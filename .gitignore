@@ -1,0 +1,21 @@
+# Build outputs
+bin/
+obj/
+*.exe
+*.o
+*.a
+*.pdb
+*.ilk
+
+# Temporary directories and caches
+*.tmp
+TestResults/
+.vs/
+.idea/
+
+# Pinned runtime binaries (can be extracted/restored via tools setup)
+tools/obs/runtime/
+tools/ffmpeg/*.exe
+tools/obs/include/libobs/*.c
+tools/obs/include/libobs/*.m
+tools/obs/include/libobs/data/
