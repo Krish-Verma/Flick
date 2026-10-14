@@ -1,0 +1,754 @@
+#include <windows.h>
+#include <psapi.h>
+#include <dwmapi.h>
+#include <iostream>
+#include <string>
+#include <vector>
+#include <mutex>
+#include <thread>
+#include <atomic>
+#include <chrono>
+#include <sstream>
+#include <iomanip>
+
+#include "obs.h"
+#include "json.hpp"
+
+using json = nlohmann::json;
+
+// Synchronization & Protocol Output
+static std::mutex g_io_mutex;
+static std::mutex g_state_mutex;
+
+static void send_json_line(const json &j) {
+    std::lock_guard<std::mutex> lock(g_io_mutex);
+    std::string s = j.dump();
+    std::cout << s << "\n";
+    std::cout.flush();
+}
+
+static void send_event(const std::string &event_name, const json &data) {
+    json j;
+    j["event"] = event_name;
+    j["data"] = data;
+    send_json_line(j);
+}
+
+static void send_response(const std::string &req_id, bool ok, const json &result, const std::string &err = "") {
+    json j;
+    j["id"] = req_id;
+    j["ok"] = ok;
+    if (ok) {
+        j["result"] = result;
+    } else {
+        j["error"] = err;
+    }
+    send_json_line(j);
+}
+
+// Redirect OBS logs to stderr so stdout is 100% clean JSON
+static void obs_log_redirect(int lvl, const char *msg, va_list args, void *p) {
+    char buf[4096];
+    vsnprintf(buf, sizeof(buf), msg, args);
+    std::cerr << "[OBS " << lvl << "] " << buf << std::endl;
+}
+
+// Capture State
+enum class CaptureState {
+    Off,
+    Starting,
+    Buffering,
+    Armed,
+    Stopping,
+    Paused,
+    Faulted
+};
+
+static const char* state_to_string(CaptureState s) {
+    switch (s) {
+        case CaptureState::Off: return "Off";
+        case CaptureState::Starting: return "Starting";
+        case CaptureState::Buffering: return "Buffering";
+        case CaptureState::Armed: return "Armed";
+        case CaptureState::Stopping: return "Stopping";
+        case CaptureState::Paused: return "Paused";
+        case CaptureState::Faulted: return "Faulted";
+        default: return "Unknown";
+    }
+}
+
+struct ActiveCapture {
+    CaptureState state = CaptureState::Off;
+    std::string target_type; // "monitor" or "window"
+    int monitor_index = 0;
+    HWND window_hwnd = nullptr;
+    int fps = 30;
+    int width = 1920;
+    int height = 1080;
+    int bitrate_kbps = 15000;
+    std::string encoder_id = "obs_nvenc_h264_tex";
+    int duration_sec = 30;
+    int buffer_mb = 256;
+    std::string output_dir;
+    std::string audio_mode; // "separated" or "system_fallback"
+    bool enable_mic = false;
+    std::string mic_device_id = "default";
+    std::string system_device_id = "default";
+
+    std::chrono::steady_clock::time_point start_time;
+    std::atomic<bool> is_armed{false};
+
+    obs_source_t *video_source = nullptr;
+    obs_source_t *sys_audio_source = nullptr;
+    obs_source_t *mic_audio_source = nullptr;
+    obs_encoder_t *video_encoder = nullptr;
+    std::vector<obs_encoder_t*> audio_encoders;
+    obs_output_t *replay_output = nullptr;
+
+    // Track metadata
+    std::vector<std::string> track_names;
+
+    // Pending save requests
+    std::string pending_save_id;
+    std::string pending_save_prefix;
+    std::chrono::steady_clock::time_point pending_save_start;
+    std::atomic<bool> save_in_progress{false};
+};
+
+static ActiveCapture g_cap;
+static std::atomic<bool> g_obs_initialized{false};
+
+// Forward declaration
+static void internal_stop_capture(const std::string &reason);
+
+// Replay buffer callbacks
+static void on_replay_saved(void *data, calldata_t *cd) {
+    const char *path = nullptr;
+    calldata_get_string(cd, "path", &path);
+    std::string saved_path = (path && strlen(path) > 0) ? path : "";
+
+    std::string save_id;
+    std::string out_dir;
+    {
+        std::lock_guard<std::mutex> lock(g_state_mutex);
+        save_id = g_cap.pending_save_id;
+        out_dir = g_cap.output_dir;
+        g_cap.save_in_progress = false;
+    }
+
+    if (saved_path.empty() && !out_dir.empty()) {
+        WIN32_FIND_DATAA fd;
+        std::string search = out_dir + "\\*.mkv";
+        HANDLE hFind = FindFirstFileA(search.c_str(), &fd);
+        FILETIME best_ft = {0, 0};
+        std::string best_file;
+        if (hFind != INVALID_HANDLE_VALUE) {
+            do {
+                if (CompareFileTime(&fd.ftLastWriteTime, &best_ft) > 0) {
+                    best_ft = fd.ftLastWriteTime;
+                    best_file = out_dir + "\\" + fd.cFileName;
+                }
+            } while (FindNextFileA(hFind, &fd));
+            FindClose(hFind);
+        }
+        saved_path = best_file;
+    }
+
+    json d;
+    d["save_id"] = save_id;
+    d["path"] = saved_path;
+    d["tracks"] = g_cap.track_names;
+    send_event("replay_saved", d);
+}
+
+// Window enumeration helpers
+struct WindowInfo {
+    uint64_t hwnd = 0;
+    std::string title;
+    DWORD pid = 0;
+    std::string exe_name;
+    int width = 0;
+    int height = 0;
+};
+
+static BOOL CALLBACK EnumWindowsProc(HWND hwnd, LPARAM lParam) {
+    auto *list = reinterpret_cast<std::vector<WindowInfo>*>(lParam);
+    if (!IsWindowVisible(hwnd) || IsIconic(hwnd)) return TRUE;
+
+    int cloaked = 0;
+    if (SUCCEEDED(DwmGetWindowAttribute(hwnd, DWMWA_CLOAKED, &cloaked, sizeof(cloaked))) && cloaked) {
+        return TRUE;
+    }
+
+    LONG_PTR exStyle = GetWindowLongPtr(hwnd, GWL_EXSTYLE);
+    if (exStyle & WS_EX_TOOLWINDOW) return TRUE;
+
+    int titleLen = GetWindowTextLengthW(hwnd);
+    if (titleLen <= 0) return TRUE;
+
+    RECT rc;
+    GetWindowRect(hwnd, &rc);
+    int w = rc.right - rc.left;
+    int h = rc.bottom - rc.top;
+    if (w < 100 || h < 100) return TRUE;
+
+    std::vector<wchar_t> wtitle(titleLen + 1);
+    GetWindowTextW(hwnd, wtitle.data(), titleLen + 1);
+
+    wchar_t clsName[256];
+    GetClassNameW(hwnd, clsName, 256);
+    if (wcscmp(clsName, L"Progman") == 0 || wcscmp(clsName, L"WorkerW") == 0 || wcscmp(clsName, L"Shell_TrayWnd") == 0) {
+        return TRUE;
+    }
+
+    DWORD pid = 0;
+    GetWindowThreadProcessId(hwnd, &pid);
+
+    std::string exeName;
+    HANDLE hProc = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
+    if (hProc) {
+        wchar_t path[MAX_PATH];
+        DWORD size = MAX_PATH;
+        if (QueryFullProcessImageNameW(hProc, 0, path, &size)) {
+            wchar_t *slash = wcsrchr(path, L'\\');
+            std::wstring wexe = (slash ? slash + 1 : path);
+            char cexe[256];
+            WideCharToMultiByte(CP_UTF8, 0, wexe.c_str(), -1, cexe, sizeof(cexe), nullptr, nullptr);
+            exeName = cexe;
+        }
+        CloseHandle(hProc);
+    }
+
+    char ctitle[512];
+    WideCharToMultiByte(CP_UTF8, 0, wtitle.data(), -1, ctitle, sizeof(ctitle), nullptr, nullptr);
+
+    WindowInfo info;
+    info.hwnd = reinterpret_cast<uint64_t>(hwnd);
+    info.title = ctitle;
+    info.pid = pid;
+    info.exe_name = exeName;
+    info.width = w;
+    info.height = h;
+
+    list->push_back(info);
+    return TRUE;
+}
+
+static void enumerate_all_windows(std::vector<WindowInfo> &wins) {
+    HDESK hdesk = OpenDesktopW(L"default", 0, FALSE, DESKTOP_READOBJECTS | DESKTOP_ENUMERATE);
+    if (hdesk) {
+        EnumDesktopWindows(hdesk, EnumWindowsProc, reinterpret_cast<LPARAM>(&wins));
+        CloseDesktop(hdesk);
+    } else {
+        EnumWindows(EnumWindowsProc, reinterpret_cast<LPARAM>(&wins));
+    }
+}
+
+// Monitor enumeration helpers
+struct MonitorInfo {
+    int index = 0;
+    std::string device_name;
+    int width = 0;
+    int height = 0;
+    bool is_primary = false;
+};
+
+static BOOL CALLBACK EnumMonitorsProc(HMONITOR hMon, HDC hdc, LPRECT rc, LPARAM lParam) {
+    auto *list = reinterpret_cast<std::vector<MonitorInfo>*>(lParam);
+    MONITORINFOEXW mi;
+    mi.cbSize = sizeof(mi);
+    if (GetMonitorInfoW(hMon, &mi)) {
+        MonitorInfo minfo;
+        minfo.index = static_cast<int>(list->size());
+        char cdev[128];
+        WideCharToMultiByte(CP_UTF8, 0, mi.szDevice, -1, cdev, sizeof(cdev), nullptr, nullptr);
+        minfo.device_name = cdev;
+        minfo.width = mi.rcMonitor.right - mi.rcMonitor.left;
+        minfo.height = mi.rcMonitor.bottom - mi.rcMonitor.top;
+        minfo.is_primary = (mi.dwFlags & MONITORINFOF_PRIMARY) != 0;
+        list->push_back(minfo);
+    }
+    return TRUE;
+}
+
+// Initialization of OBS engine
+static bool ensure_obs_init() {
+    if (g_obs_initialized) return true;
+
+    base_set_log_handler(obs_log_redirect, nullptr);
+
+    if (!obs_startup("en-US", nullptr, nullptr)) {
+        return false;
+    }
+
+    struct obs_video_info ovi = {};
+    ovi.graphics_module = "libobs-d3d11.dll";
+    ovi.fps_num = 30;
+    ovi.fps_den = 1;
+    ovi.base_width = 1920;
+    ovi.base_height = 1080;
+    ovi.output_width = 1920;
+    ovi.output_height = 1080;
+    ovi.output_format = VIDEO_FORMAT_NV12;
+    ovi.adapter = 0;
+    ovi.gpu_conversion = true;
+    ovi.colorspace = VIDEO_CS_709;
+    ovi.range = VIDEO_RANGE_PARTIAL;
+    ovi.scale_type = OBS_SCALE_BILINEAR;
+    if (obs_reset_video(&ovi) != OBS_VIDEO_SUCCESS) {
+        obs_shutdown();
+        return false;
+    }
+
+    struct obs_audio_info oai = {};
+    oai.samples_per_sec = 48000;
+    oai.speakers = SPEAKERS_STEREO;
+    if (!obs_reset_audio(&oai)) {
+        obs_shutdown();
+        return false;
+    }
+
+    // Load modules
+    const char *mods[] = {
+        "obs-ffmpeg", "obs-nvenc", "obs-x264", "obs-outputs", "win-capture", "win-wasapi"
+    };
+    for (const char *m : mods) {
+        obs_module_t *mod = nullptr;
+        std::string p = std::string("d:/Documents/ClipMax/tools/obs/runtime/obs-plugins/64bit/") + m + ".dll";
+        obs_open_module(&mod, p.c_str(), nullptr);
+        obs_init_module(mod);
+    }
+
+    g_obs_initialized = true;
+    return true;
+}
+
+// Capture start implementation
+static bool start_capture_session(const json &params, std::string &out_err) {
+    std::lock_guard<std::mutex> lock(g_state_mutex);
+    if (g_cap.state != CaptureState::Off && g_cap.state != CaptureState::Faulted) {
+        out_err = "Capture is already active or transitioning";
+        return false;
+    }
+
+    if (!ensure_obs_init()) {
+        out_err = "Failed to initialize OBS D3D11 graphics or audio engine";
+        return false;
+    }
+
+    g_cap.target_type = params.value("target_type", "monitor");
+    g_cap.monitor_index = params.value("monitor_index", 0);
+    uint64_t hwnd_raw = params.value("window_hwnd", 0ULL);
+    g_cap.window_hwnd = reinterpret_cast<HWND>(hwnd_raw);
+    g_cap.fps = params.value("fps", 30);
+    g_cap.width = params.value("width", 1920);
+    g_cap.height = params.value("height", 1080);
+    g_cap.bitrate_kbps = params.value("bitrate_kbps", 15000);
+    g_cap.encoder_id = params.value("encoder", "obs_nvenc_h264_tex");
+    g_cap.duration_sec = params.value("duration_sec", 30);
+    g_cap.buffer_mb = params.value("buffer_mb", 256);
+    g_cap.output_dir = params.value("output_dir", "D:\\Documents\\ClipMax\\Clips\\Originals");
+    g_cap.audio_mode = params.value("audio_mode", "system_fallback");
+    g_cap.enable_mic = params.value("enable_mic", true);
+    g_cap.mic_device_id = params.value("mic_device_id", "default");
+    g_cap.system_device_id = params.value("system_device_id", "default");
+
+    // Ensure output dir exists
+    CreateDirectoryA(g_cap.output_dir.c_str(), nullptr);
+
+    // 1. Create Video Source
+    if (g_cap.target_type == "window" && g_cap.window_hwnd) {
+        if (!IsWindow(g_cap.window_hwnd)) {
+            out_err = "Target window handle is invalid or closed";
+            return false;
+        }
+        obs_data_t *w_settings = obs_data_create();
+        // OBS window capture expects title:class:exe format
+        wchar_t wtitle[256] = {0};
+        wchar_t wcls[256] = {0};
+        GetWindowTextW(g_cap.window_hwnd, wtitle, 256);
+        GetClassNameW(g_cap.window_hwnd, wcls, 256);
+        DWORD pid = 0;
+        GetWindowThreadProcessId(g_cap.window_hwnd, &pid);
+        wchar_t wexe[MAX_PATH] = {0};
+        HANDLE hProc = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
+        if (hProc) {
+            DWORD sz = MAX_PATH;
+            QueryFullProcessImageNameW(hProc, 0, wexe, &sz);
+            CloseHandle(hProc);
+        }
+        wchar_t *slash = wcsrchr(wexe, L'\\');
+        std::wstring exeOnly = (slash ? slash + 1 : wexe);
+
+        std::wstringstream wss;
+        wss << wtitle << L":" << wcls << L":" << exeOnly;
+        char cwindow[512];
+        WideCharToMultiByte(CP_UTF8, 0, wss.str().c_str(), -1, cwindow, sizeof(cwindow), nullptr, nullptr);
+
+        obs_data_set_string(w_settings, "window", cwindow);
+        obs_data_set_int(w_settings, "method", 2); // 2 = Windows Graphics Capture (non-injecting)
+        obs_data_set_bool(w_settings, "cursor", true);
+        g_cap.video_source = obs_source_create("window_capture", "WindowSource", w_settings, nullptr);
+        obs_data_release(w_settings);
+    } else {
+        // Monitor capture
+        obs_data_t *m_settings = obs_data_create();
+        obs_data_set_int(m_settings, "monitor", g_cap.monitor_index);
+        obs_data_set_bool(m_settings, "capture_cursor", true);
+        g_cap.video_source = obs_source_create("monitor_capture", "DisplaySource", m_settings, nullptr);
+        obs_data_release(m_settings);
+    }
+
+    if (!g_cap.video_source) {
+        out_err = "Failed to create video capture source";
+        return false;
+    }
+    obs_set_output_source(0, g_cap.video_source);
+
+    // 2. Audio Sources & Multi-Track Routing
+    g_cap.track_names.clear();
+    g_cap.track_names.push_back("Combined Mix");
+
+    // System Audio
+    obs_data_t *sys_settings = obs_data_create();
+    obs_data_set_string(sys_settings, "device_id", g_cap.system_device_id.c_str());
+    g_cap.sys_audio_source = obs_source_create("wasapi_output_capture", "SystemAudio", sys_settings, nullptr);
+    obs_data_release(sys_settings);
+
+    if (g_cap.sys_audio_source) {
+        // Route to Track 1 (bit 0) and Track 2 (bit 1)
+        obs_source_set_audio_mixers(g_cap.sys_audio_source, (1 << 0) | (1 << 1));
+        obs_set_output_source(1, g_cap.sys_audio_source);
+        g_cap.track_names.push_back("System Audio");
+    }
+
+    // Microphone Audio (if enabled)
+    if (g_cap.enable_mic) {
+        obs_data_t *mic_settings = obs_data_create();
+        obs_data_set_string(mic_settings, "device_id", g_cap.mic_device_id.c_str());
+        g_cap.mic_audio_source = obs_source_create("wasapi_input_capture", "Microphone", mic_settings, nullptr);
+        obs_data_release(mic_settings);
+
+        if (g_cap.mic_audio_source) {
+            // Route to Track 1 (bit 0) and Track 3 (bit 2)
+            obs_source_set_audio_mixers(g_cap.mic_audio_source, (1 << 0) | (1 << 2));
+            obs_set_output_source(2, g_cap.mic_audio_source);
+            g_cap.track_names.push_back("Microphone");
+        }
+    }
+
+    // 3. Hardware Video Encoder
+    obs_data_t *v_settings = obs_data_create();
+    obs_data_set_int(v_settings, "bitrate", g_cap.bitrate_kbps);
+    obs_data_set_string(v_settings, "rate_control", "CBR");
+    obs_data_set_int(v_settings, "keyint_sec", 2);
+    g_cap.video_encoder = obs_video_encoder_create(g_cap.encoder_id.c_str(), "h264_enc", v_settings, nullptr);
+    if (!g_cap.video_encoder) {
+        // Fallback to jim_nvenc or obs_x264
+        g_cap.video_encoder = obs_video_encoder_create("jim_nvenc", "h264_enc", v_settings, nullptr);
+        if (!g_cap.video_encoder) {
+            g_cap.video_encoder = obs_video_encoder_create("obs_x264", "h264_enc", v_settings, nullptr);
+        }
+    }
+    obs_data_release(v_settings);
+
+    if (!g_cap.video_encoder) {
+        out_err = "Failed to initialize video encoder";
+        internal_stop_capture("encoder_fail");
+        return false;
+    }
+    obs_encoder_set_video(g_cap.video_encoder, obs_get_video());
+
+    // 4. Audio Encoders for active tracks
+    g_cap.audio_encoders.clear();
+    for (size_t t = 0; t < g_cap.track_names.size(); ++t) {
+        obs_data_t *a_settings = obs_data_create();
+        obs_data_set_int(a_settings, "bitrate", 128);
+        std::string a_name = "aac_track_" + std::to_string(t);
+        obs_encoder_t *a_enc = obs_audio_encoder_create("ffmpeg_aac", a_name.c_str(), a_settings, static_cast<size_t>(t), nullptr);
+        obs_data_release(a_settings);
+        obs_encoder_set_audio(a_enc, obs_get_audio());
+        g_cap.audio_encoders.push_back(a_enc);
+    }
+
+    // 5. Replay Buffer Output
+    obs_data_t *rb_settings = obs_data_create();
+    obs_data_set_int(rb_settings, "max_time_sec", g_cap.duration_sec);
+    obs_data_set_int(rb_settings, "max_size_mb", g_cap.buffer_mb);
+    obs_data_set_string(rb_settings, "directory", g_cap.output_dir.c_str());
+    obs_data_set_string(rb_settings, "format", "Clip_%CCYY-%MM-%DD_%hh-%mm-%ss");
+    obs_data_set_string(rb_settings, "extension", "mkv");
+    g_cap.replay_output = obs_output_create("replay_buffer", "ReplayBuffer", rb_settings, nullptr);
+    obs_data_release(rb_settings);
+
+    if (!g_cap.replay_output) {
+        out_err = "Failed to create replay buffer output";
+        internal_stop_capture("output_fail");
+        return false;
+    }
+
+    obs_output_set_video_encoder(g_cap.replay_output, g_cap.video_encoder);
+    for (size_t t = 0; t < g_cap.audio_encoders.size(); ++t) {
+        obs_output_set_audio_encoder(g_cap.replay_output, g_cap.audio_encoders[t], static_cast<size_t>(t));
+    }
+
+    signal_handler_connect(obs_output_get_signal_handler(g_cap.replay_output), "saved", on_replay_saved, nullptr);
+
+    if (!obs_output_start(g_cap.replay_output)) {
+        out_err = "Failed to start replay buffer";
+        internal_stop_capture("start_fail");
+        return false;
+    }
+
+    g_cap.start_time = std::chrono::steady_clock::now();
+    g_cap.state = CaptureState::Buffering;
+    g_cap.is_armed = false;
+
+    json d;
+    d["state"] = "Buffering";
+    d["target"] = g_cap.target_type;
+    d["duration_sec"] = g_cap.duration_sec;
+    d["tracks"] = g_cap.track_names;
+    send_event("state_changed", d);
+
+    return true;
+}
+
+// Stop capture implementation
+static void internal_stop_capture(const std::string &reason) {
+    if (g_cap.replay_output) {
+        obs_output_stop(g_cap.replay_output);
+        while (obs_output_active(g_cap.replay_output)) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(20));
+        }
+        obs_output_release(g_cap.replay_output);
+        g_cap.replay_output = nullptr;
+    }
+
+    if (g_cap.video_encoder) {
+        obs_encoder_release(g_cap.video_encoder);
+        g_cap.video_encoder = nullptr;
+    }
+
+    for (auto *a_enc : g_cap.audio_encoders) {
+        obs_encoder_release(a_enc);
+    }
+    g_cap.audio_encoders.clear();
+
+    if (g_cap.sys_audio_source) {
+        obs_source_release(g_cap.sys_audio_source);
+        g_cap.sys_audio_source = nullptr;
+    }
+
+    if (g_cap.mic_audio_source) {
+        obs_source_release(g_cap.mic_audio_source);
+        g_cap.mic_audio_source = nullptr;
+    }
+
+    if (g_cap.video_source) {
+        obs_source_release(g_cap.video_source);
+        g_cap.video_source = nullptr;
+    }
+
+    g_cap.state = CaptureState::Off;
+    g_cap.is_armed = false;
+    g_cap.save_in_progress = false;
+
+    json d;
+    d["state"] = "Off";
+    d["reason"] = reason;
+    send_event("state_changed", d);
+}
+
+// Save replay buffer request
+static bool trigger_save_replay(const std::string &save_id, const std::string &prefix, std::string &out_err) {
+    std::lock_guard<std::mutex> lock(g_state_mutex);
+    if (!g_cap.replay_output || !obs_output_active(g_cap.replay_output)) {
+        out_err = "Replay buffer is not active";
+        return false;
+    }
+
+    if (g_cap.save_in_progress) {
+        out_err = "A save request is already in progress";
+        return false;
+    }
+
+    g_cap.save_in_progress = true;
+    g_cap.pending_save_id = save_id;
+    g_cap.pending_save_prefix = prefix;
+    g_cap.pending_save_start = std::chrono::steady_clock::now();
+
+    proc_handler_t *ph = obs_output_get_proc_handler(g_cap.replay_output);
+    calldata_t cd;
+    calldata_init(&cd);
+    proc_handler_call(ph, "save", &cd);
+    calldata_free(&cd);
+
+    return true;
+}
+
+// Status query
+static json get_current_status() {
+    std::lock_guard<std::mutex> lock(g_state_mutex);
+    json j;
+    
+    double elapsed = 0.0;
+    if (g_cap.state == CaptureState::Buffering || g_cap.state == CaptureState::Armed) {
+        auto now = std::chrono::steady_clock::now();
+        elapsed = std::chrono::duration<double>(now - g_cap.start_time).count();
+        if (elapsed >= g_cap.duration_sec && g_cap.state == CaptureState::Buffering) {
+            g_cap.state = CaptureState::Armed;
+            g_cap.is_armed = true;
+            json d;
+            d["state"] = "Armed";
+            send_event("state_changed", d);
+        }
+    }
+
+    double buffered = (elapsed > g_cap.duration_sec) ? static_cast<double>(g_cap.duration_sec) : elapsed;
+    j["state"] = state_to_string(g_cap.state);
+    j["buffered_sec"] = buffered;
+    j["max_sec"] = g_cap.duration_sec;
+    j["is_armed"] = g_cap.is_armed.load();
+    j["target_type"] = g_cap.target_type;
+    j["tracks"] = g_cap.track_names;
+
+    // Check target window liveness
+    if (g_cap.target_type == "window" && g_cap.window_hwnd) {
+        if (!IsWindow(g_cap.window_hwnd)) {
+            j["target_valid"] = false;
+            // Trip fault
+            if (g_cap.state != CaptureState::Faulted && g_cap.state != CaptureState::Off) {
+                g_cap.state = CaptureState::Faulted;
+                json fd;
+                fd["reason"] = "Target window was closed";
+                send_event("fault", fd);
+            }
+        } else {
+            j["target_valid"] = true;
+        }
+    } else {
+        j["target_valid"] = true;
+    }
+
+    // Process memory usage (private bytes)
+    PROCESS_MEMORY_COUNTERS_EX pmc;
+    if (GetProcessMemoryInfo(GetCurrentProcess(), (PROCESS_MEMORY_COUNTERS*)&pmc, sizeof(pmc))) {
+        j["private_bytes"] = pmc.PrivateUsage;
+        j["working_set"] = pmc.WorkingSetSize;
+    }
+
+    return j;
+}
+
+// Main entry point
+int main(int argc, char **argv) {
+    // Set working directory to OBS runtime bin
+    SetCurrentDirectoryA("d:\\Documents\\ClipMax\\tools\\obs\\runtime\\bin\\64bit");
+
+    // Start background stdin reader
+    std::string line;
+    while (std::getline(std::cin, line)) {
+        if (line.empty()) continue;
+
+        try {
+            json req = json::parse(line);
+            std::string id = req.value("id", "");
+            std::string cmd = req.value("cmd", "");
+
+            if (cmd == "ping") {
+                send_response(id, true, "pong");
+            }
+            else if (cmd == "enum_targets") {
+                // Windows
+                std::vector<WindowInfo> wins;
+                enumerate_all_windows(wins);
+                json jwins = json::array();
+                for (const auto &w : wins) {
+                    jwins.push_back({
+                        {"hwnd", w.hwnd},
+                        {"title", w.title},
+                        {"pid", w.pid},
+                        {"exe", w.exe_name},
+                        {"width", w.width},
+                        {"height", w.height}
+                    });
+                }
+
+                // Monitors
+                std::vector<MonitorInfo> mons;
+                EnumDisplayMonitors(nullptr, nullptr, EnumMonitorsProc, reinterpret_cast<LPARAM>(&mons));
+                json jmons = json::array();
+                for (const auto &m : mons) {
+                    jmons.push_back({
+                        {"index", m.index},
+                        {"device", m.device_name},
+                        {"width", m.width},
+                        {"height", m.height},
+                        {"primary", m.is_primary}
+                    });
+                }
+
+                json res;
+                res["windows"] = jwins;
+                res["monitors"] = jmons;
+                send_response(id, true, res);
+            }
+            else if (cmd == "start_capture") {
+                json params = req.value("params", json::object());
+                std::string err;
+                if (start_capture_session(params, err)) {
+                    send_response(id, true, {{"status", "Buffering"}});
+                } else {
+                    send_response(id, false, nullptr, err);
+                }
+            }
+            else if (cmd == "save_replay") {
+                json params = req.value("params", json::object());
+                std::string save_id = params.value("save_id", "clip");
+                std::string prefix = params.value("prefix", "Clip");
+                std::string err;
+                if (trigger_save_replay(save_id, prefix, err)) {
+                    send_response(id, true, {{"save_id", save_id}, {"status", "saving"}});
+                } else {
+                    send_response(id, false, nullptr, err);
+                }
+            }
+            else if (cmd == "get_status") {
+                json st = get_current_status();
+                send_response(id, true, st);
+            }
+            else if (cmd == "stop_capture") {
+                {
+                    std::lock_guard<std::mutex> lock(g_state_mutex);
+                    internal_stop_capture("user_requested");
+                }
+                send_response(id, true, {{"status", "Off"}});
+            }
+            else if (cmd == "shutdown") {
+                {
+                    std::lock_guard<std::mutex> lock(g_state_mutex);
+                    internal_stop_capture("shutdown");
+                }
+                if (g_obs_initialized) {
+                    obs_shutdown();
+                    g_obs_initialized = false;
+                }
+                send_response(id, true, {{"status", "shutdown_complete"}});
+                break;
+            }
+            else {
+                send_response(id, false, nullptr, "Unknown command: " + cmd);
+            }
+        }
+        catch (const std::exception &ex) {
+            send_response("", false, nullptr, std::string("JSON parse/exec error: ") + ex.what());
+        }
+    }
+
+    // Clean exit
+    if (g_obs_initialized) {
+        obs_shutdown();
+    }
+    return 0;
+}

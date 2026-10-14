@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/LocalClip.App/LocalClip.App.csproj" />
+    <Project Path="src/LocalClip.Core/LocalClip.Core.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/LocalClip.Core.Tests/LocalClip.Core.Tests.csproj" />
+  </Folder>
+</Solution>

@@ -10,12 +10,15 @@ obj/
 # Temporary directories and caches
 *.tmp
 TestResults/
+TestOutput/
+dist/*.zip
+dist/app/
+dist/LocalClip-*/
 .vs/
 .idea/
 
 # Pinned runtime binaries (can be extracted/restored via tools setup)
 tools/obs/runtime/
+tools/obs/include/
 tools/ffmpeg/*.exe
-tools/obs/include/libobs/*.c
-tools/obs/include/libobs/*.m
-tools/obs/include/libobs/data/
+tools/obs/*.cpp
