@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json.schemastore.org/package.manifest-1.0.0.json",
+  "name": "LocalClip",
+  "version": "1.0.0",
+  "pinnedDependencies": {
+    "dotnet": {
+      "sdkVersion": "10.0.402",
+      "runtimeVersion": "10.0.13",
+      "architecture": "win-x64",
+      "license": "MIT",
+      "source": "https://builds.dotnet.microsoft.com/dotnet/Sdk/10.0.402/dotnet-sdk-10.0.402-win-x64.zip"
+    },
+    "toolchain": {
+      "compiler": "MinGW-W64 GCC 16.2.0 (Brecht Sanders WinLibs UCRT)",
+      "cmake": "4.4.2",
+      "architecture": "x86_64",
+      "license": "GPL/LGPL/Public Domain",
+      "source": "https://github.com/brechtsanders/winlibs_mingw/releases/download/16.2.0posix-14.0.0-ucrt-r1/winlibs-x86_64-posix-seh-gcc-16.2.0-mingw-w64ucrt-14.0.0-r1.zip"
+    },
+    "libobs": {
+      "version": "32.2.2",
+      "architecture": "win-x64",
+      "license": "GPL-2.0-or-later",
+      "source": "https://github.com/obsproject/obs-studio/releases/download/32.2.2/OBS-Studio-32.2.2-Windows-x64.zip",
+      "headers": "https://github.com/obsproject/obs-studio/releases/download/32.2.2/OBS-Studio-32.2.2-Sources.tar.gz"
+    },
+    "ffmpeg": {
+      "version": "9.0.1-essentials_build",
+      "architecture": "win-x64",
+      "license": "GPL-2.0-or-later",
+      "source": "https://github.com/GyanD/codexffmpeg/releases/download/9.0.1/ffmpeg-9.0.1-essentials_build.zip"
+    }
+  }
+}
