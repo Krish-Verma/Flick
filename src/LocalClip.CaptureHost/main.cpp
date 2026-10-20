@@ -155,7 +155,7 @@ static void on_replay_saved(void *data, calldata_t *cd) {
             if (g_cap.replay_output == output && g_cap.pending_save_id == save_id)
                 g_cap.save_in_progress = false;
         }
-        send_event("fault", {{"reason", message}, {"save_id", save_id}});
+        send_event("save_failed", {{"reason", message}, {"save_id", save_id}});
     };
 
     // The OBS saved signal may omit the path. Query THIS output, not the
@@ -737,7 +737,7 @@ static json get_current_status() {
     if (g_cap.save_in_progress &&
         std::chrono::steady_clock::now() - g_cap.pending_save_start > std::chrono::seconds(15)) {
         g_cap.save_in_progress = false;
-        send_event("fault", {{"reason", "Replay save timed out after 15 seconds"}});
+        send_event("save_failed", {{"reason", "Replay save timed out after 15 seconds"}});
     }
     j["state"] = state_to_string(g_cap.state);
     j["buffered_sec"] = buffered;

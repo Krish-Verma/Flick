@@ -211,6 +211,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
         _captureHost.StateChanged += OnHostStateChanged;
         _captureHost.ReplaySavedWithTracks += OnHostReplaySaved;
         _captureHost.FaultOccurred += OnHostFaultOccurred;
+        _captureHost.EventReceived += OnHostEventReceived;
 
         // Status polling timer
         _pollTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
@@ -414,6 +415,19 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
                 }
             }
         });
+    }
+
+    private void OnHostEventReceived(string eventName, System.Text.Json.JsonElement? data)
+    {
+        if (eventName != "save_failed") return;
+        string reason = "Unable to save the current replay";
+        if (data.HasValue && data.Value.TryGetProperty("reason", out var value))
+            reason = value.GetString() ?? reason;
+        var dispatcher = Application.Current?.Dispatcher;
+        if (dispatcher != null)
+            _ = dispatcher.BeginInvoke(new Action(() =>
+                StatusDetails = "Replay save failed: " + reason));
+        // Save errors leave an otherwise healthy replay buffer armed.
     }
 
     private void OnHostFaultOccurred(string reason)
