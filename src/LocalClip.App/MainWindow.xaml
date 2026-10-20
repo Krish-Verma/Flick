@@ -142,12 +142,14 @@
                         <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
 
-                    <!-- Search Box -->
-                    <Grid Grid.Row="0" Margin="0,0,0,10">
+                    <!-- Shell-level library title; detailed gallery UX is Slice 3. -->
+                    <StackPanel Grid.Row="0" Margin="0,0,0,10">
+                        <TextBlock Text="Your Clips" Style="{StaticResource Flick.Text.Section}" Margin="0,0,0,10"/>
+                        <Grid>
                         <TextBox x:Name="TxtClipSearch" Text="{Binding SearchQuery, UpdateSourceTrigger=PropertyChanged}"
                                  Padding="8,6" Background="#1E1E24" Foreground="#FAFAFA" BorderBrush="#454052"
                                  ToolTip="Search clips by title or source"/>
-                        <TextBlock Text="Search clips..." Foreground="#9C97AD" VerticalAlignment="Center" Margin="10,0,0,0" IsHitTestVisible="False">
+                        <TextBlock Text="Search Clips..." Foreground="#9C97AD" VerticalAlignment="Center" Margin="10,0,0,0" IsHitTestVisible="False">
                             <TextBlock.Style>
                                 <Style TargetType="TextBlock">
                                     <Setter Property="Visibility" Value="Collapsed"/>
@@ -159,7 +161,8 @@
                                 </Style>
                             </TextBlock.Style>
                         </TextBlock>
-                    </Grid>
+                        </Grid>
+                    </StackPanel>
 
                     <!-- Clip List -->
                     <ListBox Grid.Row="1" ItemsSource="{Binding FilteredClips}" SelectedItem="{Binding SelectedClip, Mode=TwoWay}"
@@ -361,10 +364,18 @@
 
         <!-- Bottom Status Bar -->
         <Border Grid.Row="2" Grid.Column="1" Background="#11121D" BorderBrush="#242436" BorderThickness="0,1,0,0" Padding="12,6">
-            <DockPanel>
-                <TextBlock Text="{Binding StatusDetails}" Foreground="#B9B3CC" FontSize="12"/>
-                <TextBlock Text="{Binding ResourceStatsText}" Foreground="#9C97AD" FontSize="11" HorizontalAlignment="Right"/>
-            </DockPanel>
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <TextBlock Grid.Column="0" Text="{Binding StatusDetails}" Foreground="#B9B3CC"
+                           FontSize="12" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"
+                           Margin="0,0,16,0"/>
+                <TextBlock Grid.Column="1" Text="{Binding ResourceStatsText}" Foreground="#9C97AD"
+                           FontSize="11" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"
+                           HorizontalAlignment="Right"/>
+            </Grid>
         </Border>
     </Grid>
 </Window>
