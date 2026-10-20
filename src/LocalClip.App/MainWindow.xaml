@@ -144,7 +144,7 @@
 
                     <!-- Search Box -->
                     <Grid Grid.Row="0" Margin="0,0,0,10">
-                        <TextBox Text="{Binding SearchQuery, UpdateSourceTrigger=PropertyChanged}"
+                        <TextBox x:Name="TxtClipSearch" Text="{Binding SearchQuery, UpdateSourceTrigger=PropertyChanged}"
                                  Padding="8,6" Background="#1E1E24" Foreground="#FAFAFA" BorderBrush="#454052"
                                  ToolTip="Search clips by title or source"/>
                         <TextBlock Text="Search clips..." Foreground="#9C97AD" VerticalAlignment="Center" Margin="10,0,0,0" IsHitTestVisible="False">
