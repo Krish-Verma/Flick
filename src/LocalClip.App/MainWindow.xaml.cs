@@ -37,7 +37,7 @@ public partial class MainWindow : Window
     private readonly DispatcherTimer _playerTimer;
     private bool _isDraggingSlider = false;
     private bool _isRealClosing = false;
-    private Point? _shareDragStart;
+    private System.Windows.Point? _shareDragStart;
     private bool _updatingExportCap;
     private enum PlayerView { Original, Exported, LocalCopy }
     private PlayerView _playerView = PlayerView.Original;
@@ -972,8 +972,8 @@ public partial class MainWindow : Window
             _shareDragStart = null;
             return;
         }
-        Point pos = e.GetPosition(DragHandle);
-        Point from = _shareDragStart.Value;
+        System.Windows.Point pos = e.GetPosition(DragHandle);
+        System.Windows.Point from = _shareDragStart.Value;
         if (Math.Abs(pos.X - from.X) < SystemParameters.MinimumHorizontalDragDistance &&
             Math.Abs(pos.Y - from.Y) < SystemParameters.MinimumVerticalDragDistance)
             return;
