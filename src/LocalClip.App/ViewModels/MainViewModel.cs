@@ -77,6 +77,8 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
     private string _exportStatusMessage = "";
     private bool _isExportReady = false;
     private string _readyExportFilePath = "";
+    private CancellationTokenSource? _exportCancellation;
+    private int _exportGeneration;
 
     public event PropertyChangedEventHandler? PropertyChanged;
     // Fired ONLY after the saved original is validated and indexed.
@@ -86,6 +88,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
     public AppSettings Settings => _settings;
     public bool IsCaptureActive => CaptureActive;
     public bool CanEditClip => SelectedClip?.IsAvailable == true && !IsExporting;
+    public bool CanStartExport => CanEditClip && !IsImporting;
     // WPF shell supplies consent before an active source change discards replay.
     public Func<bool>? ConfirmTargetReset { get; set; }
     public CaptureHostClient CaptureHost => _captureHost;
@@ -119,7 +122,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
     public bool IsImporting
     {
         get => _isImporting;
-        private set { _isImporting = value; OnPropertyChanged(); }
+        private set { _isImporting = value; OnPropertyChanged(); OnPropertyChanged(nameof(CanStartExport)); }
     }
 
     private bool CaptureActive => CaptureStatus is "Starting" or "Buffering" or "Armed" or "Stopping";
@@ -218,6 +221,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
                 SubscribeAudioEvents();
                 OnPropertyChanged();
                 OnPropertyChanged(nameof(CanEditClip));
+                OnPropertyChanged(nameof(CanStartExport));
                 OnSelectedClipChanged();
             }
         }
@@ -239,19 +243,41 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
         get => _targetSizeMb;
         set
         {
-            if (value < 1 || value > 250) return;
-            _targetSizeMb = value;
+            if (!ShareExportTargets.IsValid(value) || _targetSizeMb == value) return;
             _settings.DiscordTargetSizeMb = value;
             _settings.Save();
+            _targetSizeMb = value;
             OnPropertyChanged();
-            InvalidateExportReady();
+            OnSelectedClipChanged();
         }
     }
+
+    public void RefreshExportPreferences()
+    {
+        int value = ShareExportTargets.IsValid(_settings.DiscordTargetSizeMb)
+            ? _settings.DiscordTargetSizeMb : ShareExportTargets.DefaultMb;
+        if (_targetSizeMb != value)
+        {
+            _targetSizeMb = value;
+            OnPropertyChanged(nameof(TargetSizeMb));
+        }
+        OnSelectedClipChanged();
+    }
+
+    public bool TryGetReadyShareFile(out string path)
+    {
+        path = "";
+        return !IsExporting && IsExportReady &&
+               ReadyShareFile.TryGet(SelectedClip, TargetSizeMb, out path) &&
+               string.Equals(path, ReadyExportFilePath, StringComparison.OrdinalIgnoreCase);
+    }
+
+    public void CancelExport() => _exportCancellation?.Cancel();
 
     public bool IsExporting
     {
         get => _isExporting;
-        set { _isExporting = value; OnPropertyChanged(); OnPropertyChanged(nameof(CanEditClip)); }
+        set { _isExporting = value; OnPropertyChanged(); OnPropertyChanged(nameof(CanEditClip)); OnPropertyChanged(nameof(CanStartExport)); }
     }
 
     public double ExportProgress
@@ -906,84 +932,116 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
 
     public async Task ExportForDiscordAsync()
     {
-        if (SelectedClip == null || IsExporting) return;
-        // Prioritize a user-requested share export over passive folder indexing.
+        if (!CanStartExport || SelectedClip is null) return;
+        FlushPendingAudioEdits();
         _importCancellation?.Cancel();
         _thumbnailCancellation?.Cancel();
 
+        var clip = SelectedClip;
+        var snapshot = System.Text.Json.JsonSerializer.Deserialize<AppSettings>(
+            System.Text.Json.JsonSerializer.Serialize(_settings)) ??
+            throw new InvalidOperationException("Couldn't snapshot export settings.");
+        snapshot.DiscordTargetSizeMb = TargetSizeMb;
+        var cancellation = new CancellationTokenSource();
+        _exportCancellation = cancellation;
+        int generation = ++_exportGeneration;
+        InvalidateExportReady();
         IsExporting = true;
-        ExportProgress = 0.0;
-        ExportStatusMessage = "Starting Discord export...";
-
-        var progress = new Progress<ExportProgress>(p =>
+        ExportProgress = 0;
+        ExportStatusMessage = "Preparing Local MP4…";
+        var progress = new Progress<ExportProgress>(item =>
         {
-            ExportProgress = p.Percent;
-            ExportStatusMessage = p.Stage;
+            if (IsExporting && generation == _exportGeneration)
+            {
+                ExportProgress = Math.Clamp(item.Percent, 0, 99);
+                ExportStatusMessage = item.Stage;
+            }
         });
 
-        _settings.DiscordTargetSizeMb = TargetSizeMb;
-
-        ExportResult result;
         try
         {
-            result = await _exporter.ExportForDiscordAsync(SelectedClip, _settings, progress);
+            ExportResult result = await _exporter.ExportForDiscordAsync(
+                clip, snapshot, progress, cancellation.Token);
+            if (result.Success)
+            {
+                clip.ExportedFilePath = result.ExportFilePath;
+                clip.ExportedFileSizeBytes = result.FileSizeBytes;
+                clip.LastExportFingerprint = result.Fingerprint;
+                clip.IsExportReady = true;
+                _storage.AddOrUpdateClip(clip);
+                double mb = result.FileSizeBytes / 1_000_000d;
+                if (SelectedClip?.Id == clip.Id &&
+                    _targetSizeMb == snapshot.DiscordTargetSizeMb)
+                {
+                    ReadyExportFilePath = result.ExportFilePath;
+                    IsExportReady = ReadyShareFile.TryGet(clip, TargetSizeMb, out _);
+                    ExportProgress = 100;
+                    ExportStatusMessage = IsExportReady
+                        ? $"Ready to Drag Into Discord · {mb:F2} MB"
+                        : "Export Created But Readiness Verification Failed";
+                }
+                else
+                {
+                    ExportStatusMessage = $"Exported {clip.Title} · Select It to Share";
+                    OnSelectedClipChanged();
+                }
+            }
+            else
+            {
+                ExportStatusMessage = "Export Failed: " + result.ErrorMessage;
+                StatusDetails = ExportStatusMessage;
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            ExportStatusMessage = "Export Cancelled · Original Clip Unchanged";
+            ExportProgress = 0;
         }
         catch (Exception ex)
         {
-            result = new ExportResult { Success = false, ErrorMessage = ex.Message };
+            ExportStatusMessage = "Export Failed: " + ex.Message;
+            StatusDetails = ExportStatusMessage;
         }
         finally
         {
+            if (ReferenceEquals(_exportCancellation, cancellation))
+                _exportCancellation = null;
+            cancellation.Dispose();
             IsExporting = false;
-        }
-
-        if (result.Success)
-        {
-            IsExportReady = true;
-            ReadyExportFilePath = result.ExportFilePath;
-            SelectedClip.ExportedFilePath = result.ExportFilePath;
-            SelectedClip.ExportedFileSizeBytes = result.FileSizeBytes;
-            SelectedClip.LastExportFingerprint = result.Fingerprint;
-            SelectedClip.IsExportReady = true;
-            _storage.AddOrUpdateClip(SelectedClip);
-
-            double mb = result.FileSizeBytes / 1_000_000.0;
-            ExportStatusMessage = $"Ready to Share! ({mb:F2} MB, below {TargetSizeMb} MB cap)";
-        }
-        else
-        {
-            IsExportReady = false;
-            ExportStatusMessage = "Export failed: " + result.ErrorMessage;
-            MessageBox.Show(result.ErrorMessage, "Export Error", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
     }
 
     public void CopyExportedFileToClipboard()
     {
-        if (!File.Exists(ReadyExportFilePath)) return;
+        if (!TryGetReadyShareFile(out var path))
+        {
+            ExportStatusMessage = "Export the selected clip before copying.";
+            return;
+        }
         try
         {
-            var files = new System.Collections.Specialized.StringCollection { ReadyExportFilePath };
+            var files = new System.Collections.Specialized.StringCollection { path };
             Clipboard.SetFileDropList(files);
-            ExportStatusMessage = "Copied file to clipboard! Paste directly into Discord.";
+            ExportStatusMessage = "MP4 File Copied · Paste It Into Discord";
         }
-        catch (Exception ex)
-        {
-            MessageBox.Show("Failed to copy file: " + ex.Message, "Clipboard Error", MessageBoxButton.OK, MessageBoxImage.Error);
-        }
+        catch (Exception ex) { ExportStatusMessage = "Couldn't Copy MP4: " + ex.Message; }
     }
 
     public void OpenExportFolder()
     {
-        string path = File.Exists(ReadyExportFilePath) ? ReadyExportFilePath : SelectedClip?.OriginalFilePath ?? _settings.OriginalsFolder;
-        if (File.Exists(path))
+        string? directory = TryGetReadyShareFile(out var path)
+            ? Path.GetDirectoryName(path) : _settings.ExportsFolder;
+        if (string.IsNullOrWhiteSpace(directory) || !Directory.Exists(directory))
         {
-            System.Diagnostics.Process.Start("explorer.exe", $"/select,\"{path}\"");
+            StatusDetails = "Export Folder Isn't Available · Check Storage Settings";
+            return;
         }
-        else if (Directory.Exists(_settings.OriginalsFolder))
+        try
         {
-            System.Diagnostics.Process.Start("explorer.exe", _settings.OriginalsFolder);
+            System.Diagnostics.Process.Start(
+                new System.Diagnostics.ProcessStartInfo(directory) { UseShellExecute = true });
         }
+        catch (Exception ex) { StatusDetails = "Couldn't Open Export Folder: " + ex.Message; }
     }
 
     public void DeleteSelectedClip()
@@ -1026,9 +1084,14 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
 
     public async Task SendToDiscordWebhookAsync(string message = "")
     {
-        if (!File.Exists(ReadyExportFilePath))
+        if (!_settings.EnableDiscordWebhook)
         {
-            MessageBox.Show("Please export the clip first before sending.", "No Ready File", MessageBoxButton.OK, MessageBoxImage.Information);
+            StatusDetails = "Direct Posting Is Disabled · Enable It in Sharing Settings";
+            return;
+        }
+        if (!TryGetReadyShareFile(out var safeFile))
+        {
+            StatusDetails = "Export a valid MP4 for this clip before sending.";
             return;
         }
 
@@ -1044,7 +1107,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
 
         ExportStatusMessage = "Posting clip to Discord webhook...";
         var client = new DiscordWebhookClient();
-        var res = await client.PostClipAsync(secretUrl, ReadyExportFilePath, message);
+        var res = await client.PostClipAsync(secretUrl, safeFile, message);
 
         if (res.Success)
         {
@@ -1060,6 +1123,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
 
     public void Dispose()
     {
+        _exportCancellation?.Cancel();
         FlushPendingAudioEdits();
         UnsubscribeAudioEvents();
         _importCancellation?.Cancel();
