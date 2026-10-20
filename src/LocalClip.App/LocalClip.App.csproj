@@ -17,4 +17,11 @@
     <Using Remove="System.Windows.Forms" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Embed the full squircle artwork into the portable WPF assembly.
+         A runtime absolute path or external logo download is not allowed. -->
+    <None Remove="Assets\Brand\FlickLogo.png" />
+    <Resource Include="Assets\Brand\FlickLogo.png" />
+  </ItemGroup>
+
 </Project>
