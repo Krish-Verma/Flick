@@ -1,6 +1,6 @@
 # Flick — User Guide (Development Build)
 
-> Flick is currently in development. This guide describes the source on the draft stabilization PR, **not** the published v1.0.0 release. Real Windows/GPU and Discord acceptance are still required before general distribution.
+> Flick is currently in development. This guide describes the draft GUI Slice 2 branch based on the stabilization PR, **not** the published v1.0.0 release. Real Windows/GPU and Discord acceptance are still required before general distribution.
 
 Flick is a small, free, offline-first **Windows 11 x64** gameplay clipper. It manually captures recent action, lets you review and trim the original, adjust audio for the share copy, and prepare a Discord-sized MP4 without a watermark. Initial hardware support targets **NVIDIA NVENC**; other GPUs are not qualified.
 
@@ -13,18 +13,18 @@ Flick stores settings and metadata under `%LOCALAPPDATA%\LocalClip`; originals a
 ## 2. The everyday clipping workflow
 
 1. Open Flick or restore it from its tray icon. **Capture is OFF on every launch**, including when Windows starts Flick. Selecting a target or minimizing the window never starts recording.
-2. Choose a specific monitor or game window in the target dropdown. Click **Arm Replay**, or press **Ctrl+Shift+F9** (configurable).
+2. Choose a specific monitor or game window in the target dropdown. Click **Start Replay**, or press **Ctrl+Shift+F9** (configurable).
 3. Play normally while Flick fills a bounded replay buffer. The UI displays an **estimated** buffered duration; a 256 MiB compressed packet limit can shorten a high-bitrate, long clip.
-4. When you want to capture a moment, press **Ctrl+Shift+F8**, or click **Save Clip**. Flick saves the recent replay to an MKV original with a unique filename; subsequent saves do not intentionally replace old originals. Saving does **not** stop ongoing replay capture.
+4. When you want to capture a moment, press **Ctrl+Shift+F8**, or click **Save Last 30 Seconds** (or your configured duration). Flick saves the recent replay to an MKV original with a unique filename; subsequent saves do not intentionally replace old originals. Saving does **not** stop ongoing replay capture.
 5. Select your saved recording in the gallery. Play/seek, rename, search, open its folder or explicitly delete it. Choose **Open Player** if Windows cannot preview MKV in its built-in MediaElement.
 6. Adjust **Trim Start / End** and the recorded audio tracks' **Mute / Gain** values. These are saved edit decisions; the MKV original is unchanged. The editor's original playback may not reflect the export mix until you export.
 7. Pick **20 MB**, **50 MB**, **100 MB**, or an editable **Custom 1–250 MB** target. Click **Export for Discord**. Flick makes a new H.264/stereo AAC MP4, verifies its duration, size cap and decode, and keeps the MKV original intact.
 8. Click **Export MP4** in the player to preview the share copy and its audio mix. Then drag the ready file into the Discord desktop composer or use **Copy File** and paste (where supported). **Flick does not automatically send a message.**
-9. Click **Disarm Replay** to release the encoder, or quit Flick through the tray menu to stop all owned helpers. Closing the window hides it to the tray; minimizing is not the same as stopping capture.
+9. Click **Stop Replay** to release the encoder, or quit Flick through the tray menu to stop all owned helpers. Closing the window hides it to the tray; minimizing is not the same as stopping capture.
 
 ## 3. Small, useful settings
 
-Open **Settings** in the main window. Changing recording settings stops the current buffer after confirmation; you must manually arm again.
+Open **Settings** from the navigation rail or tray. **Opening Settings does not stop recording.** Quality and duration changes apply the next time you manually start replay. Disabling an actively recording microphone requires explicit confirmation because it stops the current buffer to release the device.
 
 | Setting | Options and behavior |
 |---|---|
@@ -37,11 +37,26 @@ Open **Settings** in the main window. Changing recording settings stops the curr
 | Saved clips | Select a full path for the originals folder; completed MKVs are not deleted when settings reset |
 | Windows startup | Optional per-user sign-in registration; always starts **disarmed** |
 | Open in tray | Optional hidden launch with tray controls, separate from capture status |
+| Clip Saved Overlay | Enabled by default; shows the full Flick logo in a temporary (~2 second) click-through banner after a validated save |
+| Confirmation Sound | Enabled by default, independently toggleable; quiet, short in-process chime (may be heard by system-loopback capture) |
+| Preview Notification | A button to see/hear sample feedback without saving preferences or starting capture |
 | Discord sharing | 20/50/100/custom MB file cap presets; optional encrypted webhook requires explicit confirmation for posting |
 
 Long/high-quality replays may exceed the compressed packet budget and retain less history. A video’s settings describe the requested profile, not a guarantee of actual hardware FPS or image quality. Flick does not silently switch to CPU-heavy x264 capture when NVENC cannot start.
 
 **Restore Defaults** resets the fields in the settings window; press **Save Settings** to apply them. **Cancel** leaves settings unchanged. Existing originals are never deleted by either action.
+
+### Clip Saved Feedback
+
+By default, successfully saved and indexed clips trigger **Clip Saved** in the upper-right corner of the active screen, using the full Flick squircle logo, the actual saved clip title/duration, and a short sound. The banner and sound are **independent** settings. Turning the banner off does not disable the sound; turning the sound off does not disable the banner. A failed save shows a different failure notification and never plays the success chime.
+
+The notification is temporary and creates no permanent game overlay process. Native topmost WPF windows may not appear above every exclusive-fullscreen game; this behavior, mixed-DPI placement, and FPS impact still need validation on the owner's Windows PC. The banner should not interrupt gameplay focus.
+
+### Tray & Capture Controls
+
+The new compact capture bar is available at the top of the window. When replay is off, **Start Replay** is the primary action and **Save Last N Seconds** is disabled; when buffering or armed, **Save Last N Seconds** becomes the primary action. The same state is reflected in tray actions. The navigation rail contains **Your Clips** (focuses search) and **Settings** (opens existing preferences; an in-window settings redesign is a later slice).
+
+Changing capture source while recording asks for confirmation because it discards the current unsaved buffer. Declining retains the previous target. Closing Flick hides its window but does **not** stop replay; choose Stop Replay or Quit Flick explicitly.
 
 ## 4. Limitations and troubleshooting
 
