@@ -224,7 +224,7 @@ public class MediaProber
     /// Longer imported videos are limited to the first three minutes for preview.
     /// </summary>
     public async Task<string> BuildPlaybackPreviewAsync(string original,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default, bool forceTranscode = false)
     {
         if (!File.Exists(original)) throw new FileNotFoundException("Original video is offline.", original);
         var info = new FileInfo(original);
@@ -237,7 +237,8 @@ public class MediaProber
             "LocalClip", "PreviewCache");
         Directory.CreateDirectory(cache);
         string fingerprint = Path.GetFullPath(original).ToUpperInvariant() +
-                             "|" + info.Length + "|" + info.LastWriteTimeUtc.Ticks + "|preview-v1";
+                             "|" + info.Length + "|" + info.LastWriteTimeUtc.Ticks +
+                             (forceTranscode ? "|preview-safe-v2" : "|preview-copy-v2");
         string key = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(fingerprint)));
         string resultFile = Path.Combine(cache, key + ".mp4");
 
@@ -263,7 +264,7 @@ public class MediaProber
 
         string temp = Path.Combine(cache, ".preview-" + Guid.NewGuid().ToString("N") + ".mp4");
         double seconds = PlaybackPreviewPolicy.PreviewSeconds(media.DurationSeconds);
-        bool copyH264 = PlaybackPreviewPolicy.CanStreamCopy(
+        bool copyH264 = !forceTranscode && PlaybackPreviewPolicy.CanStreamCopy(
             media.VideoCodec, media.DurationSeconds, info.Length);
 
         var psi = new ProcessStartInfo

@@ -40,6 +40,7 @@ public partial class MainWindow : Window
     private PlayerView _playerView = PlayerView.Original;
     private CancellationTokenSource? _previewCancellation;
     private MediaProber? _localPreviewProber;
+    private bool _previewWasReencoded;
     private bool _playerIsPlaying;
 
     public MainWindow()
@@ -495,6 +496,7 @@ public partial class MainWindow : Window
         PlayerSlider.Value = 0;
         BtnPlayPause.Content = "▶ Play";
         _playerView = PlayerView.Original;
+        _previewWasReencoded = false;
         BtnPreviewMode.Content = "Original ▾";
 
         var clip = _vm.SelectedClip;
@@ -681,8 +683,11 @@ public partial class MainWindow : Window
         _playerIsPlaying = false;
         BtnPlayPause.Content = "▶ Play";
         PreviewFallbackPanel.Visibility = Visibility.Visible;
-        BtnBuildPreview.Visibility = _playerView == PlayerView.Original
+        BtnBuildPreview.Visibility = _playerView == PlayerView.Original ||
+            _playerView == PlayerView.LocalCopy && !_previewWasReencoded
             ? Visibility.Visible : Visibility.Collapsed;
+        BtnBuildPreview.Content = _playerView == PlayerView.LocalCopy
+            ? "Try Compatible Preview" : "Create Local Preview";
         TxtPreviewIssue.Text = _playerView == PlayerView.Exported
             ? "Windows Couldn't Preview the Exported MP4"
             : "Windows Couldn't Play This Original";
@@ -699,6 +704,7 @@ public partial class MainWindow : Window
             _vm.StatusDetails = "Finish live capture or export before creating a local preview.";
             return;
         }
+        bool forceTranscode = _playerView == PlayerView.LocalCopy;
         _previewCancellation?.Cancel();
         _previewCancellation?.Dispose();
         var cancellation = new CancellationTokenSource();
@@ -710,9 +716,10 @@ public partial class MainWindow : Window
         {
             _localPreviewProber ??= new MediaProber();
             string result = await _localPreviewProber.BuildPlaybackPreviewAsync(
-                clip.OriginalFilePath, cancellation.Token);
+                clip.OriginalFilePath, cancellation.Token, forceTranscode);
             if (cancellation.IsCancellationRequested || _vm.SelectedClip?.Id != clip.Id)
                 return;
+            _previewWasReencoded = forceTranscode;
             SetPreviewSource(result, PlayerView.LocalCopy, startPlaying: true);
             _vm.StatusDetails = clip.DurationSeconds > 180
                 ? "Local preview covers the first 3 minutes. Your original remains untouched."
