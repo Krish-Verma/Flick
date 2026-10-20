@@ -27,6 +27,8 @@ public sealed class ClipStorage
     private readonly object _lock = new();
     private readonly SemaphoreSlim _scanGate = new(1, 1);
     private int _unflushedImportedEntries;
+    private bool _indexReadFailed;
+    private bool _sourcesReadFailed;
     private const int ImportIndexBatchSize = 32;
 
     public string LastLoadWarning { get; private set; } = "";
@@ -491,7 +493,8 @@ public sealed class ClipStorage
             }
             catch (Exception ex)
             {
-                LastLoadWarning = "Clip index unavailable: " + ex.Message;
+                _indexReadFailed = true;
+                LastLoadWarning = "Clip index unavailable; original metadata was preserved. " + ex.Message;
                 // Leave the original JSON untouched for recovery.
             }
         }
@@ -523,23 +526,30 @@ public sealed class ClipStorage
             }
             catch (Exception ex)
             {
-                LastLoadWarning = "Connected folder registry unavailable: " + ex.Message;
+                _sourcesReadFailed = true;
+                LastLoadWarning = "Connected folder registry unavailable; original metadata was preserved. " + ex.Message;
             }
         }
     }
 
     private void SaveIndexLocked()
     {
+        if (_indexReadFailed)
+            throw new InvalidDataException("Flick preserved a damaged clips_index.json; back up or repair it before editing the library.");
         SaveJsonAtomic(_metadataFile, _clips);
         _unflushedImportedEntries = 0;
     }
 
-    private void SaveSourcesLocked() => SaveJsonAtomic(_sourcesFile,
-        new SourcesState
+    private void SaveSourcesLocked()
+    {
+        if (_sourcesReadFailed)
+            throw new InvalidDataException("Flick preserved a damaged connected_sources.json; back up or repair it before linking folders.");
+        SaveJsonAtomic(_sourcesFile, new SourcesState
         {
             Folders = _folders,
             IgnoredImportedPaths = _ignoredImportedPaths.ToList()
         });
+    }
 
     private static void SaveJsonAtomic<T>(string path, T value)
     {
