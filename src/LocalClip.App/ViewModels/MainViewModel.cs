@@ -878,26 +878,21 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
              !File.Exists(SelectedClip.ThumbnailPath)))
             _ = EnsureSelectedThumbnailAsync(SelectedClip);
 
-        // Check if existing export matches current state
-        string fp = ExportFingerprint.Compute(
-            SelectedClip.OriginalFilePath,
-            SelectedClip.TrimStartSeconds,
-            SelectedClip.TrimEndSeconds > 0 ? SelectedClip.TrimEndSeconds : SelectedClip.DurationSeconds,
-            SelectedClip.AudioTracks,
-            TargetSizeMb
-        );
-
-        if (SelectedClip.IsExportReady &&
-            SelectedClip.LastExportFingerprint == fp &&
-            File.Exists(SelectedClip.ExportedFilePath))
+        // A Ready tile requires both the matching current edits and actual MP4 bytes.
+        if (ReadyShareFile.TryGet(SelectedClip, TargetSizeMb, out var ready))
         {
             IsExportReady = true;
-            ReadyExportFilePath = SelectedClip.ExportedFilePath;
-            ExportStatusMessage = $"Ready: {Path.GetFileName(ReadyExportFilePath)} ({SelectedClip.ExportedFileSizeBytes / 1_000_000.0:F2} MB)";
+            ReadyExportFilePath = ready;
+            ExportStatusMessage = $"Ready to Drag Into Discord · {SelectedClip.ExportedFileSizeBytes / 1_000_000.0:F2} MB";
         }
         else
         {
-            InvalidateExportReady();
+            // Switching clips or a size preset must not permanently destroy a
+            // verified old export: if the user switches back to its original
+            // cap, the ready MP4 may be reused without wasting an encode.
+            IsExportReady = false;
+            ReadyExportFilePath = "";
+            ExportStatusMessage = "Select Export Clip to Make a Share-Ready MP4.";
         }
     }
 
