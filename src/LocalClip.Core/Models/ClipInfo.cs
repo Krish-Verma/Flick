@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.IO;
 using System.Text.Json.Serialization;
 
@@ -15,8 +16,10 @@ public class AudioTrackInfo
     public double Gain { get; set; } = 1.0; // 0.0 to 2.0 (1.0 = unity)
 }
 
-public class ClipMetadata
+public class ClipMetadata : INotifyPropertyChanged
 {
+    public event PropertyChangedEventHandler? PropertyChanged;
+    private string _thumbnailPath = "";
     public string Id { get; set; } = Guid.NewGuid().ToString("N");
     public string OriginalFilePath { get; set; } = "";
     public string Title { get; set; } = "";
@@ -49,7 +52,17 @@ public class ClipMetadata
     [JsonIgnore]
     public string LibraryDeleteAction => IsImported ? "Remove" : "Delete";
 
-    public string ThumbnailPath { get; set; } = "";
+    public string ThumbnailPath
+    {
+        get => _thumbnailPath;
+        set
+        {
+            if (_thumbnailPath == value) return;
+            _thumbnailPath = value;
+            PropertyChanged?.Invoke(this,
+                new PropertyChangedEventArgs(nameof(ThumbnailPath)));
+        }
+    }
 
     // Multi-track audio configuration
     public List<AudioTrackInfo> AudioTracks { get; set; } = new();

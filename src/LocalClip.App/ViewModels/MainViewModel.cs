@@ -62,6 +62,8 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
     private string _importStatusText = "";
     private bool _isImporting;
     private CancellationTokenSource? _importCancellation;
+    private CancellationTokenSource? _thumbnailCancellation;
+    private readonly SemaphoreSlim _thumbnailGate = new(1, 1);
     private readonly ObservableCollection<ConnectedClipFolder> _connectedFolders = new();
 
     // Export & Sharing
@@ -392,6 +394,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
         if (CaptureStatus == "Starting" || CaptureStatus == "Stopping") return;
         // Never let folder indexing compete with the live gameplay encoder.
         _importCancellation?.Cancel();
+        _thumbnailCancellation?.Cancel();
         CaptureStatus = "Starting";
         StatusDetails = "Initializing capture encoder and audio...";
         try
@@ -734,6 +737,11 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
             return;
         }
 
+        if (SelectedClip.IsAvailable && !CaptureActive &&
+            (string.IsNullOrWhiteSpace(SelectedClip.ThumbnailPath) ||
+             !File.Exists(SelectedClip.ThumbnailPath)))
+            _ = EnsureSelectedThumbnailAsync(SelectedClip);
+
         // Check if existing export matches current state
         string fp = ExportFingerprint.Compute(
             SelectedClip.OriginalFilePath,
@@ -754,6 +762,30 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
         else
         {
             InvalidateExportReady();
+        }
+    }
+
+    private async Task EnsureSelectedThumbnailAsync(ClipMetadata clip)
+    {
+        var cancellation = new CancellationTokenSource();
+        var previous = Interlocked.Exchange(ref _thumbnailCancellation, cancellation);
+        previous?.Cancel();
+        bool acquired = false;
+        try
+        {
+            await _thumbnailGate.WaitAsync(cancellation.Token);
+            acquired = true;
+            if (CaptureActive || SelectedClip?.Id != clip.Id) return;
+            await _storage.EnsureThumbnailAsync(clip.Id, cancellation.Token);
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception) { /* Keep clip playable even without a thumbnail. */ }
+        finally
+        {
+            if (acquired) _thumbnailGate.Release();
+            if (ReferenceEquals(_thumbnailCancellation, cancellation))
+                _thumbnailCancellation = null;
+            cancellation.Dispose();
         }
     }
 
@@ -922,6 +954,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
     public void Dispose()
     {
         _importCancellation?.Cancel();
+        _thumbnailCancellation?.Cancel();
         _pollTimer.Stop();
         _captureHost.Dispose();
         GC.SuppressFinalize(this);
