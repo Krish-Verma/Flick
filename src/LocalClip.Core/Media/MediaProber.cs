@@ -67,7 +67,7 @@ public class MediaProber
         using var proc = new System.Diagnostics.Process { StartInfo = psi };
         using var job = new JobObject();
         proc.Start();
-        if (!job.AssignProcess(proc))
+        if (!job.AssignProcess(proc) && !proc.HasExited)
         {
             try { if (!proc.HasExited) proc.Kill(entireProcessTree: true); } catch { }
             throw new InvalidOperationException("Failed to confine ffprobe worker");
@@ -187,7 +187,7 @@ public class MediaProber
         using var proc = new System.Diagnostics.Process { StartInfo = psi };
         using var job = new JobObject();
         proc.Start();
-        if (!job.AssignProcess(proc))
+        if (!job.AssignProcess(proc) && !proc.HasExited)
         {
             try { if (!proc.HasExited) proc.Kill(entireProcessTree: true); } catch { }
             throw new InvalidOperationException("Failed to confine thumbnail worker");

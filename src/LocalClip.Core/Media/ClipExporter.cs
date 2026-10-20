@@ -47,11 +47,11 @@ public class ClipExporter
     {
         string probe1 = Path.Combine(baseDir, name);
         string probe2 = Path.Combine(baseDir, "tools", "ffmpeg", name);
-        string probe3 = Path.Combine(@"D:\Documents\ClipMax\tools\ffmpeg", name);
+        string devPath = Path.GetFullPath(Path.Combine(baseDir, "..", "..", "..", "..", "..", "tools", "ffmpeg", name));
 
         if (File.Exists(probe1)) return probe1;
         if (File.Exists(probe2)) return probe2;
-        if (File.Exists(probe3)) return probe3;
+        if (File.Exists(devPath)) return devPath;
         return name;
     }
 
@@ -390,7 +390,7 @@ public class ClipExporter
         using var proc = new System.Diagnostics.Process { StartInfo = psi };
         using var job = new JobObject();
         proc.Start();
-        if (!job.AssignProcess(proc))
+        if (!job.AssignProcess(proc) && !proc.HasExited)
         {
             try { if (!proc.HasExited) proc.Kill(entireProcessTree: true); } catch { }
             throw new InvalidOperationException("Failed to confine FFmpeg encode worker");
@@ -428,7 +428,7 @@ public class ClipExporter
         using var proc = new System.Diagnostics.Process { StartInfo = psi };
         using var job = new JobObject();
         proc.Start();
-        if (!job.AssignProcess(proc))
+        if (!job.AssignProcess(proc) && !proc.HasExited)
         {
             try { if (!proc.HasExited) proc.Kill(entireProcessTree: true); } catch { }
             throw new InvalidOperationException("Failed to confine FFmpeg validation worker");

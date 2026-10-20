@@ -206,7 +206,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
 
         // Wire IPC events
         _captureHost.StateChanged += OnHostStateChanged;
-        _captureHost.ReplaySaved += OnHostReplaySaved;
+        _captureHost.ReplaySavedWithTracks += OnHostReplaySaved;
         _captureHost.FaultOccurred += OnHostFaultOccurred;
 
         // Status polling timer
@@ -390,7 +390,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
         });
     }
 
-    private void OnHostReplaySaved(string saveId, string filePath)
+    private void OnHostReplaySaved(string saveId, string filePath, System.Collections.Generic.IReadOnlyList<string> trackNames)
     {
         Application.Current?.Dispatcher.Invoke(async () =>
         {
@@ -398,7 +398,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
             if (File.Exists(filePath))
             {
                 string targetName = SelectedTarget?.DisplayName ?? "Screen";
-                var clip = await _storage.RegisterNewOriginalAsync(filePath, targetName);
+                var clip = await _storage.RegisterNewOriginalAsync(filePath, targetName, trackNames);
                 ReloadClips();
                 SelectedClip = clip;
             }

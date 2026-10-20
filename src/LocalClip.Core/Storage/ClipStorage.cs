@@ -87,10 +87,14 @@ public class ClipStorage
         }
     }
 
-    public async Task<ClipMetadata> RegisterNewOriginalAsync(string originalPath, string targetName = "")
+    public async Task<ClipMetadata> RegisterNewOriginalAsync(string originalPath, string targetName = "", IReadOnlyList<string>? trackNames = null)
     {
         var probe = await _prober.ProbeFileAsync(originalPath);
         var fi = new FileInfo(originalPath);
+        if (trackNames != null && trackNames.Count == probe.AudioTracks.Count)
+            for (int i = 0; i < trackNames.Count; i++)
+                if (!string.IsNullOrWhiteSpace(trackNames[i]))
+                    probe.AudioTracks[i].Name = trackNames[i];
 
         string title = Path.GetFileNameWithoutExtension(originalPath);
         string thumbPath = Path.Combine(_thumbnailsDir, $"{Path.GetFileNameWithoutExtension(originalPath)}_thumb.jpg");

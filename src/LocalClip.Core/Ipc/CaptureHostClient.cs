@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Text.Json;
@@ -23,6 +24,7 @@ public class CaptureHostClient : IDisposable
     public event Action<string, JsonElement?>? EventReceived;
     public event Action<string>? StateChanged;
     public event Action<string, string>? ReplaySaved; // saveId, filePath
+    public event Action<string, string, IReadOnlyList<string>>? ReplaySavedWithTracks;
     public event Action<string>? FaultOccurred;
 
     private volatile bool _expectedShutdown;
@@ -154,6 +156,15 @@ public class CaptureHostClient : IDisposable
                         {
                             string saveId = evData.Value.TryGetProperty("save_id", out var sid) ? sid.GetString() ?? "" : "";
                             string path = evData.Value.TryGetProperty("path", out var pth) ? pth.GetString() ?? "" : "";
+                            var names = new List<string>();
+                            if (evData.Value.TryGetProperty("tracks", out var tracksProp) &&
+                                tracksProp.ValueKind == JsonValueKind.Array)
+                            {
+                                foreach (var item in tracksProp.EnumerateArray())
+                                    if (item.ValueKind == JsonValueKind.String)
+                                        names.Add(item.GetString() ?? "");
+                            }
+                            ReplaySavedWithTracks?.Invoke(saveId, path, names);
                             ReplaySaved?.Invoke(saveId, path);
                         }
                         else if (evName == "fault" && evData.HasValue)
