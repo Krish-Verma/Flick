@@ -46,6 +46,9 @@ public class ClipMetadata
     [JsonIgnore]
     public string LibrarySource => IsImported ? (string.IsNullOrWhiteSpace(SourceLabel) ? "Imported Clip" : SourceLabel) : "Flick";
 
+    [JsonIgnore]
+    public string LibraryDeleteAction => IsImported ? "Remove" : "Delete";
+
     public string ThumbnailPath { get; set; } = "";
 
     // Multi-track audio configuration
