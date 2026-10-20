@@ -507,61 +507,142 @@
                     </Grid>
                 </ScrollViewer>
 
-                <!-- Discord Export & Share Actions -->
-                <Border Grid.Row="1" Background="#201B2B" BorderBrush="#8D60B8" BorderThickness="1" CornerRadius="12" Padding="12">
+                <!-- Slice 5: lightweight, sticky local export and genuine OLE file drag. -->
+                <Border Grid.Row="1"
+                        Style="{StaticResource Flick.Surface.Frosted}"
+                        Padding="12" Margin="0,8,0,0">
                     <StackPanel>
-                        <!-- Presets & Export Button -->
-                        <DockPanel Margin="0,0,0,10">
-                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                <TextBlock Text="Discord Target:" FontWeight="Bold" VerticalAlignment="Center" Margin="0,0,10,0"/>
-                                <RadioButton x:Name="Radio20" Content="20 MB" GroupName="Cap" Click="Preset20_Click" VerticalAlignment="Center" Margin="0,0,10,0" Foreground="#FAFAFA"/>
-                                <RadioButton x:Name="Radio50" Content="50 MB" GroupName="Cap" Click="Preset50_Click" VerticalAlignment="Center" Margin="0,0,10,0" Foreground="#FAFAFA"/>
-                                <RadioButton x:Name="Radio100" Content="100 MB" GroupName="Cap" Click="Preset100_Click" VerticalAlignment="Center" Margin="0,0,10,0" Foreground="#FAFAFA"/>
-                                <RadioButton x:Name="RadioCustom" Content="Custom" GroupName="Cap" Click="PresetCustom_Click" VerticalAlignment="Center" Margin="0,0,5,0" Foreground="#FAFAFA"/>
-                                <TextBox x:Name="TxtCustomMb" Width="46" Text="20" VerticalAlignment="Center" LostFocus="TxtCustomMb_LostFocus" ToolTip="Custom target in MB (1–250)"/>
-                                <TextBlock Text="MB" Foreground="#B9B3CC" VerticalAlignment="Center" Margin="3,0,0,0"/>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" MinWidth="80"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,14,0">
+                                <TextBlock Text="Export for Discord"
+                                           Style="{StaticResource Flick.Text.Section}"/>
+                                <TextBlock Text="Local MP4 · H.264 + AAC · 20 MB Default"
+                                           Style="{StaticResource Flick.Text.Caption}"
+                                           TextTrimming="CharacterEllipsis"/>
                             </StackPanel>
+                            <ComboBox Grid.Column="1" x:Name="CmbExportCap"
+                                      Style="{StaticResource Flick.Input.Combo}"
+                                      Width="115" Height="36" MinWidth="0" Margin="0,0,8,0"
+                                      VerticalAlignment="Center"
+                                      SelectionChanged="ExportCap_SelectionChanged"
+                                      AutomationProperties.Name="Discord Export Size Limit"
+                                      ToolTip="File-size cap in decimal MB; Discord destination limits may vary.">
+                                <ComboBoxItem Content="10 MB" Tag="10"/>
+                                <ComboBoxItem Content="20 MB" Tag="20"/>
+                                <ComboBoxItem Content="50 MB" Tag="50"/>
+                                <ComboBoxItem Content="100 MB" Tag="100"/>
+                                <ComboBoxItem Content="Custom" Tag="Custom"/>
+                            </ComboBox>
+                            <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center"
+                                        x:Name="CustomCapPanel" Visibility="Collapsed" Margin="0,0,8,0">
+                                <TextBox x:Name="TxtCustomMb" Width="58"
+                                         Style="{StaticResource Flick.Input.Text}"
+                                         Text="20" ToolTip="1–250 decimal MB"
+                                         LostFocus="TxtCustomMb_LostFocus"
+                                         PreviewKeyDown="CustomMb_PreviewKeyDown"/>
+                                <TextBlock Text="MB" Style="{StaticResource Flick.Text.Caption}"
+                                           VerticalAlignment="Center" Margin="5,0,0,0"/>
+                            </StackPanel>
+                            <Button Grid.Column="3" x:Name="BtnExport"
+                                    Content="Export Clip"
+                                    Click="BtnExport_Click"
+                                    Style="{StaticResource Flick.Button.Primary}"
+                                    IsEnabled="{Binding CanStartExport}"
+                                    MinWidth="111" Padding="14,0"/>
+                        </Grid>
 
-                            <Button Content="⚡ Export for Discord" Click="BtnExport_Click"
-                                    IsEnabled="{Binding SelectedClip.IsAvailable}"
-                                    Background="#7953A8" FontWeight="Bold" Padding="16,8" HorizontalAlignment="Right"/>
-                        </DockPanel>
+                        <Grid Margin="0,10,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" MinWidth="70"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                <ProgressBar Height="4" Margin="0,0,0,7"
+                                             IsIndeterminate="True"
+                                             Foreground="{DynamicResource Flick.Brush.Accent}"
+                                             Visibility="{Binding IsExporting, Converter={StaticResource BoolToVis}}"
+                                             AutomationProperties.Name="Local Export Running"/>
+                                <TextBlock Text="{Binding ExportStatusMessage}"
+                                           Style="{StaticResource Flick.Text.Caption}"
+                                           TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"
+                                           ToolTip="{Binding ExportStatusMessage}"/>
+                            </StackPanel>
+                            <Button Grid.Column="1" Content="Cancel Export"
+                                    Click="BtnCancelExport_Click"
+                                    Style="{StaticResource Flick.Button.Secondary}"
+                                    Visibility="{Binding IsExporting, Converter={StaticResource BoolToVis}}"
+                                    Margin="10,0,0,0" MinHeight="30" Padding="9,0"/>
+                        </Grid>
 
-                        <!-- Progress Bar (while exporting) -->
-                        <ProgressBar Height="6" Minimum="0" Maximum="100" Value="{Binding ExportProgress}"
-                                     Visibility="{Binding IsExporting, Converter={StaticResource BoolToVis}}" Margin="0,0,0,6"/>
-
-                        <!-- Status text -->
-                        <TextBlock Text="{Binding ExportStatusMessage}" Foreground="#CDB1FF" FontSize="12" Margin="0,0,0,10"/>
-
-                        <!-- Ready Share Actions (Native Drag & Copy into Discord) -->
-                        <Border Background="#151622" BorderBrush="#22C55E" BorderThickness="1" CornerRadius="6" Padding="10"
+                        <Border Margin="0,10,0,0" Padding="9,8"
+                                Background="{DynamicResource Flick.Brush.Surface}"
+                                BorderBrush="{DynamicResource Flick.Brush.BorderStrong}"
+                                BorderThickness="1" CornerRadius="{StaticResource Flick.Corner.Control}"
                                 Visibility="{Binding IsExportReady, Converter={StaticResource BoolToVis}}">
                             <Grid>
                                 <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="Auto"/> <!-- Drag Handle -->
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="Auto"/> <!-- Buttons -->
+                                    <ColumnDefinition Width="*" MinWidth="125"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="Auto"/>
                                 </Grid.ColumnDefinitions>
 
-                                <!-- Drag Handle -->
-                                <Border x:Name="DragHandle" Grid.Column="0" Background="#346957" CornerRadius="4" Padding="14,8"
-                                        Cursor="Hand" MouseLeftButtonDown="DragHandle_MouseLeftButtonDown">
-                                    <TextBlock Text="✋ DRAG TO DISCORD" FontWeight="Bold" Foreground="#FFFFFF"/>
+                                <!-- Real drag source. Drag initiation requires pointer movement. -->
+                                <Border x:Name="DragHandle" Grid.Column="0"
+                                        Background="{DynamicResource Flick.Brush.Raised}"
+                                        BorderBrush="{DynamicResource Flick.Brush.Border}"
+                                        BorderThickness="1" CornerRadius="8"
+                                        Padding="12,7" Cursor="SizeAll" Margin="0,0,9,0"
+                                        PreviewMouseLeftButtonDown="DragHandle_MouseLeftButtonDown"
+                                        PreviewMouseMove="DragHandle_PreviewMouseMove"
+                                        ToolTip="Drag the actual validated MP4 into Discord">
+                                    <StackPanel>
+                                        <TextBlock Text="↗ Drag MP4 Into Discord"
+                                                   Style="{StaticResource Flick.Text.Control}"
+                                                   TextTrimming="CharacterEllipsis" TextWrapping="NoWrap"/>
+                                        <TextBlock Text="{Binding ReadyExportFilePath}"
+                                                   Style="{StaticResource Flick.Text.Muted}"
+                                                   TextTrimming="CharacterEllipsis" TextWrapping="NoWrap"
+                                                   ToolTip="{Binding ReadyExportFilePath}"/>
+                                    </StackPanel>
                                 </Border>
-
-                                <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="14,0,0,0">
-                                    <TextBlock Text="Share file validated and ready!" FontWeight="SemiBold" Foreground="#8FD4B0"/>
-                                    <TextBlock Text="{Binding ReadyExportFilePath}" FontSize="11" Foreground="#9C97AD" TextTrimming="CharacterEllipsis"/>
-                                </StackPanel>
-
-                                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
-                                    <Button Content="📋 Copy File" Click="BtnCopyFile_Click" Margin="0,0,8,0" Background="#242436" ToolTip="Copy MP4 to clipboard (Ctrl+V into Discord)"/>
-                                    <Button Content="📁 Open Folder" Click="BtnOpenExportFolder_Click" Margin="0,0,8,0" Background="#242436"/>
-                                    <Button Content="🚀 Send to Channel" Click="BtnSendWebhook_Click" Background="#4F46E5" FontWeight="Bold" ToolTip="Send to configured Discord text channel webhook"/>
-                                </StackPanel>
+                                <Button Grid.Column="1" Content="Copy File"
+                                        Click="BtnCopyFile_Click"
+                                        Style="{StaticResource Flick.Button.Secondary}"
+                                        MinWidth="88" Margin="0,0,7,0"
+                                        ToolTip="Copy MP4 as a file for pasting into Discord"/>
+                                <Button Grid.Column="2" Content="Open Folder"
+                                        Click="BtnOpenExportFolder_Click"
+                                        Style="{StaticResource Flick.Button.Ghost}"
+                                        MinWidth="85"/>
                             </Grid>
                         </Border>
+
+                        <Expander x:Name="AdvancedShareExpander" IsExpanded="False"
+                                  Header="Advanced: Direct Posting" Margin="0,7,0,0"
+                                  Foreground="{DynamicResource Flick.Brush.TextSecondary}"
+                                  Background="Transparent">
+                            <Grid Margin="10,7,0,3">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" MinWidth="120"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0"
+                                           Text="Optional Webhook · Manual Confirmation Required"
+                                           Style="{StaticResource Flick.Text.Caption}"
+                                           TextWrapping="Wrap" VerticalAlignment="Center"
+                                           Margin="0,0,12,0"/>
+                                <Button Grid.Column="1" Content="Send to Channel"
+                                        Click="BtnSendWebhook_Click"
+                                        Style="{StaticResource Flick.Button.Secondary}"
+                                        ToolTip="Only sends after you explicitly confirm the destination"/>
+                            </Grid>
+                        </Expander>
                     </StackPanel>
                 </Border>
             </Grid>
