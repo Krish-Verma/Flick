@@ -142,65 +142,168 @@
                         <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
 
-                    <!-- Shell-level library title; detailed gallery UX is Slice 3. -->
+                    <!-- Compact library header, search and local source filters. -->
                     <StackPanel Grid.Row="0" Margin="0,0,0,10">
-                        <TextBlock Text="Your Clips" Style="{StaticResource Flick.Text.Section}" Margin="0,0,0,10"/>
-                        <Grid>
-                        <TextBox x:Name="TxtClipSearch" Text="{Binding SearchQuery, UpdateSourceTrigger=PropertyChanged}"
-                                 Padding="8,6" Background="#1E1E24" Foreground="#FAFAFA" BorderBrush="#454052"
-                                 ToolTip="Search clips by title or source"/>
-                        <TextBlock Text="Search Clips..." Foreground="#9C97AD" VerticalAlignment="Center" Margin="10,0,0,0" IsHitTestVisible="False">
+                        <Grid Margin="0,0,0,11">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="Your Clips"
+                                       Style="{StaticResource Flick.Text.Section}"
+                                       VerticalAlignment="Center"/>
+                            <Button Grid.Column="1" Content="+ Import Folder"
+                                    Style="{StaticResource Flick.Button.Secondary}"
+                                    FontSize="12" Padding="9,0" MinWidth="0" MinHeight="32"
+                                    Click="BtnImportFolder_Click"
+                                    ToolTip="Link clips already saved by other recording software"/>
+                        </Grid>
+                        <Grid Margin="0,0,0,10">
+                            <TextBox x:Name="TxtClipSearch" Style="{StaticResource Flick.Input.Text}"
+                                     Text="{Binding SearchQuery, UpdateSourceTrigger=PropertyChanged}"
+                                     ToolTip="Search clip titles and local source names"/>
+                            <TextBlock Text="Search Clips…" Foreground="{DynamicResource Flick.Brush.TextMuted}"
+                                       Margin="11,0,0,0" VerticalAlignment="Center"
+                                       IsHitTestVisible="False">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding SearchQuery}" Value="">
+                                                <Setter Property="Visibility" Value="Visible"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                        </Grid>
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Left">
+                            <RadioButton x:Name="RadioAllClips" Content="All Clips"
+                                         Style="{StaticResource Flick.Library.FilterChip}"
+                                         GroupName="LibrarySources"
+                                         Checked="LibraryFilter_Checked" Margin="0,0,5,0"/>
+                            <RadioButton x:Name="RadioFlickClips" Content="Flick"
+                                         Style="{StaticResource Flick.Library.FilterChip}"
+                                         GroupName="LibrarySources"
+                                         Checked="LibraryFilter_Checked" Margin="0,0,5,0"/>
+                            <RadioButton x:Name="RadioImportedClips" Content="Imported"
+                                         Style="{StaticResource Flick.Library.FilterChip}"
+                                         GroupName="LibrarySources"
+                                         Checked="LibraryFilter_Checked"/>
+                        </StackPanel>
+                    </StackPanel>
+
+                    <!-- Virtualized clip rows; imported media stays in place. -->
+                    <Grid Grid.Row="1" MinHeight="0">
+                        <ListBox x:Name="ClipList"
+                                 ItemsSource="{Binding FilteredClips}"
+                                 SelectedItem="{Binding SelectedClip, Mode=TwoWay}"
+                                 Style="{StaticResource Flick.Library.List}"
+                                 PreviewMouseRightButtonDown="ClipList_PreviewMouseRightButtonDown">
+                            <ListBox.ContextMenu>
+                                <ContextMenu>
+                                    <MenuItem Header="Rename Clip" Click="BtnRename_Click"/>
+                                    <MenuItem Header="Open Original Folder" Click="BtnOpenMediaFolder_Click"/>
+                                    <Separator/>
+                                    <MenuItem Header="Remove or Delete Clip…" Click="BtnDelete_Click"/>
+                                </ContextMenu>
+                            </ListBox.ContextMenu>
+                            <ListBox.ItemContainerStyle>
+                                <Style TargetType="{x:Type ListBoxItem}" BasedOn="{StaticResource Flick.Library.Item}"/>
+                            </ListBox.ItemContainerStyle>
+                            <ListBox.ItemTemplate>
+                                <DataTemplate>
+                                    <Grid Height="62" Margin="7,3">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="78"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <Border Grid.Column="0" Width="74" Height="48"
+                                                Background="{DynamicResource Flick.Brush.Raised}"
+                                                CornerRadius="7" ClipToBounds="True"
+                                                VerticalAlignment="Center">
+                                            <Image Source="{Binding ThumbnailPath}"
+                                                   Stretch="UniformToFill"
+                                                   SnapsToDevicePixels="True"/>
+                                        </Border>
+                                        <StackPanel Grid.Column="1" Margin="9,0,0,0"
+                                                    VerticalAlignment="Center" MinWidth="0">
+                                            <TextBlock Text="{Binding Title}"
+                                                       Style="{StaticResource Flick.Text.Control}"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       TextWrapping="NoWrap"
+                                                       ToolTip="{Binding Title}"/>
+                                            <TextBlock Text="{Binding LibrarySource}"
+                                                       Style="{StaticResource Flick.Text.Caption}"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       TextWrapping="NoWrap"
+                                                       Margin="0,2,0,0"/>
+                                            <DockPanel Margin="0,3,0,0" LastChildFill="False">
+                                                <TextBlock Text="{Binding FormattedDuration}"
+                                                           Style="{StaticResource Flick.Text.Caption}"
+                                                           Foreground="{DynamicResource Flick.Brush.Accent}"/>
+                                                <TextBlock Text="{Binding LibraryStatus}"
+                                                           Style="{StaticResource Flick.Text.Caption}"
+                                                           HorizontalAlignment="Right"
+                                                           DockPanel.Dock="Right">
+                                                    <TextBlock.Style>
+                                                        <Style TargetType="TextBlock"
+                                                               BasedOn="{StaticResource Flick.Text.Caption}">
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding IsAvailable}" Value="False">
+                                                                    <Setter Property="Foreground" Value="{DynamicResource Flick.Brush.Warning}"/>
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </TextBlock.Style>
+                                                </TextBlock>
+                                            </DockPanel>
+                                        </StackPanel>
+                                    </Grid>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                        <TextBlock Text="No Clips Found. Save a Replay or Import a Folder."
+                                   Style="{StaticResource Flick.Text.Caption}"
+                                   TextWrapping="Wrap" HorizontalAlignment="Center"
+                                   VerticalAlignment="Center" TextAlignment="Center"
+                                   Margin="20" IsHitTestVisible="False">
                             <TextBlock.Style>
-                                <Style TargetType="TextBlock">
+                                <Style TargetType="TextBlock"
+                                       BasedOn="{StaticResource Flick.Text.Caption}">
                                     <Setter Property="Visibility" Value="Collapsed"/>
                                     <Style.Triggers>
-                                        <DataTrigger Binding="{Binding SearchQuery}" Value="">
+                                        <DataTrigger Binding="{Binding FilteredClips.Count}" Value="0">
                                             <Setter Property="Visibility" Value="Visible"/>
                                         </DataTrigger>
                                     </Style.Triggers>
                                 </Style>
                             </TextBlock.Style>
                         </TextBlock>
+                    </Grid>
+
+                    <StackPanel Grid.Row="2" Margin="0,10,0,0">
+                        <TextBlock Text="{Binding LibrarySummaryText}"
+                                   Style="{StaticResource Flick.Text.Muted}"
+                                   TextTrimming="CharacterEllipsis"
+                                   Margin="0,0,0,7"/>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <Button Grid.Column="0" Content="Open Folder"
+                                    Click="BtnOpenMediaFolder_Click"
+                                    Style="{StaticResource Flick.Button.Ghost}"
+                                    HorizontalAlignment="Left" MinHeight="32"
+                                    MinWidth="0" Padding="9,0"/>
+                            <Button Grid.Column="1" Content="Rescan"
+                                    Click="BtnRescan_Click"
+                                    Style="{StaticResource Flick.Button.Ghost}"
+                                    HorizontalAlignment="Right" MinHeight="32"
+                                    MinWidth="0" Padding="9,0"/>
                         </Grid>
                     </StackPanel>
-
-                    <!-- Clip List -->
-                    <ListBox Grid.Row="1" ItemsSource="{Binding FilteredClips}" SelectedItem="{Binding SelectedClip, Mode=TwoWay}"
-                             Background="Transparent" BorderThickness="0" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
-                        <ListBox.ItemTemplate>
-                            <DataTemplate>
-                                <Border Background="#1F1B2B" BorderBrush="#242436" BorderThickness="1" CornerRadius="6" Margin="0,0,0,8" Padding="8">
-                                    <Grid>
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="96"/>
-                                            <ColumnDefinition Width="*"/>
-                                        </Grid.ColumnDefinitions>
-
-                                        <!-- Thumbnail -->
-                                        <Border Grid.Column="0" Height="54" Width="96" Background="#09090B" CornerRadius="4">
-                                            <Image Source="{Binding ThumbnailPath}" Stretch="UniformToFill"/>
-                                        </Border>
-
-                                        <!-- Details -->
-                                        <StackPanel Grid.Column="1" Margin="10,0,0,0" VerticalAlignment="Center">
-                                            <TextBlock Text="{Binding Title}" FontWeight="Bold" FontSize="13" TextTrimming="CharacterEllipsis"/>
-                                            <TextBlock Text="{Binding TargetName}" FontSize="11" Foreground="#B9B3CC" Margin="0,2,0,0"/>
-                                            <DockPanel Margin="0,4,0,0">
-                                                <TextBlock Text="{Binding FormattedDuration}" FontSize="11" Foreground="#C69BFF"/>
-                                                <TextBlock Text="{Binding FormattedSize}" FontSize="11" Foreground="#9C97AD" HorizontalAlignment="Right"/>
-                                            </DockPanel>
-                                        </StackPanel>
-                                    </Grid>
-                                </Border>
-                            </DataTemplate>
-                        </ListBox.ItemTemplate>
-                    </ListBox>
-
-                    <!-- Gallery Footer -->
-                    <DockPanel Grid.Row="2" Margin="0,10,0,0">
-                        <Button Content="Open Folder" Click="BtnOpenMediaFolder_Click" Background="#242436" HorizontalAlignment="Left"/>
-                        <Button Content="Rescan" Click="BtnRescan_Click" Background="#242436" HorizontalAlignment="Right"/>
-                    </DockPanel>
                 </Grid>
             </Border>
 
@@ -225,7 +328,7 @@
                     </StackPanel>
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
                         <Button Content="Rename" Click="BtnRename_Click" Margin="0,0,8,0" Background="#242436"/>
-                        <Button Content="Delete" Click="BtnDelete_Click" Background="#7F1D1D" Foreground="#FCA5A5"/>
+                        <Button Content="{Binding SelectedClip.LibraryDeleteAction, FallbackValue=Delete}" Click="BtnDelete_Click" Background="#7F1D1D" Foreground="#FCA5A5"/>
                     </StackPanel>
                 </DockPanel>
 
