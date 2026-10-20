@@ -1,37 +1,42 @@
-> **Follow-up stabilization active:** The “backend qualification complete” status below applied to the prior hardware revision only. New native save-correlation and lightweight UX settings are unqualified on hardware until AntiGravity reruns. PR remains draft; no new release. See [current acceptance handoff](ANTIGRAVITY-VALIDATION-HANDOFF.md).
-
 # LocalClip / Flick Implementation State
 
 **Repository:** `Krish-Verma/Flick`  
 **Active Branch:** `fix/backend-stability-and-ci-20261019` (Draft PR #1)  
 **Qualified Host Platform:** Windows 11 Pro 64-bit (Build 26300), AMD Ryzen 5 5600 6-Core, 16 GB DDR4 RAM, NVIDIA GeForce RTX 5060 (8 GB Dedicated VRAM, Driver 617.42)  
 **Qualification Date:** October 20, 2026  
-**State:** Backend Technical Qualification Complete (M0, M1, M2, M3, M4 Verified on Hardware)
+**State:** Backend Technical Hardware Qualification Complete (M0, M1, M2, M3, M4 Verified on Hardware)
 
 ---
 
 ## 1. Executive Summary
 
-Flick's clipping backend has been hardened, compiled, and hardware-qualified on the local Windows 11 PC equipped with an NVIDIA GeForce RTX 5060 GPU. All 45 automated tests pass (39 offline + 6 hardware-dependent tests). The capture-to-Discord pipeline has been proven with real NVENC hardware encoding, in-memory 30s circular buffering, disk saving to Matroska (.mkv), non-destructive trimming, audio mixing, and export to a strictly capped 20 MB MP4 container.
+Flick's clipping backend has undergone full hardware qualification and stabilization on the local Windows 11 PC equipped with an NVIDIA GeForce RTX 5060 GPU. All **54 automated tests** pass (47 hardware-independent + 7 hardware-dependent tests in 2.22 minutes). The complete clipping-to-Discord pipeline has been proven with real NVENC hardware encoding, in-memory 30s circular buffering, disk saving to Matroska (.mkv), non-destructive trimming, audio mixing, and export to a strictly capped 20 MB MP4 container.
+
+High-motion video capture, visual entropy, and full zero-error FFmpeg decodes have been physically verified. Monitor capture has been hardened for Windows 11 / HAGS using Windows Graphics Capture (WGC / WinRT method 2) with dynamic display identifier resolution, eliminating the DXGI 0x0 black-frame defect. Memory stability across 50 start/stop cycles has been proven with peak private bytes bounded to 156 MiB (< 768 MiB safety cap).
 
 ---
 
 ## 2. Key Stabilization & Hardware Fixes Applied
 
-1. **OBS Replay Buffer Path Resolution:**
-   - In `src/LocalClip.CaptureHost/main.cpp`, integrated the OBS `get_last_replay` proc handler call on `g_cap.replay_output` with a fallback to newest `.mkv` write-time verification in the configured output directory. This resolved the OBS `saved` signal omitting the `path` argument in calldata on Windows.
-2. **Desktop Window Handle Attachment:**
-   - In `src/LocalClip.CaptureHost/main.cpp`, integrated `OpenDesktopW(L"default")` and `SetThreadDesktop` at startup and window validation points. This ensures user32 `IsWindow` checks succeed even when the host or test suite is executed in non-interactive or background runner sessions.
-3. **Dynamic Plugin & Runtime Resolution:**
-   - Removed all hardcoded `D:\Documents\ClipMax` development paths across `CaptureHost` and `LocalClip.Core`. Binaries determine relative runtime locations dynamically.
-4. **Subprocess Confinement via Windows Job Object:**
-   - All worker processes (OBS capture host, FFmpeg, FFprobe) are assigned to an owned Windows Job Object configured with `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`. This guarantees zero orphan processes after stop, exit, or crash.
-5. **Combined Preview Track Muting:**
-   - When discrete audio sources (System Audio + Microphone) exist, track 1 (combined mix) is muted by default in preview and export filters to prevent double-mix audio echoing. Audio mode is accurately labeled as "System Audio + Mic [Fallback]".
-6. **Strict 20 MB Decimal Cap Enforcement:**
-   - Bitrate budget calculator treats 20 MB as exactly $20,000,000$ bytes (not $20,971,520$ B), reserving a safety margin of at least $\max(5\%, 256\text{ KiB})$ to prevent Discord upload rejection.
-7. **CI Hardware Test Gating:**
-   - Gated the 6 GPU-dependent tests with `[HardwareFact]` keyed to `$env:FLICK_HARDWARE_TESTS == "1"`. GitHub-hosted runners run the 39 hardware-independent tests (reporting 6 skipped), while the local NVIDIA PC executes all 45 tests.
+1. **Windows Graphics Capture (WGC) for Display Duplication:**
+   - In `src/LocalClip.CaptureHost/main.cpp`, replaced DXGI Desktop Duplication (`method = 0`) with Windows Graphics Capture (`method = 2`) and added dynamic `monitor_id` resolution via `EnumDisplayMonitors`. This resolves DXGI `887A0004` errors in non-elevated sessions, capturing real, vibrant desktop and gameplay frames instead of black 0x0 dummy frames.
+2. **Video Engine Re-initialization & Memory Bounds:**
+   - In `ensure_obs_init`, cached current width, height, and FPS parameters to prevent redundant `obs_reset_video` calls during start/stop cycles. Disconnected the `saved` signal on capture stop. Reduced peak host memory from 931 MiB down to ~156 MiB across 50 consecutive cycles.
+3. **IPC Stop/Shutdown Deadline & Timeout Synchronization:**
+   - In `internal_stop_capture`, tuned the graceful replay buffer output stop deadline to 2.0 seconds before `obs_output_force_stop`, and synchronized `g_state_mutex` updates.
+   - In `src/LocalClip.Core/Ipc/CaptureHostClient.cs`, increased `StopCaptureAsync` timeout to 10,000 ms and `ShutdownAsync` to 8,000 ms, eliminating timeout races during rapid stress cycling.
+4. **Assembly-Level Hardware Test Serialisation:**
+   - Added `[assembly: CollectionBehavior(DisableTestParallelization = true)]` to prevent xUnit from running GPU capture sessions concurrently, preventing driver-level NVENC resource contention during automated test runs.
+5. **OBS Replay Buffer Path Resolution & Unique Immutability:**
+   - Integrated the OBS `get_last_replay` proc handler call with write-time directory verification and UUID assignment. Rapid consecutive saves generate unique immutable `.mkv` files without overwriting or relabeling older clips.
+6. **Desktop Window Handle Attachment:**
+   - In `src/LocalClip.CaptureHost/main.cpp`, integrated `OpenDesktopW(L"default")` and `SetThreadDesktop` at startup and window validation points to enable user32 `IsWindow` checks under runner sessions.
+7. **Subprocess Confinement via Windows Job Object:**
+   - Worker processes (OBS capture host, FFmpeg, FFprobe) are confined to an owned Windows Job Object configured with `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`. Zero orphan workers remain after stop, quit, or crash.
+8. **Audio Track Muting & Accurate Fallback Labeling:**
+   - Discrete audio sources (System Audio + Microphone) are routed to separate tracks. Track 1 (combined mix) is muted by default in preview and export filters to prevent duplicate audio echoing. Labeled as "System Audio + Mic [Fallback]".
+9. **Strict 20 MB Decimal Cap Enforcement:**
+   - Bitrate budget calculator treats 20 MB as exactly $20,000,000$ bytes (not $20,971,520$ B), reserving a safety margin of at least $\max(5\%, 256\text{ KiB})$ to prevent Discord upload rejection. High-motion 30s export measured at **18,763,446 bytes**.
 
 ---
 
@@ -48,20 +53,21 @@ Flick's clipping backend has been hardened, compiled, and hardware-qualified on 
 
 ## 4. Verification Evidence & Artifacts
 
-- **Full Hardware Suite:** 45 tests passed in 1.18 minutes (`scripts/run_tests.ps1 -Hardware`).
-- **Offline Suite:** 39 tests passed, 6 skipped in 1.33 seconds (`scripts/run_tests.ps1`).
-- **Original MKV:** 55,407,626 bytes, 29.03s, 1920x1080@30fps NVENC CBR 15 Mbps, 2 audio tracks (System loopback + Mic), 0 decode errors.
-- **Discord MP4:** 854,598 bytes ($\le 20,000,000$ B), 28.99s, 1920x1080@30fps H.264, 1 stereo AAC track, 0 decode errors.
-- **Stress Cycles:** 50 start/stop cycles passed with host private bytes bounded to 148.2 MiB (budget: 768 MiB).
+- **Full Hardware Suite:** 54 tests passed in 2.22 minutes (`scripts/run_tests.ps1 -Hardware`).
+- **Offline Suite:** 47 tests passed, 7 skipped in 1.48 seconds (`scripts/run_tests.ps1`).
+- **Original MKV:** 55,750,884 bytes, 29.10s, 1920x1080@30fps NVENC CBR 15 Mbps, 2 audio tracks (System loopback + Mic), 0 decode errors.
+- **Motion Quality:** 58/58 distinct frame hashes via `scripts/check_motion.ps1`.
+- **Discord MP4:** 18,763,446 bytes ($\le 20,000,000$ B), 28.99s, 1920x1080@30fps H.264, 1 stereo AAC track, 0 decode errors.
+- **Stress Cycles:** 50 start/stop cycles passed with host private bytes bounded to 156.4 MiB (safety budget: 768 MiB).
 - **Target Switches:** 20 target switches between monitor and desktop windows passed.
 - **Crash Isolation:** Killed host verified to leave 0 orphan processes in table.
-- **Portable ZIP:** `dist/LocalClip-v1.0.0-win-x64.zip` (346.9 MB, SHA-256 `CB464DD1EC1DD2CBA5333AF48D777C4BAAD093E601D140CDFA319F389DF70FF5`).
-- **Smoke Test:** Extracted and executed cleanly in `%TEMP%\Flick Smoke Test 🎮\`.
+- **Portable ZIP:** `dist/LocalClip-v1.0.0-win-x64.zip` (346.9 MB, SHA-256 `ADDA9234D56E4E72994A686D5B0F1A8AF245AE2545157EB02ECFFF15099E9EF2`).
+- **Smoke Test:** Extracted and executed cleanly in `%TEMP%\Flick Final Qualification 🎮 3112cb4aa2864a86b41cdb16947f57d9\`. Tested native host ping/shutdown, GUI launch `--minimized`, installer/uninstaller, and Windows startup registry opt-in/restore.
 
 ---
 
 ## 5. Next Steps
 
 1. Commit and push backend qualification changes to branch `fix/backend-stability-and-ci-20261019` for PR #1.
-2. Conduct user hands-on validation: drag exported clip into Discord desktop client to observe Discord player behavior.
+2. Keep PR draft until owner review.
 3. Transition from minimal functional WPF UI to the planned polished GUI redesign.

@@ -336,7 +336,15 @@ static BOOL CALLBACK EnumMonitorsProc(HMONITOR hMon, HDC hdc, LPRECT rc, LPARAM 
 
 // Initialization of OBS engine
 static bool ensure_obs_init(int width, int height, int fps) {
+    static int s_cur_width = 0;
+    static int s_cur_height = 0;
+    static int s_cur_fps = 0;
+
     bool already_initialized = g_obs_initialized.load();
+    if (already_initialized && s_cur_width == width && s_cur_height == height && s_cur_fps == fps) {
+        return true;
+    }
+
     if (!already_initialized) {
         base_set_log_handler(obs_log_redirect, nullptr);
         if (!obs_startup("en-US", nullptr, nullptr)) return false;
@@ -360,6 +368,9 @@ static bool ensure_obs_init(int width, int height, int fps) {
         if (!already_initialized) obs_shutdown();
         return false;
     }
+    s_cur_width = width;
+    s_cur_height = height;
+    s_cur_fps = fps;
     if (already_initialized) return true;
 
     struct obs_audio_info oai = {};
@@ -494,7 +505,22 @@ static bool start_capture_session(const json &params, std::string &out_err) {
     } else {
         // Monitor capture
         obs_data_t *m_settings = obs_data_create();
+        std::vector<MonitorInfo> mons;
+        EnumDisplayMonitors(nullptr, nullptr, EnumMonitorsProc, reinterpret_cast<LPARAM>(&mons));
+        std::string mon_id = params.value("monitor_id", "");
+        if (mon_id.empty()) {
+            if (g_cap.monitor_index >= 0 && g_cap.monitor_index < static_cast<int>(mons.size())) {
+                mon_id = mons[g_cap.monitor_index].device_name;
+            } else if (!mons.empty()) {
+                mon_id = mons[0].device_name;
+            }
+        }
+        std::cerr << "[CaptureHost] Configured monitor capture: mon_id=" << mon_id << ", index=" << g_cap.monitor_index << ", method=2 (WGC)" << std::endl;
+        if (!mon_id.empty()) {
+            obs_data_set_string(m_settings, "monitor_id", mon_id.c_str());
+        }
         obs_data_set_int(m_settings, "monitor", g_cap.monitor_index);
+        obs_data_set_int(m_settings, "method", 2); // 2 = Windows Graphics Capture (WinRT, non-injecting, works on Win11/HAGS)
         obs_data_set_bool(m_settings, "capture_cursor", true);
         g_cap.video_source = obs_source_create("monitor_capture", "DisplaySource", m_settings, nullptr);
         obs_data_release(m_settings);
@@ -632,8 +658,9 @@ static bool start_capture_session(const json &params, std::string &out_err) {
 // Stop capture implementation
 static void internal_stop_capture(const std::string &reason) {
     if (g_cap.replay_output) {
+        signal_handler_disconnect(obs_output_get_signal_handler(g_cap.replay_output), "saved", on_replay_saved, g_cap.replay_output);
         obs_output_stop(g_cap.replay_output);
-        auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+        auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(2000);
         while (obs_output_active(g_cap.replay_output) && std::chrono::steady_clock::now() < deadline)
             std::this_thread::sleep_for(std::chrono::milliseconds(20));
         if (obs_output_active(g_cap.replay_output)) {
@@ -673,9 +700,12 @@ static void internal_stop_capture(const std::string &reason) {
         g_cap.video_source = nullptr;
     }
 
-    g_cap.state = CaptureState::Off;
-    g_cap.is_armed = false;
-    g_cap.save_in_progress = false;
+    {
+        std::lock_guard<std::mutex> lock(g_state_mutex);
+        g_cap.state = CaptureState::Off;
+        g_cap.is_armed = false;
+        g_cap.save_in_progress = false;
+    }
 
     json d;
     d["state"] = "Off";

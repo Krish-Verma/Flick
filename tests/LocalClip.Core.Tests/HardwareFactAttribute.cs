@@ -1,6 +1,8 @@
 using System;
 using Xunit;
 
+[assembly: CollectionBehavior(DisableTestParallelization = true)]
+
 namespace LocalClip.Core.Tests;
 
 /// <summary>

@@ -202,7 +202,7 @@ public class CaptureHostClient : IDisposable
             while (!_cts?.IsCancellationRequested == true && !reader.EndOfStream)
             {
                 string? line = reader.ReadLine();
-                // Logs are drained silently to avoid console flooding, but could be logged if needed
+                if (!string.IsNullOrWhiteSpace(line)) { Console.WriteLine("[CaptureHost] " + line); }
             }
         }
         catch { }
@@ -360,7 +360,7 @@ public class CaptureHostClient : IDisposable
         if (!IsRunning) return true;
         try
         {
-            var resp = await SendCommandAsync("stop_capture", null, 5000);
+            var resp = await SendCommandAsync("stop_capture", null, 10000);
             return resp.Ok;
         }
         catch
@@ -375,7 +375,7 @@ public class CaptureHostClient : IDisposable
         _expectedShutdown = true;
         try
         {
-            await SendCommandAsync("shutdown", null, 3000);
+            await SendCommandAsync("shutdown", null, 8000);
         }
         catch { }
 
