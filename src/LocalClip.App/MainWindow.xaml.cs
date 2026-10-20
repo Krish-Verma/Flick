@@ -45,6 +45,9 @@ public partial class MainWindow : Window
     private MediaProber? _localPreviewProber;
     private bool _previewWasReencoded;
     private bool _playerIsPlaying;
+    private WorkspaceLayoutMode _layoutMode = WorkspaceLayoutMode.Split;
+    private bool _layoutInitialized;
+    private bool _compactShowingEditor;
 
     public MainWindow()
     {
@@ -64,6 +67,7 @@ public partial class MainWindow : Window
         _playerTimer.Tick += PlayerTimer_Tick;
 
         Loaded += MainWindow_Loaded;
+        SizeChanged += MainWindow_SizeChanged;
         PreviewKeyDown += MainWindow_PreviewKeyDown;
         StateChanged += (_, _) =>
         {
@@ -108,6 +112,8 @@ public partial class MainWindow : Window
             else if (ev.PropertyName == nameof(MainViewModel.SelectedClip))
             {
                 ResetPlayerForSelection();
+                if (_vm.SelectedClip != null && _layoutMode == WorkspaceLayoutMode.Compact)
+                    ShowCompactEditor();
             }
             else if (ev.PropertyName == nameof(MainViewModel.IsExportReady) &&
                      !_vm.IsExportReady && _playerView == PlayerView.Exported)
@@ -120,6 +126,8 @@ public partial class MainWindow : Window
         UpdateSharePresetSelection();
         RadioAllClips.IsChecked = true;
         ResetPlayerForSelection();
+        _layoutInitialized = true;
+        RefreshWorkspaceForSize();
     }
 
     private void RegisterHotkeys()
@@ -251,15 +259,16 @@ public partial class MainWindow : Window
         bool transitional = status == "Starting" || status == "Stopping";
         bool fault = status == "Faulted";
 
+        bool compact = _layoutMode == WorkspaceLayoutMode.Compact;
         TxtCaptureStatus.Text = status switch
         {
-            "Armed" => "Replay Ready",
-            "Buffering" => "Buffering Replay",
-            "Starting" => "Starting Replay",
-            "Stopping" => "Stopping Replay",
-            "Faulted" => "Capture Error",
-            "Paused" => "Replay Paused",
-            _ => "Replay Off"
+            "Armed" => compact ? "Ready" : "Replay Ready",
+            "Buffering" => compact ? "Buffering" : "Buffering Replay",
+            "Starting" => compact ? "Starting" : "Starting Replay",
+            "Stopping" => compact ? "Stopping" : "Stopping Replay",
+            "Faulted" => compact ? "Error" : "Capture Error",
+            "Paused" => compact ? "Paused" : "Replay Paused",
+            _ => compact ? "Off" : "Replay Off"
         };
 
         var neutral = (System.Windows.Media.Brush)FindResource("Flick.Brush.TextMuted");
@@ -276,8 +285,10 @@ public partial class MainWindow : Window
         BtnToggleCapture.IsEnabled = !transitional;
         BtnToggleCapture.ToolTip = $"Toggle Replay ({_vm.Settings.CaptureToggleHotkey})";
 
-        string saveLabel = $"Save Last {_vm.Settings.ReplayDurationSeconds} Seconds";
-        BtnSaveReplay.Content = saveLabel;
+        string saveLabel = WorkspaceLayoutRules.SaveActionLabel(
+            _vm.Settings.ReplayDurationSeconds, compact: false);
+        BtnSaveReplay.Content = WorkspaceLayoutRules.SaveActionLabel(
+            _vm.Settings.ReplayDurationSeconds, _layoutMode == WorkspaceLayoutMode.Compact);
         BtnSaveReplay.ToolTip = $"Save a replay ({_vm.Settings.SaveReplayHotkey})";
         BtnSaveReplay.IsEnabled = active;
         BtnSaveReplay.Style = (Style)FindResource(
@@ -392,7 +403,78 @@ public partial class MainWindow : Window
 
     private void BtnNavClips_Click(object sender, RoutedEventArgs e)
     {
+        if (_layoutMode == WorkspaceLayoutMode.Compact)
+            ShowCompactLibrary();
         TxtClipSearch.Focus();
+    }
+
+    private void BtnBackToLibrary_Click(object sender, RoutedEventArgs e) =>
+        BtnNavClips_Click(sender, e);
+
+    private void MainWindow_SizeChanged(object sender, SizeChangedEventArgs e) =>
+        RefreshWorkspaceForSize();
+
+    private void RefreshWorkspaceForSize()
+    {
+        if (!_layoutInitialized || ActualWidth <= 0) return;
+        var next = WorkspaceLayoutRules.Classify(ActualWidth);
+        if (next == _layoutMode) return; // Avoid per-pixel layout churn while resizing.
+        _layoutMode = next;
+        if (next == WorkspaceLayoutMode.Compact)
+            _compactShowingEditor = _vm.SelectedClip != null;
+        ApplyWorkspaceLayout();
+        UpdateStatusBadgeColor();
+    }
+
+    private void ShowCompactEditor()
+    {
+        if (_layoutMode != WorkspaceLayoutMode.Compact) return;
+        _compactShowingEditor = true;
+        ApplyWorkspaceLayout();
+    }
+
+    private void ShowCompactLibrary()
+    {
+        if (_layoutMode != WorkspaceLayoutMode.Compact) return;
+        _compactShowingEditor = false;
+        ApplyWorkspaceLayout();
+    }
+
+    private void ApplyWorkspaceLayout()
+    {
+        bool compact = _layoutMode == WorkspaceLayoutMode.Compact;
+        CaptureSourceColumn.Width = new GridLength(compact
+            ? WorkspaceLayoutRules.CompactSourceWidthDips
+            : WorkspaceLayoutRules.SplitSourceWidthDips);
+        CmbTargets.Width = compact ? 163 : 235;
+        TxtBufferedDuration.Visibility = compact ? Visibility.Collapsed : Visibility.Visible;
+        TxtResourceStats.Visibility = compact ? Visibility.Collapsed : Visibility.Visible;
+        BtnBackToLibrary.Visibility = compact ? Visibility.Visible : Visibility.Collapsed;
+        ClipLibraryColumn.MinWidth = compact ? 0 : 255;
+        ClipLibraryColumn.MaxWidth = compact ? double.PositiveInfinity : 430;
+        LibrarySplitterColumn.Width = new GridLength(compact ? 0 : 4);
+        LibrarySplitter.Visibility = compact ? Visibility.Collapsed : Visibility.Visible;
+        if (!compact)
+        {
+            ClipLibraryColumn.Width = new GridLength(WorkspaceLayoutRules.SplitLibraryWidthDips);
+            ClipEditorColumn.Width = new GridLength(1, GridUnitType.Star);
+            ClipLibraryPanel.Visibility = Visibility.Visible;
+            ClipEditorPanel.Visibility = Visibility.Visible;
+        }
+        else if (_compactShowingEditor)
+        {
+            ClipLibraryColumn.Width = new GridLength(0);
+            ClipEditorColumn.Width = new GridLength(1, GridUnitType.Star);
+            ClipLibraryPanel.Visibility = Visibility.Collapsed;
+            ClipEditorPanel.Visibility = Visibility.Visible;
+        }
+        else
+        {
+            ClipLibraryColumn.Width = new GridLength(1, GridUnitType.Star);
+            ClipEditorColumn.Width = new GridLength(0);
+            ClipLibraryPanel.Visibility = Visibility.Visible;
+            ClipEditorPanel.Visibility = Visibility.Collapsed;
+        }
     }
 
     // Top Bar Handlers
