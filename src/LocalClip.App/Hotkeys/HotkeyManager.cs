@@ -94,6 +94,8 @@ public class HotkeyManager : IDisposable
         return true;
     }
 
+    public static bool IsValidHotkey(string hotkey) => ParseHotkey(hotkey, out _, out _);
+
     private static bool ParseHotkey(string str, out uint modifiers, out uint vk)
     {
         modifiers = 0;
@@ -123,10 +125,10 @@ public class HotkeyManager : IDisposable
             }
             else
             {
-                if (Enum.TryParse<Key>(token, true, out var parsedKey))
-                {
+                if (Enum.TryParse<Key>(token, true, out var parsedKey) &&
+                    Enum.IsDefined(typeof(Key), parsedKey) && key == Key.None)
                     key = parsedKey;
-                }
+                else return false;
             }
         }
 
