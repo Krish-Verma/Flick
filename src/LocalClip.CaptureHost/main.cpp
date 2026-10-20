@@ -782,6 +782,10 @@ int main(int argc, char **argv) {
             else if (cmd == "get_status") {
                 json st = get_current_status();
                 send_response(id, true, st);
+                if (g_cap.state == CaptureState::Faulted) {
+                    // Do not leave an actively encoding source behind a faulted UI.
+                    internal_stop_capture("capture_target_lost");
+                }
             }
             else if (cmd == "stop_capture") {
                 internal_stop_capture("user_requested");

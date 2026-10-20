@@ -439,6 +439,12 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
                 double appMb = sample.AppPrivateBytes / (1024.0 * 1024.0);
                 ResourceStatsText = $"App RAM: {appMb:F0} MB | Host RAM: {hostMb:F0} MB | CPU: {sample.AppCpuPercent:F1}%";
 
+                if (st.PrivateBytes > 805_306_368L)
+                {
+                    await StopCaptureAsync();
+                    StatusDetails = "Capture stopped: native host exceeded the 768 MiB safety limit.";
+                    return;
+                }
                 if (sample.IsLowSystemMemory)
                 {
                     StatusDetails = "Warning: System available physical memory < 1 GB!";

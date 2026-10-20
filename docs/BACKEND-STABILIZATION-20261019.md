@@ -17,3 +17,6 @@ PR: [#1](https://github.com/Krish-Verma/Flick/pull/1); target `main`. Draft only
 - Process assignment is immediately after launch; a strictly race-free guarantee would require starting suspended/in a job. Do not describe this as a proven absolute zero-orphan guarantee.
 - Hard-coded original historical benchmark numbers in TEST-RESULTS are not post-fix measurements. No personal media should be put on a public release without owner review.
 - GitHub repository visibility remains a separate owner administration action; the connected connector does not provide repository-visibility updates.
+
+## Follow-up safety change
+A closed window target now causes the native host to stop the active encoder after returning the fault response, rather than retaining a hidden recording. The UI also stops capture when the native host exceeds 768 MiB private bytes. Both require on-device fault/recovery testing.
