@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Text.Json.Serialization;
 
 namespace LocalClip.Core.Models;
 
@@ -26,6 +27,25 @@ public class ClipMetadata
     public int Height { get; set; }
     public int Fps { get; set; }
     public string TargetName { get; set; } = "";
+
+    // Source ownership is explicit: linked/imported media is NEVER deleted by
+    // a normal Remove From Library operation.
+    public string SourceKind { get; set; } = "Flick";
+    public string ConnectedFolderId { get; set; } = "";
+    public string SourceLabel { get; set; } = "";
+
+    [JsonIgnore]
+    public bool IsImported => SourceKind == "Imported";
+
+    [JsonIgnore]
+    public bool IsAvailable => File.Exists(OriginalFilePath);
+
+    [JsonIgnore]
+    public string LibraryStatus => IsAvailable ? (IsImported ? "Imported" : "Flick") : "Offline";
+
+    [JsonIgnore]
+    public string LibrarySource => IsImported ? (string.IsNullOrWhiteSpace(SourceLabel) ? "Imported Clip" : SourceLabel) : "Flick";
+
     public string ThumbnailPath { get; set; } = "";
 
     // Multi-track audio configuration
