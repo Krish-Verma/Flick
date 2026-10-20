@@ -10,6 +10,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using LocalClip.Core.Models;
 using LocalClip.Core.Process;
+using LocalClip.Core.Rules;
 
 namespace LocalClip.Core.Media;
 
@@ -261,10 +262,9 @@ public class MediaProber
         catch (IOException) { }
 
         string temp = Path.Combine(cache, ".preview-" + Guid.NewGuid().ToString("N") + ".mp4");
-        double seconds = Math.Min(180.0, media.DurationSeconds);
-        bool copyH264 = media.VideoCodec.Equals("h264", StringComparison.OrdinalIgnoreCase) &&
-                        media.DurationSeconds <= 180 &&
-                        info.Length <= 100_000_000L;
+        double seconds = PlaybackPreviewPolicy.PreviewSeconds(media.DurationSeconds);
+        bool copyH264 = PlaybackPreviewPolicy.CanStreamCopy(
+            media.VideoCodec, media.DurationSeconds, info.Length);
 
         var psi = new ProcessStartInfo
         {
@@ -326,7 +326,7 @@ public class MediaProber
                 throw new IOException("Preview encoding failed: " +
                                       diagnostic[..Math.Min(400, diagnostic.Length)]);
             long length = new FileInfo(temp).Length;
-            if (length < 1024 || length > 120_000_000L)
+            if (length < 1024 || length > PlaybackPreviewPolicy.MaximumOutputBytes)
                 throw new IOException("Preview exceeds the bounded local preview size.");
             var verification = await ProbeFileAsync(temp, cancellationToken);
             if (!verification.IsValid || !verification.VideoCodec.Equals(

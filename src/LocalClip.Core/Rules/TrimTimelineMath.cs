@@ -51,13 +51,12 @@ public static class TrimTimelineMath
         string[] parts = input.Trim().Split(':');
         if (parts.Length > 3) return false;
         double value = 0;
-        foreach (string part in parts)
+        for (int i = 0; i < parts.Length; i++)
         {
-            if (!double.TryParse(part.Trim(), NumberStyles.AllowDecimalPoint,
+            if (!double.TryParse(parts[i].Trim(), NumberStyles.AllowDecimalPoint,
                 CultureInfo.InvariantCulture, out double segment) ||
                 !double.IsFinite(segment) || segment < 0) return false;
-            if (parts.Length > 1 && !ReferenceEquals(part, parts[0]) && segment >= 60)
-                return false;
+            if (parts.Length > 1 && i > 0 && segment >= 60) return false;
             value = value * 60 + segment;
         }
         seconds = value;
