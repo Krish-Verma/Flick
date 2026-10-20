@@ -6,14 +6,40 @@ using System.Text.Json.Serialization;
 
 namespace LocalClip.Core.Models;
 
-public class AudioTrackInfo
+public class AudioTrackInfo : INotifyPropertyChanged
 {
+    private bool _isMuted;
+    private double _gain = 1.0;
+
+    public event PropertyChangedEventHandler? PropertyChanged;
+
     public int StreamIndex { get; set; }
     public int TrackIndex { get; set; }
     public string Name { get; set; } = "";
     public string Codec { get; set; } = "";
-    public bool IsMuted { get; set; } = false;
-    public double Gain { get; set; } = 1.0; // 0.0 to 2.0 (1.0 = unity)
+
+    public bool IsMuted
+    {
+        get => _isMuted;
+        set
+        {
+            if (_isMuted == value) return;
+            _isMuted = value;
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsMuted)));
+        }
+    }
+
+    public double Gain
+    {
+        get => _gain;
+        set
+        {
+            double safe = double.IsFinite(value) ? Math.Clamp(value, 0.0, 2.0) : 1.0;
+            if (Math.Abs(_gain - safe) < 0.000001) return;
+            _gain = safe;
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Gain)));
+        }
+    }
 }
 
 public class ClipMetadata : INotifyPropertyChanged

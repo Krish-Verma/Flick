@@ -40,6 +40,9 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
     private readonly ClipExporter _exporter;
     private readonly ResourceMonitor _resourceMonitor;
     private readonly DispatcherTimer _pollTimer;
+    // Audio UI changes are reflected instantly but index writes are debounced.
+    private readonly DispatcherTimer _audioEditCommitTimer;
+    private ClipMetadata? _pendingAudioClip;
 
     // Capture state
     private string _captureStatus = "Off";
@@ -206,6 +209,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
         {
             if (_selectedClip != value)
             {
+                FlushPendingAudioEdits();
                 _selectedClip = value;
                 OnPropertyChanged();
                 OnSelectedClipChanged();
@@ -289,6 +293,8 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
         _pollTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
         _pollTimer.Tick += OnPollTick;
         _pollTimer.Start();
+        _audioEditCommitTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(450) };
+        _audioEditCommitTimer.Tick += (_, _) => FlushPendingAudioEdits();
 
         // Load library and user-authorized linked sources (no scanning on startup).
         RefreshConnectedFolders();
@@ -697,6 +703,67 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
         _storage.AddOrUpdateClip(SelectedClip);
     }
 
+    public bool ApplyTrim(double start, double end)
+    {
+        if (SelectedClip is null || !SelectedClip.IsAvailable || IsExporting) return false;
+        var validated = TrimValidator.Validate(start, end, SelectedClip.DurationSeconds);
+        if (!validated.IsValid)
+        {
+            StatusDetails = validated.ErrorMessage;
+            return false;
+        }
+        if (Math.Abs(SelectedClip.TrimStartSeconds - validated.ValidatedStart) < 1e-6 &&
+            Math.Abs(SelectedClip.TrimEndSeconds - validated.ValidatedEnd) < 1e-6) return true;
+        var oldStart = SelectedClip.TrimStartSeconds;
+        var oldEnd = SelectedClip.TrimEndSeconds;
+        SelectedClip.TrimStartSeconds = validated.ValidatedStart;
+        SelectedClip.TrimEndSeconds = validated.ValidatedEnd;
+        try
+        {
+            SaveClipEdits();
+            StatusDetails = "Trim Saved · The Original Video Is Unchanged";
+            return true;
+        }
+        catch (Exception ex)
+        {
+            SelectedClip.TrimStartSeconds = oldStart;
+            SelectedClip.TrimEndSeconds = oldEnd;
+            StatusDetails = "Couldn't Save Trim: " + ex.Message;
+            return false;
+        }
+    }
+
+    public void ScheduleAudioEdit()
+    {
+        if (SelectedClip is null || !SelectedClip.IsAvailable) return;
+        InvalidateExportReady(); // Never let stale exported audio look ready.
+        _pendingAudioClip = SelectedClip;
+        _audioEditCommitTimer.Stop();
+        _audioEditCommitTimer.Start();
+    }
+
+    public void FlushPendingAudioEdits()
+    {
+        _audioEditCommitTimer?.Stop();
+        var clip = _pendingAudioClip;
+        _pendingAudioClip = null;
+        if (clip is null) return;
+        try { _storage.AddOrUpdateClip(clip); }
+        catch (Exception ex) { StatusDetails = "Couldn't Save Audio Mix: " + ex.Message; }
+    }
+
+    public void ResetAudioMix()
+    {
+        if (SelectedClip == null || IsExporting || !SelectedClip.IsAvailable) return;
+        foreach (var track in SelectedClip.AudioTracks)
+        {
+            track.IsMuted = SelectedClip.AudioTracks.Count > 1 && track.TrackIndex == 0 &&
+                !SelectedClip.IsImported;
+            track.Gain = 1.0;
+        }
+        ScheduleAudioEdit();
+    }
+
     public void ReloadClips()
     {
         string? selectedId = SelectedClip?.Id;
@@ -964,6 +1031,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
 
     public void Dispose()
     {
+        FlushPendingAudioEdits();
         _importCancellation?.Cancel();
         _thumbnailCancellation?.Cancel();
         _pollTimer.Stop();
