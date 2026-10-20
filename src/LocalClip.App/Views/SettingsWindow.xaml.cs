@@ -16,6 +16,7 @@ public partial class SettingsWindow : Window
 
     // Only an explicit preview opens an overlay before settings are saved.
     public event Action<bool, bool>? PreviewNotificationRequested;
+    public event EventHandler? ManageFoldersRequested;
 
     public SettingsWindow(AppSettings settings, bool captureActive = false)
     {
@@ -30,6 +31,7 @@ public partial class SettingsWindow : Window
         TxtToggleHotkey.Text = s.CaptureToggleHotkey;
         TxtSaveHotkey.Text = s.SaveReplayHotkey;
         TxtOriginalsFolder.Text = s.OriginalsFolder;
+        TxtExportsFolder.Text = s.ExportsFolder;
         TxtDuration.Text = s.ReplayDurationSeconds.ToString();
         CmbQuality.SelectedIndex = RecordingProfiles.Identify(s) switch
         {
@@ -85,6 +87,21 @@ public partial class SettingsWindow : Window
             TxtOriginalsFolder.Text = dialog.SelectedPath;
     }
 
+    private void BrowseExports_Click(object sender, RoutedEventArgs e)
+    {
+        using var dialog = new System.Windows.Forms.FolderBrowserDialog
+        {
+            Description = "Choose where Flick saves exported share-ready MP4 files",
+            UseDescriptionForTitle = true,
+            SelectedPath = _settings.ExportsFolder
+        };
+        if (dialog.ShowDialog() == System.Windows.Forms.DialogResult.OK)
+            TxtExportsFolder.Text = dialog.SelectedPath;
+    }
+
+    private void ManageFolders_Click(object sender, RoutedEventArgs e) =>
+        ManageFoldersRequested?.Invoke(this, EventArgs.Empty);
+
     private void Save_Click(object sender, RoutedEventArgs e)
     {
         if (!int.TryParse(TxtDuration.Text, out int duration) || duration < 15 || duration > 120)
@@ -101,9 +118,18 @@ public partial class SettingsWindow : Window
             return;
         }
         var folder = TxtOriginalsFolder.Text.Trim();
-        if (string.IsNullOrWhiteSpace(folder) || !Path.IsPathFullyQualified(folder))
+        var exports = TxtExportsFolder.Text.Trim();
+        if (string.IsNullOrWhiteSpace(folder) || !Path.IsPathFullyQualified(folder) ||
+            string.IsNullOrWhiteSpace(exports) || !Path.IsPathFullyQualified(exports))
         {
-            MessageBox.Show("Choose a full path for saved clips.", "Invalid folder");
+            MessageBox.Show("Choose complete paths for Saved Clips and Export Folder.", "Invalid Storage Folders");
+            return;
+        }
+        folder = Path.TrimEndingDirectorySeparator(Path.GetFullPath(folder));
+        exports = Path.TrimEndingDirectorySeparator(Path.GetFullPath(exports));
+        if (string.Equals(folder, exports, StringComparison.OrdinalIgnoreCase))
+        {
+            MessageBox.Show("Saved Clips and Exports must be separate folders.", "Storage Folders");
             return;
         }
         var hook = TxtWebhookUrl.Password.Trim();
@@ -124,10 +150,14 @@ public partial class SettingsWindow : Window
         try
         {
             // Windows startup registration is explicit; failure must not silently claim success.
+            // Create only on explicit Save. Cancel has no filesystem side effects.
+            Directory.CreateDirectory(folder);
+            Directory.CreateDirectory(exports);
             WindowsStartupRegistration.Apply(ChkStartWithWindows.IsChecked == true, ChkStartMinimized.IsChecked == true);
             _settings.CaptureToggleHotkey = toggle;
             _settings.SaveReplayHotkey = save;
             _settings.OriginalsFolder = folder;
+            _settings.ExportsFolder = exports;
             _settings.ReplayDurationSeconds = duration;
             _settings.EnableMicrophone = ChkMicrophone.IsChecked == true;
             _settings.StartWithWindows = ChkStartWithWindows.IsChecked == true;

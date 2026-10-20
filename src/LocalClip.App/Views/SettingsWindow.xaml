@@ -1,7 +1,7 @@
 <Window x:Class="LocalClip.App.Views.SettingsWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Flick Settings" Height="670" Width="625"
+        Title="Flick Settings" Height="700" Width="650"
         WindowStartupLocation="CenterOwner"
         Background="#18181B" Foreground="#FAFAFA">
     <Window.Resources>
@@ -71,6 +71,31 @@
                     <Button Grid.Column="2" Content="Browse..." Click="BrowseOriginals_Click"/>
                 </Grid>
 
+                <Grid Margin="0,0,0,12">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="180"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="Export Folder" VerticalAlignment="Center"/>
+                    <TextBox x:Name="TxtExportsFolder" Grid.Column="1" Margin="0,0,8,0"/>
+                    <Button Grid.Column="2" Content="Browse…" Click="BrowseExports_Click"/>
+                </Grid>
+
+                <Grid Margin="0,0,0,8">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                    <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                        <TextBlock Text="Connected Clip Folders" FontWeight="SemiBold"/>
+                        <TextBlock Text="Link existing MP4 and MKV files without copying or moving them."
+                                   TextWrapping="Wrap" Foreground="{DynamicResource Flick.Brush.TextSecondary}"
+                                   FontSize="12" Margin="0,4,8,0"/>
+                    </StackPanel>
+                    <Button Grid.Column="1" Content="Manage Folders" Click="ManageFolders_Click"
+                            Style="{StaticResource Flick.Button.Secondary}"/>
+                </Grid>
+                <TextBlock Text="Changing locations affects future files only; existing recordings are not moved."
+                           TextWrapping="Wrap" Foreground="{DynamicResource Flick.Brush.TextMuted}"
+                           FontSize="12" Margin="0,0,0,8"/>
                 <Separator Background="#27272A" Margin="0,10,0,15"/>
 
                 <!-- Capture -->
