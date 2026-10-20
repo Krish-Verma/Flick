@@ -3,32 +3,17 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:components="clr-namespace:LocalClip.App.Views.Components"
         xmlns:services="clr-namespace:LocalClip.App.Services"
-        Title="Flick — Gameplay Clipper" Height="760" Width="1240" MinWidth="1000" MinHeight="650"
+        Title="Flick — Gameplay Clipper" Height="760" Width="1240" MinWidth="720" MinHeight="480"
         WindowStartupLocation="CenterScreen"
         Background="{DynamicResource Flick.Brush.Canvas}" Foreground="{DynamicResource Flick.Brush.TextPrimary}"
         FontFamily="{StaticResource Flick.Font.UI}" UseLayoutRounding="True" SnapsToDevicePixels="True"
         Closing="Window_Closing">
     <Window.Resources>
-        <Style TargetType="TextBlock">
-            <Setter Property="Foreground" Value="#E4E4E7"/>
-            <Setter Property="FontSize" Value="13"/>
-        </Style>
-        <Style TargetType="TextBox">
-            <Setter Property="Background" Value="#1E1E24"/>
-            <Setter Property="Foreground" Value="#FAFAFA"/>
-            <Setter Property="BorderBrush" Value="#454052"/>
-            <Setter Property="Padding" Value="6,4"/>
-            <Setter Property="FontSize" Value="13"/>
-        </Style>
-        <Style TargetType="Button">
-            <Setter Property="Background" Value="#242436"/>
-            <Setter Property="Foreground" Value="#FAFAFA"/>
-            <Setter Property="BorderThickness" Value="0"/>
-            <Setter Property="Padding" Value="12,6"/>
-            <Setter Property="Cursor" Value="Hand"/>
-            <Setter Property="FontSize" Value="13"/>
-            <Setter Property="FontWeight" Value="SemiBold"/>
-        </Style>
+        <!-- No mismatched one-off control typography: use the same foundation
+             from Slice 1 for unstyled legacy controls and new shell views. -->
+        <Style TargetType="{x:Type TextBlock}" BasedOn="{StaticResource Flick.Text.Base}"/>
+        <Style TargetType="{x:Type TextBox}" BasedOn="{StaticResource Flick.Input.Text}"/>
+        <Style TargetType="{x:Type Button}" BasedOn="{StaticResource Flick.Button.Secondary}"/>
         <BooleanToVisibilityConverter x:Key="BoolToVis"/>
         <services:WidthToVideoHeightConverter x:Key="Flick.VideoAspectHeight"/>
     </Window.Resources>
@@ -79,7 +64,7 @@
                 Padding="14,7">
             <Grid>
                 <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="260"/>
+                    <ColumnDefinition x:Name="CaptureSourceColumn" Width="260"/>
                     <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
@@ -129,15 +114,16 @@
         </Border>
 
         <!-- Main Body: Gallery & Editor -->
-        <Grid Grid.Row="1" Grid.Column="1">
+        <Grid x:Name="WorkspaceContentGrid" Grid.Row="1" Grid.Column="1">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="286" MinWidth="255" MaxWidth="430"/> <!-- Gallery -->
-                <ColumnDefinition Width="4"/>                                  <!-- Splitter -->
-                <ColumnDefinition Width="*"/>                                  <!-- Editor / Share -->
+                <ColumnDefinition x:Name="ClipLibraryColumn" Width="286" MinWidth="0"/> <!-- Library / compact -->
+                <ColumnDefinition x:Name="LibrarySplitterColumn" Width="4"/> <!-- Only split mode -->
+                <ColumnDefinition x:Name="ClipEditorColumn" Width="*"/> <!-- Editor / compact -->
             </Grid.ColumnDefinitions>
 
             <!-- Left: Clip Gallery -->
-            <Border Grid.Column="0" Background="#11121D" BorderBrush="#242436" BorderThickness="0,0,1,0">
+            <Border x:Name="ClipLibraryPanel" Grid.Column="0" Background="{DynamicResource Flick.Brush.Surface}"
+                    BorderBrush="{DynamicResource Flick.Brush.Border}" BorderThickness="0,0,1,0">
                 <Grid Margin="12">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
@@ -308,10 +294,13 @@
                 </Grid>
             </Border>
 
-            <GridSplitter Grid.Column="1" Width="4" Background="#151622" HorizontalAlignment="Stretch"/>
+            <GridSplitter x:Name="LibrarySplitter" Grid.Column="1" Width="4"
+                          Background="{DynamicResource Flick.Brush.Raised}"
+                          ResizeBehavior="PreviousAndNext" ResizeDirection="Columns"
+                          HorizontalAlignment="Stretch" ToolTip="Resize Clip Library"/>
 
-            <!-- Slice 4: single clean editor, scrolling above a sticky export dock. -->
-            <Grid Grid.Column="2" Margin="12,10,12,12"
+            <!-- Scrollable editor and sticky share dock; compact mode fills entire workspace. -->
+            <Grid x:Name="ClipEditorPanel" Grid.Column="2" Margin="12,10,12,12"
                   Background="{DynamicResource Flick.Brush.Canvas}">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="*" MinHeight="0"/>
@@ -334,6 +323,11 @@
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
                             <StackPanel Grid.Column="0" MinWidth="0" VerticalAlignment="Center">
+                                <Button x:Name="BtnBackToLibrary" Content="← Your Clips"
+                                        Style="{StaticResource Flick.Button.Ghost}"
+                                        HorizontalAlignment="Left" Margin="0,0,0,6"
+                                        Click="BtnBackToLibrary_Click" Visibility="Collapsed"
+                                        ToolTip="Return to Your Clips" AutomationProperties.Name="Back to Your Clips"/>
                                 <TextBlock Text="{Binding SelectedClip.Title, TargetNullValue=Select a Clip}"
                                            Style="{StaticResource Flick.Text.ClipTitle}"
                                            TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"/>
@@ -658,7 +652,8 @@
                 <TextBlock Grid.Column="0" Text="{Binding StatusDetails}" Foreground="#B9B3CC"
                            FontSize="12" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"
                            Margin="0,0,16,0"/>
-                <TextBlock Grid.Column="1" Text="{Binding ResourceStatsText}" Foreground="#9C97AD"
+                <TextBlock Grid.Column="1" x:Name="TxtResourceStats"
+                           Text="{Binding ResourceStatsText}" Foreground="{DynamicResource Flick.Brush.TextMuted}"
                            FontSize="11" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"
                            HorizontalAlignment="Right"/>
             </Grid>
