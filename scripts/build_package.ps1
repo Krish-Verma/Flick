@@ -14,7 +14,10 @@ if (Test-Path $PackageDir) { Remove-Item -Recurse -Force $PackageDir }
 if (Test-Path $ZipPath) { Remove-Item -Force $ZipPath }
 New-Item -ItemType Directory -Path $PackageDir -Force | Out-Null
 
-$env:PATH = "C:\Users\krish\AppData\Local\Microsoft\dotnet;C:\Users\krish\AppData\Local\Microsoft\WinGet\Packages\BrechtSanders.WinLibs.POSIX.UCRT_Microsoft.Winget.Source_8wekyb3d8bbwe\mingw64\bin;$env:PATH"
+if (-not (Get-Command dotnet -ErrorAction SilentlyContinue)) { throw "dotnet SDK not found on PATH" }
+if (-not (Get-Command g++ -ErrorAction SilentlyContinue)) { throw "MinGW-w64 g++ not found on PATH" }
+if (-not (Test-Path (Join-Path $RootDir "tools\\obs\\runtime\\bin\\64bit\\obs.dll"))) { throw "Missing pinned OBS runtime. Run scripts/setup_tools.ps1." }
+if (-not (Test-Path (Join-Path $RootDir "tools\\ffmpeg\\ffmpeg.exe"))) { throw "Missing FFmpeg runtime. Run scripts/setup_tools.ps1." }
 
 Write-Host "=== Step 2: Compiling Native CaptureHost (C++ MinGW) ===" -ForegroundColor Cyan
 $HostSrc = Join-Path $RootDir "src\LocalClip.CaptureHost\main.cpp"
@@ -35,7 +38,7 @@ Write-Host "CaptureHost compiled successfully to: $HostOut" -ForegroundColor Gre
 
 Write-Host "=== Step 3: Publishing WPF Application (Release win-x64) ===" -ForegroundColor Cyan
 $AppCsproj = Join-Path $RootDir "src\LocalClip.App\LocalClip.App.csproj"
-dotnet publish "$AppCsproj" -c Release -r win-x64 -o (Join-Path $DistDir "app") --nologo
+dotnet publish "$AppCsproj" -c Release -r win-x64 --self-contained true -o (Join-Path $DistDir "app") --nologo
 
 if ($LASTEXITCODE -ne 0) {
     throw "Dotnet publish failed"
@@ -104,7 +107,11 @@ $UninstallScript = @"
 Write-Host "Uninstalling LocalClip..." -ForegroundColor Cyan
 
 # Stop running instances
-Get-Process -Name "LocalClip.App", "LocalClip.CaptureHost" -ErrorAction SilentlyContinue | Stop-Process -Force
+# Never kill unrelated similarly named programs or another user's work.
+`$runningApp = Get-Process -Name "LocalClip.App" -ErrorAction SilentlyContinue | Where-Object {
+    try { `$_.Path -like (Join-Path `$env:LOCALAPPDATA "LocalClip\\*") } catch { `$false }
+}
+if (`$runningApp) { throw "Please Quit Flick from the system tray before uninstalling." }
 
 # Remove Desktop Shortcut
 `$Desktop = [System.Environment]::GetFolderPath([System.Environment+SpecialFolder]::Desktop)

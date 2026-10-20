@@ -12,7 +12,7 @@ namespace LocalClip.Core.Tests;
 
 public class IntegrationTests
 {
-    [Fact]
+    [HardwareFact]
     public async Task TestCaptureHostLifecycleAndIpc()
     {
         using var client = new CaptureHostClient();
@@ -37,10 +37,13 @@ public class IntegrationTests
         Assert.False(client.IsRunning);
     }
 
-    [Fact]
+    [HardwareFact]
     public async Task TestRealCaptureAndExportPipeline()
     {
-        string testOutputDir = @"D:\Documents\ClipMax\TestOutput";
+        string testOutputDir = Path.Combine(
+            Environment.GetEnvironmentVariable("FLICK_TEST_OUTPUT_DIR")
+                ?? Path.Combine(Path.GetTempPath(), "Flick-HardwareTests"),
+            "Capture");
         Directory.CreateDirectory(testOutputDir);
 
         var settings = AppSettings.CreateDefault();
@@ -48,7 +51,7 @@ public class IntegrationTests
         settings.ExportsFolder = Path.Combine(testOutputDir, "Exports");
         settings.TempFolder = Path.Combine(testOutputDir, "Temp");
         settings.DiscordTargetSizeMb = 20;
-        settings.ReplayDurationSeconds = 5; // Short duration for fast test
+        settings.ReplayDurationSeconds = 30; // Validate full rolling replay duration
 
         using var client = new CaptureHostClient();
         client.Start();
@@ -66,13 +69,13 @@ public class IntegrationTests
         bool started = await client.StartCaptureAsync(settings);
         Assert.True(started);
 
-        // Buffer frames for 3 seconds
-        await Task.Delay(3000);
+        // Allow the entire 30-second replay buffer to fill.
+        await Task.Delay(TimeSpan.FromSeconds(31));
 
         // Query status while buffering
         var status = await client.GetStatusAsync();
         Assert.Contains(status.State, new[] { "Buffering", "Armed" });
-        Assert.True(status.BufferedSec > 0.5);
+        Assert.True(status.BufferedSec >= 29.0, $"Full 30s buffer not reached: {status.BufferedSec:F1}s");
 
         // 2. Trigger Save Replay
         string saveId = "test-clip-" + Guid.NewGuid().ToString("N");
@@ -93,7 +96,7 @@ public class IntegrationTests
         var prober = new MediaProber();
         var origProbe = await prober.ProbeFileAsync(savedClipPath);
         Assert.True(origProbe.IsValid);
-        Assert.True(origProbe.DurationSeconds > 0.5);
+        Assert.InRange(origProbe.DurationSeconds, 28.0, 32.5);
         Assert.Equal(1920, origProbe.Width);
         Assert.Equal(1080, origProbe.Height);
         Assert.NotEmpty(origProbe.AudioTracks);

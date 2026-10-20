@@ -19,7 +19,9 @@ public class LifecycleStressTests : IDisposable
     public LifecycleStressTests(ITestOutputHelper output)
     {
         _output = output;
-        _testOutputDir = Path.Combine(@"D:\Documents\ClipMax", "TestOutput", "Lifecycle");
+        _testOutputDir = Path.Combine(
+            Environment.GetEnvironmentVariable("FLICK_TEST_OUTPUT_DIR")
+                ?? Path.Combine(Path.GetTempPath(), "Flick-HardwareTests"), "Lifecycle");
         Directory.CreateDirectory(_testOutputDir);
     }
 
@@ -35,15 +37,20 @@ public class LifecycleStressTests : IDisposable
         catch { }
     }
 
-    [Fact]
+    private static string RequiredHostPath()
+    {
+        string path = Environment.GetEnvironmentVariable("FLICK_CAPTURE_HOST_PATH")
+            ?? Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..",
+                "tools", "obs", "runtime", "bin", "64bit", "LocalClip.CaptureHost.exe"));
+        Assert.True(File.Exists(path), "Hardware validation enabled but capture host missing: " + path);
+        return path;
+    }
+
+    [HardwareFact]
     public async Task Test50StartStopCyclesAndResourceStability()
     {
-        string hostPath = @"D:\Documents\ClipMax\tools\obs\runtime\bin\64bit\LocalClip.CaptureHost.exe";
-        if (!File.Exists(hostPath))
-        {
-            _output.WriteLine("CaptureHost not found at " + hostPath);
-            return;
-        }
+        string hostPath = RequiredHostPath();
+
 
         using var client = new CaptureHostClient(hostPath);
         client.Start();
@@ -65,8 +72,8 @@ public class LifecycleStressTests : IDisposable
         };
 
         var monitor = new ResourceMonitor();
-        long baselineWorkingSet = 0;
-        long baselinePrivateBytes = 0;
+        long baselineHostPrivateBytes = 0;
+        long peakHostPrivateBytes = 0;
 
         _output.WriteLine("Starting 50 Start/Stop capture cycles...");
 
@@ -78,13 +85,10 @@ public class LifecycleStressTests : IDisposable
             // Small delay to let the pipeline run for 100ms
             await Task.Delay(100);
 
-            var sampleRunning = monitor.Sample();
+            var runningStatus = await client.GetStatusAsync();
+            peakHostPrivateBytes = Math.Max(peakHostPrivateBytes, runningStatus.PrivateBytes);
             if (i == 5)
-            {
-                // Record baseline after initial warm-up
-                baselineWorkingSet = sampleRunning.AppWorkingSet;
-                baselinePrivateBytes = sampleRunning.AppPrivateBytes;
-            }
+                baselineHostPrivateBytes = runningStatus.PrivateBytes;
 
             bool stopped = await client.StopCaptureAsync();
             Assert.True(stopped, $"StopCaptureAsync failed at cycle {i}");
@@ -96,6 +100,10 @@ public class LifecycleStressTests : IDisposable
             }
         }
 
+        Assert.True(peakHostPrivateBytes < 805_306_368L,
+            $"Capture host exceeded 768 MiB private bytes: {peakHostPrivateBytes}");
+        _output.WriteLine($"Host baseline={baselineHostPrivateBytes}, peak={peakHostPrivateBytes} private bytes");
+
         // Final verification: ensure client is responsive and state is off
         var status = await client.GetStatusAsync();
         Assert.Equal("Off", status.State);
@@ -104,11 +112,10 @@ public class LifecycleStressTests : IDisposable
         await client.ShutdownAsync();
     }
 
-    [Fact]
+    [HardwareFact]
     public async Task Test20TargetSwitches()
     {
-        string hostPath = @"D:\Documents\ClipMax\tools\obs\runtime\bin\64bit\LocalClip.CaptureHost.exe";
-        if (!File.Exists(hostPath)) return;
+        string hostPath = RequiredHostPath();
 
         using var client = new CaptureHostClient(hostPath);
         client.Start();
@@ -138,6 +145,7 @@ public class LifecycleStressTests : IDisposable
             await Task.Delay(500); // Allow window to create
             targetApp.Refresh();
             ulong targetHwnd = (ulong)targetApp.MainWindowHandle.ToInt64();
+            Assert.NotEqual(0UL, targetHwnd); // Never silently skip actual window capture.
 
             _output.WriteLine($"Notepad test window launched with HWND=0x{targetHwnd:X}");
 
@@ -200,11 +208,10 @@ public class LifecycleStressTests : IDisposable
         await client.ShutdownAsync();
     }
 
-    [Fact]
+    [HardwareFact]
     public async Task TestSaveDuringStopRejection()
     {
-        string hostPath = @"D:\Documents\ClipMax\tools\obs\runtime\bin\64bit\LocalClip.CaptureHost.exe";
-        if (!File.Exists(hostPath)) return;
+        string hostPath = RequiredHostPath();
 
         using var client = new CaptureHostClient(hostPath);
         client.Start();
@@ -217,11 +224,10 @@ public class LifecycleStressTests : IDisposable
         await client.ShutdownAsync();
     }
 
-    [Fact]
+    [HardwareFact]
     public async Task TestCaptureHostCrashDetectionAndNoOrphans()
     {
-        string hostPath = @"D:\Documents\ClipMax\tools\obs\runtime\bin\64bit\LocalClip.CaptureHost.exe";
-        if (!File.Exists(hostPath)) return;
+        string hostPath = RequiredHostPath();
 
         bool faultFired = false;
         var client = new CaptureHostClient(hostPath);
@@ -231,13 +237,12 @@ public class LifecycleStressTests : IDisposable
         bool ping = await client.PingAsync();
         Assert.True(ping);
 
-        // Find process and kill it directly
-        var procs = System.Diagnostics.Process.GetProcessesByName("LocalClip.CaptureHost");
-        Assert.NotEmpty(procs);
-
-        foreach (var p in procs)
+        // Terminate ONLY the host launched by this specific test.
+        int ownedHostId = client.HostProcessId ?? throw new InvalidOperationException("Test host was not started");
+        using (var ownedProcess = System.Diagnostics.Process.GetProcessById(ownedHostId))
         {
-            try { p.Kill(); } catch { }
+            ownedProcess.Kill();
+            Assert.True(ownedProcess.WaitForExit(5000), "Test-owned capture host failed to exit");
         }
 
         await Task.Delay(200);
