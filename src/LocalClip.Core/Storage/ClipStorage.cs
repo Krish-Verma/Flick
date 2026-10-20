@@ -90,6 +90,8 @@ public class ClipStorage
     public async Task<ClipMetadata> RegisterNewOriginalAsync(string originalPath, string targetName = "", IReadOnlyList<string>? trackNames = null)
     {
         var probe = await _prober.ProbeFileAsync(originalPath);
+        if (!probe.IsValid || probe.DurationSeconds <= 0 || probe.Width <= 0 || probe.Height <= 0)
+            throw new InvalidDataException("Saved media did not pass validation and cannot be added to the gallery.");
         var fi = new FileInfo(originalPath);
         if (trackNames != null && trackNames.Count == probe.AudioTracks.Count)
             for (int i = 0; i < trackNames.Count; i++)

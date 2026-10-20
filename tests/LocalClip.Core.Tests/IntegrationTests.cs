@@ -52,6 +52,7 @@ public class IntegrationTests
         settings.TempFolder = Path.Combine(testOutputDir, "Temp");
         settings.DiscordTargetSizeMb = 20;
         settings.ReplayDurationSeconds = 30; // Validate full rolling replay duration
+        settings.EnableMicrophone = true; // Explicit opt-in for this hardware-only test
 
         using var client = new CaptureHostClient();
         client.Start();
@@ -99,7 +100,8 @@ public class IntegrationTests
         Assert.InRange(origProbe.DurationSeconds, 28.0, 32.5);
         Assert.Equal(1920, origProbe.Width);
         Assert.Equal(1080, origProbe.Height);
-        Assert.NotEmpty(origProbe.AudioTracks);
+        Assert.True(origProbe.AudioTracks.Count >= 3,
+            $"Expected combined, system and mic tracks but received {origProbe.AudioTracks.Count}");
 
         // 5. Register with Storage
         var storage = new ClipStorage(settings, prober);

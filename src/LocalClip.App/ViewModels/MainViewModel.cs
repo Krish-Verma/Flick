@@ -299,6 +299,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
 
     public async Task ToggleCaptureAsync()
     {
+        if (CaptureStatus == "Starting" || CaptureStatus == "Stopping") return;
         if (CaptureStatus == "Off" || CaptureStatus == "Faulted" || CaptureStatus == "Paused")
         {
             await StartCaptureAsync();
@@ -397,10 +398,17 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
             StatusDetails = $"Saved original clip: {Path.GetFileName(filePath)}";
             if (File.Exists(filePath))
             {
-                string targetName = SelectedTarget?.DisplayName ?? "Screen";
-                var clip = await _storage.RegisterNewOriginalAsync(filePath, targetName, trackNames);
-                ReloadClips();
-                SelectedClip = clip;
+                try
+                {
+                    string targetName = SelectedTarget?.DisplayName ?? "Screen";
+                    var clip = await _storage.RegisterNewOriginalAsync(filePath, targetName, trackNames);
+                    ReloadClips();
+                    SelectedClip = clip;
+                }
+                catch (Exception ex)
+                {
+                    StatusDetails = "Saved clip could not be indexed: " + ex.Message;
+                }
             }
         });
     }
@@ -424,7 +432,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
                 var st = await _captureHost.GetStatusAsync();
                 if (st.State == "Buffering" || st.State == "Armed")
                 {
-                    BufferedDurationText = $"{st.BufferedSec:F1}s / {st.MaxSec:F0}.0s";
+                    BufferedDurationText = $"~{st.BufferedSec:F1}s / {st.MaxSec:F0}s";
                 }
 
                 if (!st.TargetValid && CaptureStatus != "Faulted")

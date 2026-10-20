@@ -82,6 +82,7 @@ public partial class MainWindow : Window
 
     private void RegisterHotkeys()
     {
+        BtnSaveReplay.Content = $"SAVE CLIP ({_vm.Settings.SaveReplayHotkey})";
         if (!_hotkeyManager.RegisterToggleHotkey(_vm.Settings.CaptureToggleHotkey, out string toggleErr))
         {
             MessageBox.Show(toggleErr, "Hotkey Conflict (Capture Toggle)", MessageBoxButton.OK, MessageBoxImage.Warning);
@@ -203,7 +204,7 @@ public partial class MainWindow : Window
 
     private async void BtnSettings_Click(object sender, RoutedEventArgs e)
     {
-        if (_vm.CaptureStatus != "Off" && _vm.CaptureStatus != "Faulted")
+        if (_vm.CaptureStatus != "Off")
         {
             if (MessageBox.Show("Recording settings require stopping the current replay buffer. Stop and open settings?",
                 "Flick settings", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
