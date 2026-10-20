@@ -83,6 +83,8 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
     public event Action<string>? ReplaySaveFailed;
 
     public AppSettings Settings => _settings;
+    public bool IsCaptureActive => CaptureActive;
+    public bool CanEditClip => SelectedClip?.IsAvailable == true && !IsExporting;
     // WPF shell supplies consent before an active source change discards replay.
     public Func<bool>? ConfirmTargetReset { get; set; }
     public CaptureHostClient CaptureHost => _captureHost;
@@ -212,6 +214,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
                 FlushPendingAudioEdits();
                 _selectedClip = value;
                 OnPropertyChanged();
+                OnPropertyChanged(nameof(CanEditClip));
                 OnSelectedClipChanged();
             }
         }
@@ -245,7 +248,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
     public bool IsExporting
     {
         get => _isExporting;
-        set { _isExporting = value; OnPropertyChanged(); }
+        set { _isExporting = value; OnPropertyChanged(); OnPropertyChanged(nameof(CanEditClip)); }
     }
 
     public double ExportProgress
