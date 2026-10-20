@@ -188,4 +188,33 @@ public sealed class ConnectedFolderTests
             ClipLibraryPaths.DiscoverVideos(env.Media, true, cts.Token));
         Assert.True(File.Exists(video));
     }
+    [Fact]
+    public void DamagedClipIndexIsPreservedInsteadOfOverwritten()
+    {
+        using var env = new Sandbox();
+        var original = Path.Combine(env.Metadata, "clips_index.json");
+        const string badContents = "{THIS IS NOT A VALID CLIP INDEX";
+        File.WriteAllText(original, badContents);
+        var db = env.Storage();
+        Assert.Contains("preserved", db.LastLoadWarning, StringComparison.OrdinalIgnoreCase);
+        Assert.Throws<InvalidDataException>(() => db.AddOrUpdateClip(new ClipMetadata
+        {
+            OriginalFilePath = env.Video()
+        }));
+        Assert.Equal(badContents, File.ReadAllText(original));
+    }
+
+    [Fact]
+    public void DamagedLinkedFolderRegistryIsPreservedInsteadOfOverwritten()
+    {
+        using var env = new Sandbox();
+        var original = Path.Combine(env.Metadata, "connected_sources.json");
+        const string badContents = "{UNREADABLE FOLDER METADATA";
+        File.WriteAllText(original, badContents);
+        var db = env.Storage();
+        Assert.Contains("preserved", db.LastLoadWarning, StringComparison.OrdinalIgnoreCase);
+        Assert.Throws<InvalidDataException>(() => db.ConnectFolder(env.Media));
+        Assert.Equal(badContents, File.ReadAllText(original));
+    }
+
 }
