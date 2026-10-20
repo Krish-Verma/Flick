@@ -25,6 +25,7 @@ public partial class TrimRangeControl : UserControl
     private double _end;
     private double _committedStart;
     private double _committedEnd;
+    private bool _keyboardRangeDirty;
 
     public event EventHandler<TrimRangeCommittedEventArgs>? RangeCommitted;
 
@@ -130,8 +131,25 @@ public partial class TrimRangeControl : UserControl
         else
             _end = TrimTimelineMath.MoveEnd(desired, _start, _duration);
         RefreshControls();
-        Commit();
+        _keyboardRangeDirty = true;
         e.Handled = true;
+    }
+
+    private void Handle_PreviewKeyUp(object sender, KeyEventArgs e)
+    {
+        if (_keyboardRangeDirty && e.Key is Key.Left or Key.Right or Key.Home or Key.End)
+        {
+            _keyboardRangeDirty = false;
+            Commit(); // One disk write per completed held key action, not each repeat.
+            e.Handled = true;
+        }
+    }
+
+    private void Handle_LostKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e)
+    {
+        if (!_keyboardRangeDirty) return;
+        _keyboardRangeDirty = false;
+        Commit();
     }
 
     private void TimeBox_PreviewKeyDown(object sender, KeyEventArgs e)

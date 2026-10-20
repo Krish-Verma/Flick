@@ -39,6 +39,8 @@
                               Cursor="SizeWE" DragDelta="StartHandle_DragDelta"
                               DragCompleted="Handle_DragCompleted"
                               PreviewKeyDown="Handle_PreviewKeyDown"
+                              PreviewKeyUp="Handle_PreviewKeyUp"
+                              LostKeyboardFocus="Handle_LostKeyboardFocus"
                               PreviewMouseLeftButtonDown="Handle_PreviewMouseLeftButtonDown"
                               ToolTip="Drag or use Left/Right arrows to set trim start"
                               AutomationProperties.Name="Trim Start Handle">
@@ -65,6 +67,8 @@
                               Cursor="SizeWE" DragDelta="EndHandle_DragDelta"
                               DragCompleted="Handle_DragCompleted"
                               PreviewKeyDown="Handle_PreviewKeyDown"
+                              PreviewKeyUp="Handle_PreviewKeyUp"
+                              LostKeyboardFocus="Handle_LostKeyboardFocus"
                               PreviewMouseLeftButtonDown="Handle_PreviewMouseLeftButtonDown"
                               ToolTip="Drag or use Left/Right arrows to set trim end"
                               AutomationProperties.Name="Trim End Handle">
