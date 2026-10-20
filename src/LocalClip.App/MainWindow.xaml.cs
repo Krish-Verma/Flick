@@ -36,6 +36,8 @@ public partial class MainWindow : Window
     private readonly DispatcherTimer _playerTimer;
     private bool _isDraggingSlider = false;
     private bool _isRealClosing = false;
+    private Point? _shareDragStart;
+    private bool _updatingExportCap;
     private enum PlayerView { Original, Exported, LocalCopy }
     private PlayerView _playerView = PlayerView.Original;
     private CancellationTokenSource? _previewCancellation;
@@ -424,6 +426,8 @@ public partial class MainWindow : Window
         if (dialog.ShowDialog() != true) return;
 
         RegisterHotkeys();
+        _vm.RefreshExportPreferences();
+        UpdateSharePresetSelection();
         UpdateStatusBadgeColor();
         // Mic opt-out must release the device instead of leaving it open.
         if (isCapturing && oldMic && !_vm.Settings.EnableMicrophone)
@@ -848,65 +852,146 @@ public partial class MainWindow : Window
             ShowOriginalPreview(startPlaying: false);
     }
 
-    // Preset Clicks
-    private void Preset20_Click(object sender, RoutedEventArgs e) { _vm.TargetSizeMb = 20; UpdateSharePresetSelection(); }
-    private void Preset50_Click(object sender, RoutedEventArgs e) { _vm.TargetSizeMb = 50; UpdateSharePresetSelection(); }
-    private void Preset100_Click(object sender, RoutedEventArgs e) { _vm.TargetSizeMb = 100; UpdateSharePresetSelection(); }
+    // Share UI Slice 5: one size chooser, optional custom field, and real MP4.
+    private void ExportCap_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_vm is null || _updatingExportCap || CmbExportCap is null ||
+            CustomCapPanel is null || TxtCustomMb is null) return;
+        bool custom = CmbExportCap.SelectedIndex == 4;
+        CustomCapPanel.Visibility = custom ? Visibility.Visible : Visibility.Collapsed;
+        if (custom)
+        {
+            TxtCustomMb.Text = _vm.TargetSizeMb.ToString();
+            TxtCustomMb.SelectAll();
+            return; // Selecting Custom does not silently change a saved cap.
+        }
+        int selected = CmbExportCap.SelectedIndex switch
+        {
+            0 => 10,
+            1 => 20,
+            2 => 50,
+            3 => 100,
+            _ => _vm.TargetSizeMb
+        };
+        ApplyExportSize(selected);
+    }
 
-    private void PresetCustom_Click(object sender, RoutedEventArgs e) => TryApplyCustomSize();
+    private void ApplyExportSize(int cap)
+    {
+        if (_vm.IsExporting)
+        {
+            _vm.StatusDetails = "Finish or Cancel the Current Export Before Changing Its Limit.";
+            UpdateSharePresetSelection();
+            return;
+        }
+        try
+        {
+            _vm.TargetSizeMb = cap;
+            UpdateSharePresetSelection();
+        }
+        catch (Exception ex)
+        {
+            _vm.StatusDetails = "Couldn't Save File Limit: " + ex.Message;
+            UpdateSharePresetSelection();
+        }
+    }
+
     private void TxtCustomMb_LostFocus(object sender, RoutedEventArgs e)
     {
-        if (RadioCustom.IsChecked == true) TryApplyCustomSize();
+        if (CmbExportCap.SelectedIndex == 4) TryApplyCustomSize();
+    }
+
+    private void CustomMb_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Enter)
+        {
+            TryApplyCustomSize();
+            e.Handled = true;
+        }
+        else if (e.Key == Key.Escape)
+        {
+            TxtCustomMb.Text = _vm.TargetSizeMb.ToString();
+            e.Handled = true;
+        }
     }
 
     private void TryApplyCustomSize()
     {
-        if (!int.TryParse(TxtCustomMb.Text, out int mb) || mb < 1 || mb > 250)
+        if (!int.TryParse(TxtCustomMb.Text, out var cap) ||
+            !ShareExportTargets.IsValid(cap))
         {
-            MessageBox.Show("Choose an export target between 1 and 250 MB.", "Invalid export size");
-            UpdateSharePresetSelection();
+            _vm.StatusDetails = "Custom Export Limit Must Be Between 1 and 250 MB.";
+            TxtCustomMb.Text = _vm.TargetSizeMb.ToString();
             return;
         }
-        _vm.TargetSizeMb = mb;
-        UpdateSharePresetSelection();
+        ApplyExportSize(cap);
     }
 
     private void UpdateSharePresetSelection()
     {
-        int mb = _vm.TargetSizeMb;
-        Radio20.IsChecked = mb == 20;
-        Radio50.IsChecked = mb == 50;
-        Radio100.IsChecked = mb == 100;
-        RadioCustom.IsChecked = mb != 20 && mb != 50 && mb != 100;
-        if (RadioCustom.IsChecked == true)
-            TxtCustomMb.Text = mb.ToString();
+        _updatingExportCap = true;
+        try
+        {
+            int cap = _vm.TargetSizeMb;
+            CmbExportCap.SelectedIndex = cap switch
+            {
+                10 => 0, 20 => 1, 50 => 2, 100 => 3, _ => 4
+            };
+            CustomCapPanel.Visibility = CmbExportCap.SelectedIndex == 4
+                ? Visibility.Visible : Visibility.Collapsed;
+            TxtCustomMb.Text = cap.ToString();
+            CmbExportCap.IsEnabled = !_vm.IsExporting;
+            TxtCustomMb.IsEnabled = !_vm.IsExporting;
+        }
+        finally { _updatingExportCap = false; }
     }
 
-    // Export & Share
     private async void BtnExport_Click(object sender, RoutedEventArgs e)
     {
         await _vm.ExportForDiscordAsync();
+        UpdateSharePresetSelection();
+    }
+
+    private void BtnCancelExport_Click(object sender, RoutedEventArgs e)
+    {
+        _vm.CancelExport();
+        _vm.ExportStatusMessage = "Cancelling Local Export…";
     }
 
     private void DragHandle_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
-        if (File.Exists(_vm.ReadyExportFilePath))
+        _shareDragStart = _vm.TryGetReadyShareFile(out _)
+            ? e.GetPosition(DragHandle) : null;
+    }
+
+    private void DragHandle_PreviewMouseMove(object sender, MouseEventArgs e)
+    {
+        if (e.LeftButton != MouseButtonState.Pressed || _shareDragStart is null)
         {
-            // Initiate standard Windows OLE Drag & Drop of the actual file
-            var data = new DataObject(DataFormats.FileDrop, new[] { _vm.ReadyExportFilePath });
-            DragDrop.DoDragDrop(DragHandle, data, DragDropEffects.Copy);
+            _shareDragStart = null;
+            return;
         }
+        Point pos = e.GetPosition(DragHandle);
+        Point from = _shareDragStart.Value;
+        if (Math.Abs(pos.X - from.X) < SystemParameters.MinimumHorizontalDragDistance &&
+            Math.Abs(pos.Y - from.Y) < SystemParameters.MinimumVerticalDragDistance)
+            return;
+
+        _shareDragStart = null;
+        if (!_vm.TryGetReadyShareFile(out var path))
+        {
+            _vm.ExportStatusMessage = "Share File No Longer Valid · Export This Clip Again";
+            return;
+        }
+        var data = new DataObject(DataFormats.FileDrop, new[] { path });
+        DragDrop.DoDragDrop(DragHandle, data, DragDropEffects.Copy);
     }
 
-    private void BtnCopyFile_Click(object sender, RoutedEventArgs e)
-    {
+    private void BtnCopyFile_Click(object sender, RoutedEventArgs e) =>
         _vm.CopyExportedFileToClipboard();
-    }
 
-    private void BtnOpenExportFolder_Click(object sender, RoutedEventArgs e)
-    {
+    private void BtnOpenExportFolder_Click(object sender, RoutedEventArgs e) =>
         _vm.OpenExportFolder();
-    }
 
     private async void BtnSendWebhook_Click(object sender, RoutedEventArgs e)
     {
