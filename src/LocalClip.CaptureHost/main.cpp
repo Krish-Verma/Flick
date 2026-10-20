@@ -145,22 +145,9 @@ static void on_replay_saved(void *data, calldata_t *cd) {
         g_cap.save_in_progress = false;
     }
 
-    if (saved_path.empty() && !out_dir.empty()) {
-        WIN32_FIND_DATAA fd;
-        std::string search = out_dir + "\\*.mkv";
-        HANDLE hFind = FindFirstFileA(search.c_str(), &fd);
-        FILETIME best_ft = {0, 0};
-        std::string best_file;
-        if (hFind != INVALID_HANDLE_VALUE) {
-            do {
-                if (CompareFileTime(&fd.ftLastWriteTime, &best_ft) > 0) {
-                    best_ft = fd.ftLastWriteTime;
-                    best_file = out_dir + "\\" + fd.cFileName;
-                }
-            } while (FindNextFileA(hFind, &fd));
-            FindClose(hFind);
-        }
-        saved_path = best_file;
+    if (saved_path.empty()) {
+        send_event("fault", {{"reason", "OBS reported a replay save without a verified path"}});
+        return;
     }
 
     json d;
@@ -457,6 +444,11 @@ static bool start_capture_session(const json &params, std::string &out_err) {
     g_cap.sys_audio_source = obs_source_create("wasapi_output_capture", "SystemAudio", sys_settings, nullptr);
     obs_data_release(sys_settings);
 
+    if (!g_cap.sys_audio_source) {
+        out_err = "System audio loopback source could not be created";
+        internal_stop_capture("audio_source_fail");
+        return false;
+    }
     if (g_cap.sys_audio_source) {
         // Route to Track 1 (bit 0) and Track 2 (bit 1)
         obs_source_set_audio_mixers(g_cap.sys_audio_source, (1 << 0) | (1 << 1));
@@ -471,6 +463,11 @@ static bool start_capture_session(const json &params, std::string &out_err) {
         g_cap.mic_audio_source = obs_source_create("wasapi_input_capture", "Microphone", mic_settings, nullptr);
         obs_data_release(mic_settings);
 
+        if (!g_cap.mic_audio_source) {
+            out_err = "Microphone source could not be created; disable mic or select an input";
+            internal_stop_capture("microphone_fail");
+            return false;
+        }
         if (g_cap.mic_audio_source) {
             // Route to Track 1 (bit 0) and Track 3 (bit 2)
             obs_source_set_audio_mixers(g_cap.mic_audio_source, (1 << 0) | (1 << 2));
@@ -542,7 +539,8 @@ static bool start_capture_session(const json &params, std::string &out_err) {
     signal_handler_connect(obs_output_get_signal_handler(g_cap.replay_output), "saved", on_replay_saved, nullptr);
 
     if (!obs_output_start(g_cap.replay_output)) {
-        out_err = "Failed to start replay buffer";
+        const char *obs_error = obs_output_get_last_error(g_cap.replay_output);
+        out_err = std::string("Failed to start replay buffer: ") + (obs_error ? obs_error : "unknown OBS error");
         internal_stop_capture("start_fail");
         return false;
     }
@@ -636,9 +634,13 @@ static bool trigger_save_replay(const std::string &save_id, const std::string &p
     proc_handler_t *ph = obs_output_get_proc_handler(g_cap.replay_output);
     calldata_t cd;
     calldata_init(&cd);
-    proc_handler_call(ph, "save", &cd);
+    bool accepted = ph && proc_handler_call(ph, "save", &cd);
     calldata_free(&cd);
-
+    if (!accepted) {
+        g_cap.save_in_progress = false;
+        out_err = "Replay buffer did not accept save operation";
+        return false;
+    }
     return true;
 }
 
@@ -661,6 +663,11 @@ static json get_current_status() {
     }
 
     double buffered = (elapsed > g_cap.duration_sec) ? static_cast<double>(g_cap.duration_sec) : elapsed;
+    if (g_cap.save_in_progress &&
+        std::chrono::steady_clock::now() - g_cap.pending_save_start > std::chrono::seconds(15)) {
+        g_cap.save_in_progress = false;
+        send_event("fault", {{"reason", "Replay save timed out after 15 seconds"}});
+    }
     j["state"] = state_to_string(g_cap.state);
     j["buffered_sec"] = buffered;
     j["max_sec"] = g_cap.duration_sec;
