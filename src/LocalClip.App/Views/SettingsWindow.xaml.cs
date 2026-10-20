@@ -252,6 +252,9 @@ public partial class SettingsWindow : Window
         string originals, exports;
         try
         {
+            if (!Path.IsPathFullyQualified(TxtOriginalsFolder.Text.Trim()) ||
+                !Path.IsPathFullyQualified(TxtExportsFolder.Text.Trim()))
+                throw new ArgumentException("Select fully qualified paths.");
             originals = Path.TrimEndingDirectorySeparator(
                 Path.GetFullPath(TxtOriginalsFolder.Text.Trim()));
             exports = Path.TrimEndingDirectorySeparator(
