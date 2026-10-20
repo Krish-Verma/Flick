@@ -7,6 +7,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using LocalClip.Core.Media;
+using LocalClip.Core.Rules;
 using LocalClip.Core.Models;
 
 namespace LocalClip.Core.Storage;
@@ -210,7 +211,8 @@ public sealed class ClipStorage
             // or automatically mix every unknown track twice.
             foreach (var track in probe.AudioTracks)
             {
-                track.IsMuted = track.TrackIndex != 0;
+                track.IsMuted = AudioMixDefaults.ShouldMute(
+                    imported: true, probe.AudioTracks.Count, track.TrackIndex);
                 if (track.Name == "Combined Audio")
                     track.Name = "Audio Track 1";
             }

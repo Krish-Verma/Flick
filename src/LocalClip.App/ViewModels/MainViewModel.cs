@@ -786,8 +786,8 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
         if (SelectedClip == null || IsExporting || !SelectedClip.IsAvailable) return;
         foreach (var track in SelectedClip.AudioTracks)
         {
-            track.IsMuted = SelectedClip.AudioTracks.Count > 1 && track.TrackIndex == 0 &&
-                !SelectedClip.IsImported;
+            track.IsMuted = AudioMixDefaults.ShouldMute(
+                SelectedClip.IsImported, SelectedClip.AudioTracks.Count, track.TrackIndex);
             track.Gain = 1.0;
         }
         ScheduleAudioEdit();
