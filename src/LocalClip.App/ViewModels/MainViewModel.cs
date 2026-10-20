@@ -428,10 +428,14 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
                 {
                     string targetName = SelectedTarget?.DisplayName ?? "Screen";
                     var clip = await _storage.RegisterNewOriginalAsync(filePath, targetName, trackNames);
+                    // Reloading an ObservableCollection can temporarily clear the
+                    // ListBox selection through its TwoWay binding. Snapshot the
+                    // edit context BEFORE rebuilding the gallery.
+                    var editing = SelectedClip;
                     ReloadClips();
-                    // A hotkey save must not interrupt somebody editing another clip.
-                    if (SelectedClip is null)
-                        SelectedClip = clip;
+                    SelectedClip = editing is null
+                        ? clip
+                        : FilteredClips.FirstOrDefault(c => c.Id == editing.Id) ?? editing;
                     ClipSavedConfirmed?.Invoke(clip);
                 }
                 catch (Exception ex)
