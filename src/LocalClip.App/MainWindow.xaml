@@ -432,7 +432,7 @@
                             </Button>
                         </Grid>
 
-                        <Border Grid.Row="3"
+                        <Border Grid.Row="3" IsEnabled="{Binding CanEditClip}"
                                 Background="{DynamicResource Flick.Brush.Surface}"
                                 BorderBrush="{DynamicResource Flick.Brush.Border}" BorderThickness="1"
                                 CornerRadius="{StaticResource Flick.Corner.Panel}"
@@ -446,12 +446,12 @@
                                 BorderBrush="{DynamicResource Flick.Brush.Border}" BorderThickness="1"
                                 CornerRadius="{StaticResource Flick.Corner.Panel}"
                                 Padding="6,3">
-                            <Expander x:Name="AudioExpander"
+                            <Expander x:Name="AudioExpander" IsEnabled="{Binding CanEditClip}"
                                       Header="Export Audio"
                                       IsExpanded="False" Foreground="{DynamicResource Flick.Brush.TextPrimary}"
                                       Background="Transparent" Padding="4">
                                 <StackPanel Margin="5,8,5,8">
-                                    <TextBlock Text="Audio Mix · Original Recording Is Never Modified"
+                                    <TextBlock Text="Export Mix · Original Recording Is Never Modified"
                                                Style="{StaticResource Flick.Text.Caption}"
                                                Margin="0,0,0,8" TextWrapping="Wrap"/>
                                     <ItemsControl ItemsSource="{Binding SelectedClip.AudioTracks}">
