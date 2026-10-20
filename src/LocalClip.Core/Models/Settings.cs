@@ -24,10 +24,11 @@ public class AppSettings
     public string VideoEncoder { get; set; } = "obs_nvenc_h264_tex"; // Fallbacks: "jim_nvenc", "obs_x264"
     public int ReplayDurationSeconds { get; set; } = 30;
     public int BufferMemoryLimitMb { get; set; } = 256;
+    public string QualityPreset { get; set; } = "Balanced"; // Light, Balanced, Smooth; user-visible presets
 
     // Audio Profile
     public string AudioMode { get; set; } = "SystemFallback"; // "Separated" or "SystemFallback"
-    public bool EnableMicrophone { get; set; } = true;
+    public bool EnableMicrophone { get; set; } = false; // Privacy: opt-in, never access mic on first run
     public string MicrophoneDeviceId { get; set; } = "default";
     public string SystemAudioDeviceId { get; set; } = "default";
     public int GameProcessId { get; set; } = 0;

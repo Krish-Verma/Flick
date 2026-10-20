@@ -1,6 +1,8 @@
 using System;
 using System.ComponentModel;
 using System.IO;
+using System.Linq;
+using System.Diagnostics;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -54,12 +56,25 @@ public partial class MainWindow : Window
         // Initialize targets
         await _vm.InitializeAsync();
 
+        // Startup from Windows Run is always disarmed; optionally hide the window.
+        if (_vm.Settings.StartMinimizedToTray ||
+            Environment.GetCommandLineArgs().Any(a =>
+                a.Equals("--minimized", StringComparison.OrdinalIgnoreCase)))
+            Dispatcher.BeginInvoke(new Action(Hide));
+
         // Wire CaptureStatus badge color updates
         _vm.PropertyChanged += (s, ev) =>
         {
             if (ev.PropertyName == nameof(MainViewModel.CaptureStatus))
-            {
                 UpdateStatusBadgeColor();
+            else if (ev.PropertyName == nameof(MainViewModel.SelectedClip))
+            {
+                VideoPlayer.Stop();
+                _playerTimer.Stop();
+                BtnPlayPause.Content = "▶ Play";
+                var clipPath = _vm.SelectedClip?.OriginalFilePath;
+                VideoPlayer.Source = !string.IsNullOrEmpty(clipPath) && File.Exists(clipPath)
+                    ? new Uri(clipPath) : null;
             }
         };
         UpdateStatusBadgeColor();
@@ -83,12 +98,12 @@ public partial class MainWindow : Window
         _notifyIcon = new System.Windows.Forms.NotifyIcon
         {
             Icon = System.Drawing.SystemIcons.Application,
-            Text = "LocalClip - Windows Gameplay Clipper",
+            Text = "Flick - Manual Gameplay Clipper",
             Visible = true
         };
 
         var menu = new System.Windows.Forms.ContextMenuStrip();
-        menu.Items.Add("Open LocalClip", null, (s, e) => ShowAndRestoreWindow());
+        menu.Items.Add("Open Flick", null, (s, e) => ShowAndRestoreWindow());
         menu.Items.Add(new System.Windows.Forms.ToolStripSeparator());
         menu.Items.Add("Start/Stop Replay", null, async (s, e) => await _vm.ToggleCaptureAsync());
         menu.Items.Add("Save Replay Clip", null, async (s, e) => await _vm.SaveReplayAsync());
@@ -98,11 +113,14 @@ public partial class MainWindow : Window
         _notifyIcon.ContextMenuStrip = menu;
         _notifyIcon.DoubleClick += (s, e) => ShowAndRestoreWindow();
 
-        // Show balloon tip on save
+        // Only report a confirmed saved file, from the UI dispatcher.
         _vm.CaptureHost.ReplaySaved += (id, path) =>
-        {
-            _notifyIcon?.ShowBalloonTip(3000, "LocalClip", $"Saved replay clip: {Path.GetFileName(path)}", System.Windows.Forms.ToolTipIcon.Info);
-        };
+            Dispatcher.BeginInvoke(new Action(() =>
+            {
+                if (File.Exists(path))
+                    _notifyIcon?.ShowBalloonTip(2000, "Flick",
+                        $"Saved replay clip: {Path.GetFileName(path)}", System.Windows.Forms.ToolTipIcon.Info);
+            }));
     }
 
     private void UpdateStatusBadgeColor()
@@ -110,25 +128,25 @@ public partial class MainWindow : Window
         if (_vm.CaptureStatus == "Armed")
         {
             StatusBadge.Background = new SolidColorBrush(Color.FromRgb(34, 197, 94)); // Green
-            BtnToggleCapture.Content = "DISARM CAPTURE (Ctrl+Shift+F9)";
+            BtnToggleCapture.Content = $"DISARM REPLAY ({_vm.Settings.CaptureToggleHotkey})";
             BtnToggleCapture.Background = new SolidColorBrush(Color.FromRgb(220, 38, 38)); // Red
         }
         else if (_vm.CaptureStatus == "Buffering")
         {
             StatusBadge.Background = new SolidColorBrush(Color.FromRgb(234, 179, 8)); // Yellow
-            BtnToggleCapture.Content = "DISARM CAPTURE (Ctrl+Shift+F9)";
+            BtnToggleCapture.Content = $"DISARM REPLAY ({_vm.Settings.CaptureToggleHotkey})";
             BtnToggleCapture.Background = new SolidColorBrush(Color.FromRgb(220, 38, 38)); // Red
         }
         else if (_vm.CaptureStatus == "Faulted")
         {
             StatusBadge.Background = new SolidColorBrush(Color.FromRgb(239, 68, 68)); // Red
-            BtnToggleCapture.Content = "ARM REPLAY (Ctrl+Shift+F9)";
+            BtnToggleCapture.Content = $"ARM REPLAY ({_vm.Settings.CaptureToggleHotkey})";
             BtnToggleCapture.Background = new SolidColorBrush(Color.FromRgb(22, 163, 74)); // Green
         }
         else
         {
             StatusBadge.Background = new SolidColorBrush(Color.FromRgb(63, 63, 70)); // Gray
-            BtnToggleCapture.Content = "ARM REPLAY (Ctrl+Shift+F9)";
+            BtnToggleCapture.Content = $"ARM REPLAY ({_vm.Settings.CaptureToggleHotkey})";
             BtnToggleCapture.Background = new SolidColorBrush(Color.FromRgb(22, 163, 74)); // Green
         }
     }
@@ -152,7 +170,7 @@ public partial class MainWindow : Window
         {
             e.Cancel = true;
             Hide();
-            _notifyIcon?.ShowBalloonTip(2000, "LocalClip", "Running in system tray. Right click tray icon to quit.", System.Windows.Forms.ToolTipIcon.Info);
+            _notifyIcon?.ShowBalloonTip(2000, "Flick", "Running in system tray. Right click tray icon to quit.", System.Windows.Forms.ToolTipIcon.Info);
             return;
         }
 
@@ -183,12 +201,21 @@ public partial class MainWindow : Window
         await _vm.RefreshTargetsAsync();
     }
 
-    private void BtnSettings_Click(object sender, RoutedEventArgs e)
+    private async void BtnSettings_Click(object sender, RoutedEventArgs e)
     {
+        if (_vm.CaptureStatus != "Off" && _vm.CaptureStatus != "Faulted")
+        {
+            if (MessageBox.Show("Recording settings require stopping the current replay buffer. Stop and open settings?",
+                "Flick settings", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
+                return;
+            await _vm.StopCaptureAsync();
+        }
         var dlg = new SettingsWindow(_vm.Settings) { Owner = this };
         if (dlg.ShowDialog() == true)
         {
             RegisterHotkeys();
+            UpdateStatusBadgeColor();
+            _vm.StatusDetails = "Preferences saved. Replay capture remains disarmed until manually started.";
         }
     }
 
@@ -300,6 +327,30 @@ public partial class MainWindow : Window
             PlayerSlider.Value = VideoPlayer.Position.TotalSeconds;
             TxtPlayerTime.Text = $"{VideoPlayer.Position:m\\:ss} / {VideoPlayer.NaturalDuration.TimeSpan:m\\:ss}";
         }
+    }
+
+    private void PlayerSlider_MouseDown(object sender, MouseButtonEventArgs e)
+    {
+        _isDraggingSlider = true;
+    }
+
+    private void PlayerSlider_MouseUp(object sender, MouseButtonEventArgs e)
+    {
+        VideoPlayer.Position = TimeSpan.FromSeconds(PlayerSlider.Value);
+        _isDraggingSlider = false;
+    }
+
+    private void VideoPlayer_MediaFailed(object sender, ExceptionRoutedEventArgs e)
+    {
+        _vm.StatusDetails = "Windows could not preview this MKV. Open it in your default video player.";
+        BtnPlayPause.Content = "▶ Play";
+    }
+
+    private void OpenInPlayer_Click(object sender, RoutedEventArgs e)
+    {
+        var path = _vm.SelectedClip?.OriginalFilePath;
+        if (!string.IsNullOrWhiteSpace(path) && File.Exists(path))
+            Process.Start(new ProcessStartInfo(path) { UseShellExecute = true });
     }
 
     // Trim Handlers

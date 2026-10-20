@@ -349,14 +349,14 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
 
     public async Task SaveReplayAsync()
     {
-        if (CaptureStatus == "Off")
+        if (CaptureStatus != "Buffering" && CaptureStatus != "Armed")
         {
-            StatusDetails = "Cannot save: Capture is DISARMED. Press Start Capture (or Ctrl+Shift+F9) first!";
+            StatusDetails = "Turn replay capture on before saving a clip.";
             return;
         }
 
         StatusDetails = "Snapshotting replay buffer to original MKV...";
-        string saveId = "clip_" + DateTime.Now.ToString("yyyyMMdd_HHmmss");
+        string saveId = "clip_" + DateTime.UtcNow.ToString("yyyyMMdd_HHmmss") + "_" + Guid.NewGuid().ToString("N");
         try
         {
             if (!await _captureHost.SaveReplayAsync(saveId, "Clip"))
