@@ -1,0 +1,199 @@
+using System;
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
+using System.Windows.Input;
+using LocalClip.Core.Rules;
+
+namespace LocalClip.App.Views.Components;
+
+public sealed class TrimRangeCommittedEventArgs(double start, double end) : EventArgs
+{
+    public double Start { get; } = start;
+    public double End { get; } = end;
+}
+
+/// <summary>
+/// Render two accessible handles over one horizontal trim selection, persisting
+/// only on drag completion / keyboard / validated precise time entry.
+/// This control never touches source media or launches a worker.
+/// </summary>
+public partial class TrimRangeControl : UserControl
+{
+    private double _duration;
+    private double _start;
+    private double _end;
+    private double _committedStart;
+    private double _committedEnd;
+
+    public event EventHandler<TrimRangeCommittedEventArgs>? RangeCommitted;
+
+    public double SelectionStart => _start;
+    public double SelectionEnd => _end;
+    public double OriginalDuration => _duration;
+
+    public TrimRangeControl()
+    {
+        InitializeComponent();
+        SetRange(0, 0, 0);
+    }
+
+    public void SetRange(double duration, double start, double end)
+    {
+        if (!TrimTimelineMath.TryCreate(duration, start, end, out _start, out _end))
+        {
+            _duration = _start = _end = 0;
+            _committedStart = _committedEnd = 0;
+            IsEnabled = false;
+        }
+        else
+        {
+            _duration = duration;
+            _committedStart = _start;
+            _committedEnd = _end;
+            IsEnabled = true;
+        }
+        RefreshControls();
+    }
+
+    private void RangeCanvas_SizeChanged(object sender, SizeChangedEventArgs e) => UpdateTrack();
+
+    private double TravelWidth => Math.Max(1, RangeCanvas.ActualWidth - StartHandle.Width);
+    private double Position(double seconds) => _duration <= 0 ? 0 :
+        Math.Clamp(seconds / _duration, 0, 1) * TravelWidth;
+
+    private void UpdateTrack()
+    {
+        if (TrackBackground is null || StartHandle is null || EndHandle is null) return;
+        double from = Position(_start);
+        double to = Position(_end);
+        TrackBackground.Width = Math.Max(0, RangeCanvas.ActualWidth);
+        Canvas.SetLeft(TrackBackground, 0);
+        Canvas.SetLeft(SelectedTrack, from + StartHandle.Width / 2);
+        SelectedTrack.Width = Math.Max(0, to - from);
+        Canvas.SetLeft(StartHandle, from);
+        Canvas.SetTop(StartHandle, 1);
+        Canvas.SetLeft(EndHandle, to);
+        Canvas.SetTop(EndHandle, 1);
+    }
+
+    private void RefreshControls()
+    {
+        if (StartTimeBox is null) return;
+        StartTimeBox.Text = TrimTimelineMath.Format(_start);
+        EndTimeBox.Text = TrimTimelineMath.Format(_end);
+        SelectedDurationText.Text = _duration > 0
+            ? "Selected: " + TrimTimelineMath.Format(_end - _start)
+            : "No Clip Selected";
+        UpdateTrack();
+    }
+
+    private void StartHandle_DragDelta(object sender, DragDeltaEventArgs e)
+    {
+        if (_duration <= 0) return;
+        _start = TrimTimelineMath.MoveStart(
+            _start + e.HorizontalChange * _duration / TravelWidth, _end, _duration);
+        RefreshControls();
+    }
+
+    private void EndHandle_DragDelta(object sender, DragDeltaEventArgs e)
+    {
+        if (_duration <= 0) return;
+        _end = TrimTimelineMath.MoveEnd(
+            _end + e.HorizontalChange * _duration / TravelWidth, _start, _duration);
+        RefreshControls();
+    }
+
+    private void Handle_DragCompleted(object sender, DragCompletedEventArgs e) => Commit();
+
+    private void Handle_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e) =>
+        ((Thumb)sender).Focus();
+
+    private void Handle_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (_duration <= 0) return;
+        bool startHandle = ReferenceEquals(sender, StartHandle);
+        bool coarse = Keyboard.Modifiers.HasFlag(ModifierKeys.Control);
+        double step = coarse ? TrimTimelineMath.KeyboardCoarseStep : TrimTimelineMath.KeyboardFineStep;
+        double current = startHandle ? _start : _end;
+        double desired = e.Key switch
+        {
+            Key.Left => current - step,
+            Key.Right => current + step,
+            Key.Home => 0,
+            Key.End => _duration,
+            _ => double.NaN
+        };
+        if (!double.IsFinite(desired)) return;
+        if (startHandle)
+            _start = TrimTimelineMath.MoveStart(desired, _end, _duration);
+        else
+            _end = TrimTimelineMath.MoveEnd(desired, _start, _duration);
+        RefreshControls();
+        Commit();
+        e.Handled = true;
+    }
+
+    private void TimeBox_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Enter)
+        {
+            CommitTimeBoxes();
+            Keyboard.ClearFocus();
+            e.Handled = true;
+        }
+        else if (e.Key == Key.Escape)
+        {
+            RefreshControls();
+            Keyboard.ClearFocus();
+            e.Handled = true;
+        }
+    }
+
+    private void TimeBox_LostKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e)
+        => CommitTimeBoxes();
+
+    private void CommitTimeBoxes()
+    {
+        if (_duration <= 0) return;
+        if (!TrimTimelineMath.TryParseTime(StartTimeBox.Text, out double s) ||
+            !TrimTimelineMath.TryParseTime(EndTimeBox.Text, out double t) ||
+            t <= s || t > _duration || s < 0 ||
+            !TrimTimelineMath.TryCreate(_duration, s, t, out var start, out var end))
+        {
+            RefreshControls(); // Reject rather than persist an invalid range.
+            return;
+        }
+        _start = start;
+        _end = end;
+        RefreshControls();
+        Commit();
+    }
+
+    private void ResetTrim_Click(object sender, RoutedEventArgs e)
+    {
+        if (_duration <= 0) return;
+        _start = 0;
+        _end = _duration;
+        RefreshControls();
+        Commit();
+    }
+
+    private void Commit()
+    {
+        if (_duration <= 0 ||
+            Math.Abs(_start - _committedStart) < 1e-7 &&
+            Math.Abs(_end - _committedEnd) < 1e-7) return;
+        if (!TrimValidator.Validate(_start, _end, _duration).IsValid)
+        {
+            _start = _committedStart;
+            _end = _committedEnd;
+            RefreshControls();
+            return;
+        }
+        // Change is announced only after the user completes an intentional edit.
+        _committedStart = _start;
+        _committedEnd = _end;
+        RangeCommitted?.Invoke(this, new TrimRangeCommittedEventArgs(_start, _end));
+    }
+}
