@@ -157,7 +157,10 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
         get => _targetSizeMb;
         set
         {
+            if (value < 1 || value > 250) return;
             _targetSizeMb = value;
+            _settings.DiscordTargetSizeMb = value;
+            _settings.Save();
             OnPropertyChanged();
             InvalidateExportReady();
         }

@@ -78,6 +78,7 @@ public partial class MainWindow : Window
             }
         };
         UpdateStatusBadgeColor();
+        UpdateSharePresetSelection();
     }
 
     private void RegisterHotkeys()
@@ -378,9 +379,38 @@ public partial class MainWindow : Window
     }
 
     // Preset Clicks
-    private void Preset20_Click(object sender, RoutedEventArgs e) => _vm.TargetSizeMb = 20;
-    private void Preset50_Click(object sender, RoutedEventArgs e) => _vm.TargetSizeMb = 50;
-    private void Preset100_Click(object sender, RoutedEventArgs e) => _vm.TargetSizeMb = 100;
+    private void Preset20_Click(object sender, RoutedEventArgs e) { _vm.TargetSizeMb = 20; UpdateSharePresetSelection(); }
+    private void Preset50_Click(object sender, RoutedEventArgs e) { _vm.TargetSizeMb = 50; UpdateSharePresetSelection(); }
+    private void Preset100_Click(object sender, RoutedEventArgs e) { _vm.TargetSizeMb = 100; UpdateSharePresetSelection(); }
+
+    private void PresetCustom_Click(object sender, RoutedEventArgs e) => TryApplyCustomSize();
+    private void TxtCustomMb_LostFocus(object sender, RoutedEventArgs e)
+    {
+        if (RadioCustom.IsChecked == true) TryApplyCustomSize();
+    }
+
+    private void TryApplyCustomSize()
+    {
+        if (!int.TryParse(TxtCustomMb.Text, out int mb) || mb < 1 || mb > 250)
+        {
+            MessageBox.Show("Choose an export target between 1 and 250 MB.", "Invalid export size");
+            UpdateSharePresetSelection();
+            return;
+        }
+        _vm.TargetSizeMb = mb;
+        UpdateSharePresetSelection();
+    }
+
+    private void UpdateSharePresetSelection()
+    {
+        int mb = _vm.TargetSizeMb;
+        Radio20.IsChecked = mb == 20;
+        Radio50.IsChecked = mb == 50;
+        Radio100.IsChecked = mb == 100;
+        RadioCustom.IsChecked = mb != 20 && mb != 50 && mb != 100;
+        if (RadioCustom.IsChecked == true)
+            TxtCustomMb.Text = mb.ToString();
+    }
 
     // Export & Share
     private async void BtnExport_Click(object sender, RoutedEventArgs e)

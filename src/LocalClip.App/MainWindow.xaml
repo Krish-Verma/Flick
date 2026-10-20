@@ -267,9 +267,12 @@
                         <DockPanel Margin="0,0,0,10">
                             <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                 <TextBlock Text="Discord Target:" FontWeight="Bold" VerticalAlignment="Center" Margin="0,0,10,0"/>
-                                <RadioButton Content="20 MB (Free)" IsChecked="True" GroupName="Cap" Click="Preset20_Click" VerticalAlignment="Center" Margin="0,0,10,0" Foreground="#FAFAFA"/>
-                                <RadioButton Content="50 MB" GroupName="Cap" Click="Preset50_Click" VerticalAlignment="Center" Margin="0,0,10,0" Foreground="#FAFAFA"/>
-                                <RadioButton Content="100 MB" GroupName="Cap" Click="Preset100_Click" VerticalAlignment="Center" Margin="0,0,10,0" Foreground="#FAFAFA"/>
+                                <RadioButton x:Name="Radio20" Content="20 MB" GroupName="Cap" Click="Preset20_Click" VerticalAlignment="Center" Margin="0,0,10,0" Foreground="#FAFAFA"/>
+                                <RadioButton x:Name="Radio50" Content="50 MB" GroupName="Cap" Click="Preset50_Click" VerticalAlignment="Center" Margin="0,0,10,0" Foreground="#FAFAFA"/>
+                                <RadioButton x:Name="Radio100" Content="100 MB" GroupName="Cap" Click="Preset100_Click" VerticalAlignment="Center" Margin="0,0,10,0" Foreground="#FAFAFA"/>
+                                <RadioButton x:Name="RadioCustom" Content="Custom" GroupName="Cap" Click="PresetCustom_Click" VerticalAlignment="Center" Margin="0,0,5,0" Foreground="#FAFAFA"/>
+                                <TextBox x:Name="TxtCustomMb" Width="46" Text="20" VerticalAlignment="Center" LostFocus="TxtCustomMb_LostFocus" ToolTip="Custom target in MB (1–250)"/>
+                                <TextBlock Text="MB" Foreground="#A1A1AA" VerticalAlignment="Center" Margin="3,0,0,0"/>
                             </StackPanel>
 
                             <Button Content="⚡ Export for Discord" Click="BtnExport_Click"
