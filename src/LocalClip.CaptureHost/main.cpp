@@ -114,6 +114,7 @@ struct ActiveCapture {
     std::string pending_save_id;
     std::string pending_save_prefix;
     std::chrono::steady_clock::time_point pending_save_start;
+    std::filesystem::file_time_type pending_save_walltime;
     std::atomic<bool> save_in_progress{false};
 };
 
@@ -130,71 +131,97 @@ static std::filesystem::path runtime_bin_directory() {
 // Forward declaration
 static void internal_stop_capture(const std::string &reason);
 
-// Replay buffer callbacks
+// Replay buffer callbacks: only the current OBS output and save request can
+// publish a clip. Never pick the newest file from a directory (stale-clip bug).
 static void on_replay_saved(void *data, calldata_t *cd) {
-    const char *path = nullptr;
-    calldata_get_string(cd, "path", &path);
-    std::string saved_path = (path && strlen(path) > 0) ? path : "";
-
+    obs_output_t *output = reinterpret_cast<obs_output_t*>(data);
     std::string save_id;
     std::string out_dir;
+    std::vector<std::string> tracks;
+    std::filesystem::file_time_type requested_at;
     {
         std::lock_guard<std::mutex> lock(g_state_mutex);
+        if (!g_cap.save_in_progress || !g_cap.replay_output ||
+            g_cap.replay_output != output) return;
         save_id = g_cap.pending_save_id;
         out_dir = g_cap.output_dir;
-        g_cap.save_in_progress = false;
+        requested_at = g_cap.pending_save_walltime;
+        tracks = g_cap.track_names;
     }
 
-    obs_output_t *out = nullptr;
-    {
-        std::lock_guard<std::mutex> lock(g_state_mutex);
-        out = g_cap.replay_output;
-    }
-
-    if (saved_path.empty() && out) {
-        proc_handler_t *ph = obs_output_get_proc_handler(out);
-        if (ph) {
-            calldata_t rcd;
-            calldata_init(&rcd);
-            if (proc_handler_call(ph, "get_last_replay", &rcd)) {
-                const char *p = nullptr;
-                calldata_get_string(&rcd, "path", &p);
-                if (p && strlen(p) > 0) {
-                    saved_path = p;
-                }
-            }
-            calldata_free(&rcd);
+    auto reject = [&](const char *message) {
+        {
+            std::lock_guard<std::mutex> lock(g_state_mutex);
+            if (g_cap.replay_output == output && g_cap.pending_save_id == save_id)
+                g_cap.save_in_progress = false;
         }
-    }
+        send_event("fault", {{"reason", message}, {"save_id", save_id}});
+    };
 
-    if (saved_path.empty() && !out_dir.empty()) {
-        WIN32_FIND_DATAA fd;
-        std::string search = out_dir + "\\*.mkv";
-        HANDLE hFind = FindFirstFileA(search.c_str(), &fd);
-        FILETIME best_ft = {0, 0};
-        std::string best_file;
-        if (hFind != INVALID_HANDLE_VALUE) {
-            do {
-                if (CompareFileTime(&fd.ftLastWriteTime, &best_ft) > 0) {
-                    best_ft = fd.ftLastWriteTime;
-                    best_file = out_dir + "\\" + fd.cFileName;
-                }
-            } while (FindNextFileA(hFind, &fd));
-            FindClose(hFind);
+    // The OBS saved signal may omit the path. Query THIS output, not the
+    // filesystem, and reject an absent/stale/unrelated result.
+    std::string saved_path;
+    proc_handler_t *ph = obs_output_get_proc_handler(output);
+    if (ph) {
+        calldata_t reply;
+        calldata_init(&reply);
+        if (proc_handler_call(ph, "get_last_replay", &reply)) {
+            const char *p = nullptr;
+            if (calldata_get_string(&reply, "path", &p) && p && *p)
+                saved_path = p;
         }
-        saved_path = best_file;
+        calldata_free(&reply);
     }
-
     if (saved_path.empty()) {
-        send_event("fault", {{"reason", "OBS reported a replay save without a verified path"}});
+        reject("OBS did not supply the path for this replay; refusing to guess");
         return;
     }
 
-    json d;
-    d["save_id"] = save_id;
-    d["path"] = saved_path;
-    d["tracks"] = g_cap.track_names;
-    send_event("replay_saved", d);
+    std::error_code ec;
+    auto source = std::filesystem::u8path(saved_path);
+    auto directory = std::filesystem::u8path(out_dir);
+    if (source.extension() != L".mkv" ||
+        !std::filesystem::is_regular_file(source, ec) || ec ||
+        !std::filesystem::equivalent(source.parent_path(), directory, ec) || ec) {
+        reject("Replay file is missing or outside the configured originals folder");
+        return;
+    }
+
+    const auto modified = std::filesystem::last_write_time(source, ec);
+    if (ec || modified + std::chrono::seconds(4) < requested_at ||
+        std::filesystem::file_size(source, ec) == 0 || ec) {
+        reject("Replay path points to an empty or stale file");
+        return;
+    }
+
+    // Each request gets a distinct immutable name even when multiple saves
+    // occur within the same wall-clock second. MoveFileW never replaces.
+    std::string safe_id;
+    for (unsigned char c : save_id) {
+        if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+            (c >= '0' && c <= '9') || c == '-' || c == '_')
+            safe_id.push_back(static_cast<char>(c));
+    }
+    if (safe_id.empty()) {
+        reject("Replay save ID was invalid");
+        return;
+    }
+    auto target = directory / std::filesystem::u8path("Flick_" + safe_id + ".mkv");
+    if (!MoveFileW(source.c_str(), target.c_str())) {
+        reject("Could not finalize the unique replay file without overwriting another clip");
+        return;
+    }
+
+    {
+        std::lock_guard<std::mutex> lock(g_state_mutex);
+        if (g_cap.replay_output == output && g_cap.pending_save_id == save_id)
+            g_cap.save_in_progress = false;
+    }
+    send_event("replay_saved", {
+        {"save_id", save_id},
+        {"path", target.u8string()},
+        {"tracks", tracks}
+    });
 }
 
 // Window enumeration helpers
@@ -581,7 +608,7 @@ static bool start_capture_session(const json &params, std::string &out_err) {
         obs_output_set_audio_encoder(g_cap.replay_output, g_cap.audio_encoders[t], static_cast<size_t>(t));
     }
 
-    signal_handler_connect(obs_output_get_signal_handler(g_cap.replay_output), "saved", on_replay_saved, nullptr);
+    signal_handler_connect(obs_output_get_signal_handler(g_cap.replay_output), "saved", on_replay_saved, g_cap.replay_output);
 
     if (!obs_output_start(g_cap.replay_output)) {
         const char *obs_error = obs_output_get_last_error(g_cap.replay_output);
@@ -675,6 +702,7 @@ static bool trigger_save_replay(const std::string &save_id, const std::string &p
     g_cap.pending_save_id = save_id;
     g_cap.pending_save_prefix = prefix;
     g_cap.pending_save_start = std::chrono::steady_clock::now();
+    g_cap.pending_save_walltime = std::filesystem::file_time_type::clock::now();
 
     proc_handler_t *ph = obs_output_get_proc_handler(g_cap.replay_output);
     calldata_t cd;
