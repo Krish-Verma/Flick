@@ -92,6 +92,7 @@ public partial class MainWindow : Window
         };
         UpdateStatusBadgeColor();
         UpdateSharePresetSelection();
+        RadioAllClips.IsChecked = true;
     }
 
     private void RegisterHotkeys()
@@ -324,6 +325,34 @@ public partial class MainWindow : Window
             == MessageBoxResult.Yes;
     }
 
+    private void LibraryFilter_Checked(object sender, RoutedEventArgs e)
+    {
+        if (_vm is null || !IsLoaded) return;
+        if (ReferenceEquals(sender, RadioAllClips)) _vm.ClipSourceFilter = "All Clips";
+        else if (ReferenceEquals(sender, RadioFlickClips)) _vm.ClipSourceFilter = "Flick";
+        else if (ReferenceEquals(sender, RadioImportedClips)) _vm.ClipSourceFilter = "Imported";
+    }
+
+    private void ClipList_PreviewMouseRightButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (e.OriginalSource is not DependencyObject node) return;
+        while (node != null && node is not ListBoxItem)
+            node = System.Windows.Media.VisualTreeHelper.GetParent(node);
+        if (node is ListBoxItem item)
+            item.IsSelected = true;
+    }
+
+    private void BtnImportFolder_Click(object sender, RoutedEventArgs e) =>
+        OpenConnectedFolders(this);
+
+    private void OpenConnectedFolders(Window owner)
+    {
+        var dialog = new ConnectedFoldersWindow(_vm) { Owner = owner };
+        dialog.ShowDialog();
+        _vm.ReloadClips();
+        _vm.RefreshConnectedFolders();
+    }
+
     private void BtnNavClips_Click(object sender, RoutedEventArgs e)
     {
         TxtClipSearch.Focus();
@@ -353,6 +382,7 @@ public partial class MainWindow : Window
                            _vm.CaptureStatus == "Buffering";
         bool oldMic = _vm.Settings.EnableMicrophone;
         var dialog = new SettingsWindow(_vm.Settings, isCapturing) { Owner = this };
+        dialog.ManageFoldersRequested += (sender, args) => OpenConnectedFolders(dialog);
         dialog.PreviewNotificationRequested += (show, sound) =>
         {
             try { _notificationService.Preview(sound); } catch { }
@@ -389,7 +419,7 @@ public partial class MainWindow : Window
     // Gallery Handlers
     private void BtnOpenMediaFolder_Click(object sender, RoutedEventArgs e)
     {
-        _vm.OpenExportFolder();
+        _vm.OpenOriginalFolder();
     }
 
     private async void BtnRescan_Click(object sender, RoutedEventArgs e)

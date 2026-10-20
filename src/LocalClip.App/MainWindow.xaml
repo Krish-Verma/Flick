@@ -243,7 +243,6 @@
                                                            Style="{StaticResource Flick.Text.Caption}"
                                                            Foreground="{DynamicResource Flick.Brush.Accent}"/>
                                                 <TextBlock Text="{Binding LibraryStatus}"
-                                                           Style="{StaticResource Flick.Text.Caption}"
                                                            HorizontalAlignment="Right"
                                                            DockPanel.Dock="Right">
                                                     <TextBlock.Style>
