@@ -53,8 +53,8 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
     private TargetItem? _selectedTarget;
 
     // Clips
-    private ObservableCollection<ClipMetadata> _allClips = new();
-    private ObservableCollection<ClipMetadata> _filteredClips = new();
+    private System.Collections.Generic.List<ClipMetadata> _allClips = new();
+    private LibraryObservableCollection<ClipMetadata> _filteredClips = new();
     private ClipMetadata? _selectedClip;
     private string _searchQuery = "";
     private string _clipSourceFilter = "All Clips";
@@ -195,11 +195,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
         }
     }
 
-    public ObservableCollection<ClipMetadata> FilteredClips
-    {
-        get => _filteredClips;
-        set { _filteredClips = value; OnPropertyChanged(); }
-    }
+    public ObservableCollection<ClipMetadata> FilteredClips => _filteredClips;
 
     public ClipMetadata? SelectedClip
     {
@@ -695,9 +691,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
     public void ReloadClips()
     {
         string? selectedId = SelectedClip?.Id;
-        _allClips.Clear();
-        foreach (var clip in _storage.GetAllClips())
-            _allClips.Add(clip);
+        _allClips = _storage.GetAllClips();
         ApplyFilter();
         if (selectedId != null)
         {
@@ -710,8 +704,8 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
 
     public void ApplyFilter()
     {
-        FilteredClips.Clear();
         var query = _searchQuery.Trim();
+        var visible = new System.Collections.Generic.List<ClipMetadata>();
         foreach (var clip in _allClips)
         {
             if (_clipSourceFilter == "Flick" && clip.IsImported) continue;
@@ -721,8 +715,9 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
                 !clip.TargetName.Contains(query, StringComparison.OrdinalIgnoreCase) &&
                 !clip.LibrarySource.Contains(query, StringComparison.OrdinalIgnoreCase))
                 continue;
-            FilteredClips.Add(clip);
+            visible.Add(clip);
         }
+        _filteredClips.ReplaceAll(visible);
     }
 
     private void OnSelectedClipChanged()
