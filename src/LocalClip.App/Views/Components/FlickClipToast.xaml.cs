@@ -52,7 +52,7 @@ public partial class FlickClipToast : UserControl
         ResultGlyph.Data = Geometry.Parse(IsError
             ? "M 4,4 L 15,15 M 15,4 L 4,15"
             : "M 2,9 L 7,14 L 16,4");
-        ResultGlyph.Stroke = (Brush)FindResource(
+        ResultGlyph.Stroke = (System.Windows.Media.Brush)FindResource(
             IsError ? "Flick.Brush.Danger" : "Flick.Brush.Success");
     }
 }
