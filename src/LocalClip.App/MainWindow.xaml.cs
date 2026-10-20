@@ -16,6 +16,9 @@ using LocalClip.App.Views;
 using LocalClip.App.Services;
 using System.Runtime.InteropServices;
 using LocalClip.Core.Models;
+using LocalClip.Core.Media;
+using LocalClip.App.Views.Components;
+using System.Threading;
 
 namespace LocalClip.App;
 
@@ -33,6 +36,11 @@ public partial class MainWindow : Window
     private readonly DispatcherTimer _playerTimer;
     private bool _isDraggingSlider = false;
     private bool _isRealClosing = false;
+    private enum PlayerView { Original, Exported, LocalCopy }
+    private PlayerView _playerView = PlayerView.Original;
+    private CancellationTokenSource? _previewCancellation;
+    private MediaProber? _localPreviewProber;
+    private bool _playerIsPlaying;
 
     public MainWindow()
     {
@@ -82,17 +90,19 @@ public partial class MainWindow : Window
                 UpdateStatusBadgeColor();
             else if (ev.PropertyName == nameof(MainViewModel.SelectedClip))
             {
-                VideoPlayer.Stop();
-                _playerTimer.Stop();
-                BtnPlayPause.Content = "▶ Play";
-                var clipPath = _vm.SelectedClip?.OriginalFilePath;
-                VideoPlayer.Source = !string.IsNullOrEmpty(clipPath) && File.Exists(clipPath)
-                    ? new Uri(clipPath) : null;
+                ResetPlayerForSelection();
+            }
+            else if (ev.PropertyName == nameof(MainViewModel.IsExportReady) &&
+                     !_vm.IsExportReady && _playerView == PlayerView.Exported)
+            {
+                // The export became stale after edits, so never preview it as ready.
+                ShowOriginalPreview(startPlaying: false);
             }
         };
         UpdateStatusBadgeColor();
         UpdateSharePresetSelection();
         RadioAllClips.IsChecked = true;
+        ResetPlayerForSelection();
     }
 
     private void RegisterHotkeys()
@@ -300,6 +310,8 @@ public partial class MainWindow : Window
         }
 
         _playerTimer.Stop();
+        _previewCancellation?.Cancel();
+        _previewCancellation?.Dispose();
         _vm.ConfirmTargetReset = null;
         FlickBackdropService.Reset(this);
         _vm.ClipSavedConfirmed -= OnClipSavedConfirmed;
@@ -468,144 +480,320 @@ public partial class MainWindow : Window
         _vm.DeleteSelectedClip();
     }
 
-    // Video Player & Transport
+    // Player/Editor Slice 4: WPF native preview first. An explicit, bounded
+    // local MP4 can be created if this PC cannot decode the original MKV.
+    private void ResetPlayerForSelection()
+    {
+        _previewCancellation?.Cancel();
+        _previewCancellation?.Dispose();
+        _previewCancellation = null;
+
+        _playerTimer.Stop();
+        _playerIsPlaying = false;
+        VideoPlayer.Stop();
+        VideoPlayer.Source = null;
+        PlayerSlider.Value = 0;
+        BtnPlayPause.Content = "▶ Play";
+        _playerView = PlayerView.Original;
+        BtnPreviewMode.Content = "Original ▾";
+
+        var clip = _vm.SelectedClip;
+        TrimTimeline.SetRange(clip?.DurationSeconds ?? 0,
+            clip?.TrimStartSeconds ?? 0, clip?.TrimEndSeconds ?? 0);
+        BtnPlayPause.IsEnabled = clip?.IsAvailable == true;
+        BtnPreviewMode.IsEnabled = clip?.IsAvailable == true;
+        BtnBuildPreview.IsEnabled = clip?.IsAvailable == true;
+        TxtPlayerTime.Text = "0:00 / " + (clip is null ? "0:00" : clip.FormattedDuration);
+
+        if (clip is null || !clip.IsAvailable)
+        {
+            PreviewFallbackPanel.Visibility = Visibility.Visible;
+            TxtPreviewIssue.Text = clip is null
+                ? "Select a Clip to Preview"
+                : "Original Video Is Offline";
+            BtnBuildPreview.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        PreviewFallbackPanel.Visibility = Visibility.Collapsed;
+        BtnBuildPreview.Visibility = Visibility.Visible;
+        VideoPlayer.Source = new Uri(clip.OriginalFilePath);
+        // Do not autoplay or start a background decoder while browsing clips.
+    }
+
+    private void SetPreviewSource(string path, PlayerView mode, bool startPlaying)
+    {
+        if (!File.Exists(path))
+        {
+            _vm.StatusDetails = "Preview File Unavailable · Reconnect the Original";
+            return;
+        }
+        _playerTimer.Stop();
+        _playerIsPlaying = false;
+        VideoPlayer.Stop();
+        VideoPlayer.Source = new Uri(path);
+        PlayerSlider.Value = 0;
+        _playerView = mode;
+        BtnPreviewMode.Content = mode switch
+        {
+            PlayerView.Exported => "Export Preview ▾",
+            PlayerView.LocalCopy => "Local Preview ▾",
+            _ => "Original ▾"
+        };
+        BtnPlayPause.Content = "▶ Play";
+        PreviewFallbackPanel.Visibility = Visibility.Collapsed;
+        if (startPlaying)
+        {
+            VideoPlayer.Play();
+            _playerIsPlaying = true;
+            BtnPlayPause.Content = "⏸ Pause";
+            _playerTimer.Start();
+        }
+    }
+
+    private void ShowOriginalPreview(bool startPlaying)
+    {
+        var clip = _vm.SelectedClip;
+        if (clip is null || !File.Exists(clip.OriginalFilePath))
+        {
+            _vm.StatusDetails = "Original Video Offline · Reconnect Its Folder";
+            return;
+        }
+        SetPreviewSource(clip.OriginalFilePath, PlayerView.Original, startPlaying);
+        _vm.StatusDetails = "Original Preview · Edits Affect Only the Exported Copy";
+    }
+
     private void VideoPlayer_MediaOpened(object sender, RoutedEventArgs e)
     {
         if (VideoPlayer.NaturalDuration.HasTimeSpan)
         {
-            double dur = VideoPlayer.NaturalDuration.TimeSpan.TotalSeconds;
-            PlayerSlider.Maximum = dur;
-
-            // Never replace ORIGINAL trim bounds with the (shorter) export length.
-            if (_vm.SelectedClip != null &&
-                string.Equals(VideoPlayer.Source?.LocalPath, _vm.SelectedClip.OriginalFilePath,
-                    StringComparison.OrdinalIgnoreCase))
-            {
-                double originalDuration = _vm.SelectedClip.DurationSeconds;
-                SliderTrimStart.Maximum = originalDuration;
-                SliderTrimEnd.Maximum = originalDuration;
-                if (_vm.SelectedClip.TrimEndSeconds <= 0.0)
-                    _vm.SelectedClip.TrimEndSeconds = originalDuration;
-            }
+            var duration = VideoPlayer.NaturalDuration.TimeSpan;
+            PlayerSlider.Maximum = Math.Max(.25, duration.TotalSeconds);
+            TxtPlayerTime.Text = "0:00 / " + duration.ToString(
+                duration.TotalHours >= 1 ? @"h\:mm\:ss" : @"m\:ss");
         }
-        _playerTimer.Start();
+        PreviewFallbackPanel.Visibility = Visibility.Collapsed;
     }
 
     private void VideoPlayer_MediaEnded(object sender, RoutedEventArgs e)
     {
+        _playerTimer.Stop();
+        _playerIsPlaying = false;
         VideoPlayer.Stop();
+        PlayerSlider.Value = 0;
         BtnPlayPause.Content = "▶ Play";
     }
 
     private void BtnPlayPause_Click(object sender, RoutedEventArgs e)
     {
-        if (_vm.SelectedClip == null || string.IsNullOrEmpty(_vm.SelectedClip.OriginalFilePath)) return;
-        if (!File.Exists(_vm.SelectedClip.OriginalFilePath))
-        {
-            _vm.StatusDetails = "Original Video Offline · Reconnect Its Linked Folder";
-            return;
-        }
-
-        if (VideoPlayer.Source == null)
-            VideoPlayer.Source = new Uri(_vm.SelectedClip.OriginalFilePath);
-
-        if (BtnPlayPause.Content.ToString() == "▶ Play")
-        {
-            VideoPlayer.Play();
-            BtnPlayPause.Content = "⏸ Pause";
-        }
-        else
+        if (_vm.SelectedClip?.IsAvailable != true) return;
+        if (_playerIsPlaying)
         {
             VideoPlayer.Pause();
+            _playerIsPlaying = false;
+            _playerTimer.Stop();
             BtnPlayPause.Content = "▶ Play";
+            return;
         }
+        if (PreviewFallbackPanel.Visibility == Visibility.Visible) return;
+        if (VideoPlayer.Source == null)
+            SetPreviewSource(_vm.SelectedClip.OriginalFilePath, PlayerView.Original, false);
+        VideoPlayer.Play();
+        _playerIsPlaying = true;
+        _playerTimer.Start();
+        BtnPlayPause.Content = "⏸ Pause";
+    }
+
+    private void BtnPreviewMode_Click(object sender, RoutedEventArgs e)
+    {
+        if (BtnPreviewMode.ContextMenu is null) return;
+        BtnPreviewMode.ContextMenu.PlacementTarget = BtnPreviewMode;
+        BtnPreviewMode.ContextMenu.IsOpen = true;
     }
 
     private void PreviewExport_Click(object sender, RoutedEventArgs e)
     {
         if (!_vm.IsExportReady || !File.Exists(_vm.ReadyExportFilePath))
         {
-            _vm.StatusDetails = "Export this clip first to preview the final Discord mix.";
+            _vm.StatusDetails = "Export this clip first to preview its final audio mix.";
             return;
         }
-        VideoPlayer.Source = new Uri(_vm.ReadyExportFilePath);
-        VideoPlayer.Play();
-        BtnPlayPause.Content = "⏸ Pause";
-        _vm.StatusDetails = "Previewing exported H.264/AAC MP4 with selected audio levels.";
+        SetPreviewSource(_vm.ReadyExportFilePath, PlayerView.Exported, true);
+        _vm.StatusDetails = "Export Preview · H.264/AAC MP4 with the selected audio mix";
     }
 
-    private void PreviewOriginal_Click(object sender, RoutedEventArgs e)
-    {
-        var path = _vm.SelectedClip?.OriginalFilePath;
-        if (string.IsNullOrWhiteSpace(path) || !File.Exists(path)) return;
-        VideoPlayer.Source = new Uri(path);
-        VideoPlayer.Play();
-        BtnPlayPause.Content = "⏸ Pause";
-        _vm.StatusDetails = "Previewing original recording. Mix sliders affect the exported copy.";
-    }
+    private void PreviewOriginal_Click(object sender, RoutedEventArgs e) =>
+        ShowOriginalPreview(startPlaying: true);
 
     private void PlayerSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
     {
         if (_isDraggingSlider)
         {
-            VideoPlayer.Position = TimeSpan.FromSeconds(PlayerSlider.Value);
+            double seconds = Math.Clamp(PlayerSlider.Value, 0,
+                Math.Max(0, PlayerSlider.Maximum));
+            TxtPlayerTime.Text = TimeSpan.FromSeconds(seconds).ToString(@"m\:ss") +
+                " / " + (_vm.SelectedClip?.FormattedDuration ?? "0:00");
         }
+    }
+
+    private void PlayerSlider_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (!VideoPlayer.NaturalDuration.HasTimeSpan) return;
+        double seconds = PlayerSlider.Value;
+        double amount = Keyboard.Modifiers.HasFlag(ModifierKeys.Control) ? 5 : 1;
+        switch (e.Key)
+        {
+            case Key.Left: seconds -= amount; break;
+            case Key.Right: seconds += amount; break;
+            case Key.Home: seconds = 0; break;
+            case Key.End: seconds = PlayerSlider.Maximum; break;
+            default: return;
+        }
+        PlayerSlider.Value = Math.Clamp(seconds, 0, PlayerSlider.Maximum);
+        VideoPlayer.Position = TimeSpan.FromSeconds(PlayerSlider.Value);
+        e.Handled = true;
     }
 
     private void PlayerTimer_Tick(object? sender, EventArgs e)
     {
-        if (!_isDraggingSlider && VideoPlayer.NaturalDuration.HasTimeSpan)
-        {
-            PlayerSlider.Value = VideoPlayer.Position.TotalSeconds;
-            TxtPlayerTime.Text = $"{VideoPlayer.Position:m\\:ss} / {VideoPlayer.NaturalDuration.TimeSpan:m\\:ss}";
-        }
+        if (_isDraggingSlider || !VideoPlayer.NaturalDuration.HasTimeSpan) return;
+        PlayerSlider.Value = VideoPlayer.Position.TotalSeconds;
+        var position = VideoPlayer.Position;
+        var length = VideoPlayer.NaturalDuration.TimeSpan;
+        TxtPlayerTime.Text = position.ToString(position.TotalHours >= 1 ? @"h\:mm\:ss" : @"m\:ss") +
+                             " / " + length.ToString(length.TotalHours >= 1 ? @"h\:mm\:ss" : @"m\:ss");
     }
 
-    private void PlayerSlider_MouseDown(object sender, MouseButtonEventArgs e)
-    {
+    private void PlayerSlider_MouseDown(object sender, MouseButtonEventArgs e) =>
         _isDraggingSlider = true;
-    }
 
     private void PlayerSlider_MouseUp(object sender, MouseButtonEventArgs e)
     {
-        VideoPlayer.Position = TimeSpan.FromSeconds(PlayerSlider.Value);
+        if (_isDraggingSlider && VideoPlayer.NaturalDuration.HasTimeSpan)
+            VideoPlayer.Position = TimeSpan.FromSeconds(
+                Math.Clamp(PlayerSlider.Value, 0, PlayerSlider.Maximum));
         _isDraggingSlider = false;
     }
 
     private void VideoPlayer_MediaFailed(object sender, ExceptionRoutedEventArgs e)
     {
-        _vm.StatusDetails = "Windows could not preview this MKV. Open it in your default video player.";
+        _playerTimer.Stop();
+        _playerIsPlaying = false;
         BtnPlayPause.Content = "▶ Play";
+        PreviewFallbackPanel.Visibility = Visibility.Visible;
+        BtnBuildPreview.Visibility = _playerView == PlayerView.Original
+            ? Visibility.Visible : Visibility.Collapsed;
+        TxtPreviewIssue.Text = _playerView == PlayerView.Exported
+            ? "Windows Couldn't Preview the Exported MP4"
+            : "Windows Couldn't Play This Original";
+        _vm.StatusDetails = _playerView == PlayerView.Exported
+            ? "Export preview unavailable. Open the validated MP4 externally."
+            : "Original MKV playback unsupported by Windows. Create a temporary local MP4 or open the original in another player.";
+    }
+
+    private async void BuildPlayablePreview_Click(object sender, RoutedEventArgs e)
+    {
+        var clip = _vm.SelectedClip;
+        if (clip?.IsAvailable != true || _vm.IsCaptureActive || _vm.IsExporting)
+        {
+            _vm.StatusDetails = "Finish live capture or export before creating a local preview.";
+            return;
+        }
+        _previewCancellation?.Cancel();
+        _previewCancellation?.Dispose();
+        var cancellation = new CancellationTokenSource();
+        _previewCancellation = cancellation;
+        BtnBuildPreview.IsEnabled = false;
+        BtnBuildPreview.Content = "Preparing…";
+        _vm.StatusDetails = "Preparing a bounded, on-demand local playback copy…";
+        try
+        {
+            _localPreviewProber ??= new MediaProber();
+            string result = await _localPreviewProber.BuildPlaybackPreviewAsync(
+                clip.OriginalFilePath, cancellation.Token);
+            if (cancellation.IsCancellationRequested || _vm.SelectedClip?.Id != clip.Id)
+                return;
+            SetPreviewSource(result, PlayerView.LocalCopy, startPlaying: true);
+            _vm.StatusDetails = clip.DurationSeconds > 180
+                ? "Local preview covers the first 3 minutes. Your original remains untouched."
+                : "Playing local compatibility copy. Your original remains untouched.";
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception ex)
+        {
+            if (_vm.SelectedClip?.Id == clip.Id)
+            {
+                _vm.StatusDetails = "Couldn't Create Local Preview: " + ex.Message;
+                PreviewFallbackPanel.Visibility = Visibility.Visible;
+            }
+        }
+        finally
+        {
+            if (ReferenceEquals(_previewCancellation, cancellation))
+            {
+                _previewCancellation = null;
+                BtnBuildPreview.IsEnabled = true;
+                BtnBuildPreview.Content = "Create Local Preview";
+            }
+            cancellation.Dispose();
+        }
     }
 
     private void OpenInPlayer_Click(object sender, RoutedEventArgs e)
     {
-        var path = _vm.SelectedClip?.OriginalFilePath;
-        if (!string.IsNullOrWhiteSpace(path) && File.Exists(path))
-            Process.Start(new ProcessStartInfo(path) { UseShellExecute = true });
+        string? path = _playerView == PlayerView.Exported &&
+                       File.Exists(_vm.ReadyExportFilePath)
+            ? _vm.ReadyExportFilePath : _vm.SelectedClip?.OriginalFilePath;
+        if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
+        {
+            _vm.StatusDetails = "Original Video Offline · Reconnect Its Folder";
+            return;
+        }
+        try { Process.Start(new ProcessStartInfo(path) { UseShellExecute = true }); }
+        catch (Exception ex) { _vm.StatusDetails = "Could Not Open External Player: " + ex.Message; }
     }
 
-    // Trim Handlers
-    private void TrimSliders_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+    private void BtnClipActions_Click(object sender, RoutedEventArgs e)
     {
-        if (_vm.SelectedClip != null)
+        if (BtnClipActions.ContextMenu is null) return;
+        BtnClipActions.ContextMenu.PlacementTarget = BtnClipActions;
+        BtnClipActions.ContextMenu.IsOpen = true;
+    }
+
+    private void TrimTimeline_RangeCommitted(object sender, TrimRangeCommittedEventArgs e)
+    {
+        if (!_vm.ApplyTrim(e.Start, e.End))
         {
-            if (SliderTrimEnd.Value <= SliderTrimStart.Value && SliderTrimStart.Maximum > 0)
-            {
-                SliderTrimEnd.Value = Math.Min(SliderTrimStart.Value + 1.0, SliderTrimStart.Maximum);
-            }
-            _vm.SaveClipEdits();
+            var clip = _vm.SelectedClip;
+            TrimTimeline.SetRange(clip?.DurationSeconds ?? 0,
+                clip?.TrimStartSeconds ?? 0, clip?.TrimEndSeconds ?? 0);
+            return;
         }
+        if (_playerView == PlayerView.Exported)
+            ShowOriginalPreview(startPlaying: false);
     }
 
     private void AudioMuteChanged(object sender, RoutedEventArgs e)
     {
-        _vm.SaveClipEdits();
+        if (!IsLoaded || !_vm.CanEditClip) return;
+        _vm.ScheduleAudioEdit();
+        if (_playerView == PlayerView.Exported)
+            ShowOriginalPreview(startPlaying: false);
     }
 
     private void AudioGainChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
     {
-        _vm.SaveClipEdits();
+        if (!IsLoaded || !_vm.CanEditClip) return;
+        _vm.ScheduleAudioEdit();
+        if (_playerView == PlayerView.Exported)
+            ShowOriginalPreview(startPlaying: false);
+    }
+
+    private void ResetAudioMix_Click(object sender, RoutedEventArgs e)
+    {
+        _vm.ResetAudioMix();
+        if (_playerView == PlayerView.Exported)
+            ShowOriginalPreview(startPlaying: false);
     }
 
     // Preset Clicks
