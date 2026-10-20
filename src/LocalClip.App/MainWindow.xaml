@@ -201,7 +201,7 @@
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
-                    <StackPanel Orientation="Horizontal" Grid.Column="0"><Button x:Name="BtnPlayPause" Content="▶ Play" Click="BtnPlayPause_Click" Width="80" Margin="0,0,10,0"/><Button Content="Open Player" Click="OpenInPlayer_Click" Margin="0,0,10,0"/></StackPanel>
+                    <StackPanel Orientation="Horizontal" Grid.Column="0"><Button x:Name="BtnPlayPause" Content="▶ Play" Click="BtnPlayPause_Click" Width="80" Margin="0,0,10,0"/><Button Content="Original" Click="PreviewOriginal_Click" Margin="0,0,8,0"/><Button Content="Export MP4" Click="PreviewExport_Click" Margin="0,0,8,0"/><Button Content="Open Player" Click="OpenInPlayer_Click" Margin="0,0,10,0"/></StackPanel>
                     <Slider x:Name="PlayerSlider" Grid.Column="1" VerticalAlignment="Center"
                             Minimum="0" Maximum="1" SmallChange="0.05" LargeChange="0.2"
                             ValueChanged="PlayerSlider_ValueChanged" PreviewMouseLeftButtonDown="PlayerSlider_MouseDown" PreviewMouseLeftButtonUp="PlayerSlider_MouseUp"/>
@@ -238,7 +238,8 @@
                 <!-- Audio Mixer Controls -->
                 <Border Grid.Row="4" Background="#18181B" BorderBrush="#27272A" BorderThickness="1" CornerRadius="6" Padding="12" Margin="0,0,0,8">
                     <StackPanel>
-                        <TextBlock Text="Audio Tracks (Source Isolation &amp; Levels)" FontWeight="SemiBold" Foreground="#60A5FA" Margin="0,0,0,6"/>
+                        <TextBlock Text="Export audio tracks (mute &amp; gain)" FontWeight="SemiBold" Foreground="#60A5FA" Margin="0,0,0,6"/>
+                        <TextBlock Text="Adjust levels, export, then preview MP4 to hear the mix." Foreground="#A1A1AA" FontSize="11" Margin="0,0,0,5"/>
                         <ItemsControl ItemsSource="{Binding SelectedClip.AudioTracks}">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>

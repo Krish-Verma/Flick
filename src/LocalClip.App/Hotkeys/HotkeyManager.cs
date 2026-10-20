@@ -72,6 +72,44 @@ public class HotkeyManager : IDisposable
         return true;
     }
 
+    public string? RegisteredToggleHotkey => _toggleHotkey;
+    public string? RegisteredSaveHotkey => _saveHotkey;
+
+    public bool TryConfigure(string toggle, string save, out string error)
+    {
+        error = "";
+        if (!IsValidHotkey(toggle) || !IsValidHotkey(save) ||
+            AreEquivalentHotkeys(toggle, save))
+        {
+            error = "Use two distinct, valid hotkeys.";
+            return false;
+        }
+        if (_toggleHotkey != null && _saveHotkey != null &&
+            AreEquivalentHotkeys(toggle, _toggleHotkey) &&
+            AreEquivalentHotkeys(save, _saveHotkey))
+            return true;
+
+        string? oldToggle = _toggleHotkey, oldSave = _saveHotkey;
+        ClearRegistrations();
+        bool toggleOk = RegisterToggleHotkey(toggle, out var toggleError);
+        bool saveOk = toggleOk && RegisterSaveHotkey(save, out var saveError);
+        if (toggleOk && saveOk) return true;
+
+        error = toggleOk ? "Save hotkey is unavailable." : toggleError;
+        ClearRegistrations();
+        if (oldToggle != null) RegisterToggleHotkey(oldToggle, out _);
+        if (oldSave != null) RegisterSaveHotkey(oldSave, out _);
+        return false;
+    }
+
+    private void ClearRegistrations()
+    {
+        if (_toggleId != 0) UnregisterHotKey(_hwnd, _toggleId);
+        if (_saveId != 0) UnregisterHotKey(_hwnd, _saveId);
+        _toggleId = _saveId = 0;
+        _toggleHotkey = _saveHotkey = null;
+    }
+
     public static bool AreEquivalentHotkeys(string left, string right) =>
         ParseHotkey(left, out var leftMods, out var leftKey) &&
         ParseHotkey(right, out var rightMods, out var rightKey) &&
@@ -141,16 +179,7 @@ public class HotkeyManager : IDisposable
 
     public void Dispose()
     {
-        if (_toggleId != 0 && _hwnd != IntPtr.Zero)
-        {
-            UnregisterHotKey(_hwnd, _toggleId);
-            _toggleId = 0;
-        }
-        if (_saveId != 0 && _hwnd != IntPtr.Zero)
-        {
-            UnregisterHotKey(_hwnd, _saveId);
-            _saveId = 0;
-        }
+        if (_hwnd != IntPtr.Zero) ClearRegistrations();
         _source?.RemoveHook(HwndHook);
         _source = null;
         GC.SuppressFinalize(this);

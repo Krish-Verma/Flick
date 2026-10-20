@@ -83,16 +83,21 @@ public partial class MainWindow : Window
 
     private void RegisterHotkeys()
     {
+        string? oldToggle = _hotkeyManager.RegisteredToggleHotkey;
+        string? oldSave = _hotkeyManager.RegisteredSaveHotkey;
+        if (!_hotkeyManager.TryConfigure(_vm.Settings.CaptureToggleHotkey,
+                _vm.Settings.SaveReplayHotkey, out string error))
+        {
+            MessageBox.Show(error + " The previous shortcuts were restored if possible.",
+                "Flick hotkey conflict", MessageBoxButton.OK, MessageBoxImage.Warning);
+            if (oldToggle != null && oldSave != null)
+            {
+                _vm.Settings.CaptureToggleHotkey = oldToggle;
+                _vm.Settings.SaveReplayHotkey = oldSave;
+                _vm.Settings.Save();
+            }
+        }
         BtnSaveReplay.Content = $"SAVE CLIP ({_vm.Settings.SaveReplayHotkey})";
-        if (!_hotkeyManager.RegisterToggleHotkey(_vm.Settings.CaptureToggleHotkey, out string toggleErr))
-        {
-            MessageBox.Show(toggleErr, "Hotkey Conflict (Capture Toggle)", MessageBoxButton.OK, MessageBoxImage.Warning);
-        }
-
-        if (!_hotkeyManager.RegisterSaveHotkey(_vm.Settings.SaveReplayHotkey, out string saveErr))
-        {
-            MessageBox.Show(saveErr, "Hotkey Conflict (Save Replay)", MessageBoxButton.OK, MessageBoxImage.Warning);
-        }
     }
 
     private void SetupSystemTray()
@@ -297,10 +302,8 @@ public partial class MainWindow : Window
     {
         if (_vm.SelectedClip == null || string.IsNullOrEmpty(_vm.SelectedClip.OriginalFilePath)) return;
 
-        if (VideoPlayer.Source == null || VideoPlayer.Source.LocalPath != _vm.SelectedClip.OriginalFilePath)
-        {
+        if (VideoPlayer.Source == null)
             VideoPlayer.Source = new Uri(_vm.SelectedClip.OriginalFilePath);
-        }
 
         if (BtnPlayPause.Content.ToString() == "▶ Play")
         {
@@ -312,6 +315,29 @@ public partial class MainWindow : Window
             VideoPlayer.Pause();
             BtnPlayPause.Content = "▶ Play";
         }
+    }
+
+    private void PreviewExport_Click(object sender, RoutedEventArgs e)
+    {
+        if (!_vm.IsExportReady || !File.Exists(_vm.ReadyExportFilePath))
+        {
+            _vm.StatusDetails = "Export this clip first to preview the final Discord mix.";
+            return;
+        }
+        VideoPlayer.Source = new Uri(_vm.ReadyExportFilePath);
+        VideoPlayer.Play();
+        BtnPlayPause.Content = "⏸ Pause";
+        _vm.StatusDetails = "Previewing exported H.264/AAC MP4 with selected audio levels.";
+    }
+
+    private void PreviewOriginal_Click(object sender, RoutedEventArgs e)
+    {
+        var path = _vm.SelectedClip?.OriginalFilePath;
+        if (string.IsNullOrWhiteSpace(path) || !File.Exists(path)) return;
+        VideoPlayer.Source = new Uri(path);
+        VideoPlayer.Play();
+        BtnPlayPause.Content = "⏸ Pause";
+        _vm.StatusDetails = "Previewing original recording. Mix sliders affect the exported copy.";
     }
 
     private void PlayerSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
