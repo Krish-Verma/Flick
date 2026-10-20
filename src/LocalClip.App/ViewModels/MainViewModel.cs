@@ -72,6 +72,8 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
     public event Action<string>? ReplaySaveFailed;
 
     public AppSettings Settings => _settings;
+    // WPF shell supplies consent before an active source change discards replay.
+    public Func<bool>? ConfirmTargetReset { get; set; }
     public CaptureHostClient CaptureHost => _captureHost;
 
     public string CaptureStatus
@@ -117,6 +119,19 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
         {
             if (_selectedTarget != value)
             {
+                bool active = CaptureStatus is "Starting" or "Buffering" or "Armed" or "Stopping";
+                if (_selectedTarget != null && active)
+                {
+                    bool allowed = CaptureStatus is not ("Starting" or "Stopping")
+                        && ConfirmTargetReset?.Invoke() == true;
+                    if (!allowed)
+                    {
+                        // The ComboBox's requested item is rejected; restore the
+                        // old selection without touching source settings or buffer.
+                        OnPropertyChanged();
+                        return;
+                    }
+                }
                 _selectedTarget = value;
                 OnPropertyChanged();
                 OnTargetChanged();

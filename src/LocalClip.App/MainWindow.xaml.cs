@@ -39,6 +39,7 @@ public partial class MainWindow : Window
         _vm = new MainViewModel();
         DataContext = _vm;
         _notificationService = new FlickNotificationService(Dispatcher);
+        _vm.ConfirmTargetReset = ConfirmSourceReset;
         _vm.ClipSavedConfirmed += OnClipSavedConfirmed;
         _vm.ReplaySaveFailed += OnReplaySaveFailed;
 
@@ -50,6 +51,7 @@ public partial class MainWindow : Window
         _playerTimer.Tick += PlayerTimer_Tick;
 
         Loaded += MainWindow_Loaded;
+        SourceInitialized += (_, _) => _ = FlickBackdropService.TryApplyMica(this);
     }
 
     private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
@@ -291,6 +293,8 @@ public partial class MainWindow : Window
         }
 
         _playerTimer.Stop();
+        _vm.ConfirmTargetReset = null;
+        FlickBackdropService.Reset(this);
         _vm.ClipSavedConfirmed -= OnClipSavedConfirmed;
         _vm.ReplaySaveFailed -= OnReplaySaveFailed;
         _notificationService.Dispose();
@@ -304,6 +308,14 @@ public partial class MainWindow : Window
         if (_trayBrandIcon != null && !ReferenceEquals(_trayBrandIcon, System.Drawing.SystemIcons.Application))
             _trayBrandIcon.Dispose();
         _vm.Dispose();
+    }
+
+    private bool ConfirmSourceReset()
+    {
+        return MessageBox.Show(
+            "Changing the capture source will stop replay and clear the current unsaved buffer. Continue?",
+            "Change Capture Source", MessageBoxButton.YesNo, MessageBoxImage.Warning)
+            == MessageBoxResult.Yes;
     }
 
     private void BtnNavClips_Click(object sender, RoutedEventArgs e)
