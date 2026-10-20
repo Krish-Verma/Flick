@@ -10,6 +10,8 @@
 #include <chrono>
 #include <sstream>
 #include <iomanip>
+#include <filesystem>
+#include <system_error>
 
 #include "obs.h"
 #include "json.hpp"
@@ -117,6 +119,13 @@ struct ActiveCapture {
 
 static ActiveCapture g_cap;
 static std::atomic<bool> g_obs_initialized{false};
+
+static std::filesystem::path runtime_bin_directory() {
+    wchar_t file_name[32768] = {};
+    DWORD len = GetModuleFileNameW(nullptr, file_name, 32768);
+    if (!len || len >= 32768) return {};
+    return std::filesystem::path(file_name).parent_path();
+}
 
 // Forward declaration
 static void internal_stop_capture(const std::string &reason);
@@ -272,23 +281,21 @@ static BOOL CALLBACK EnumMonitorsProc(HMONITOR hMon, HDC hdc, LPRECT rc, LPARAM 
 }
 
 // Initialization of OBS engine
-static bool ensure_obs_init() {
-    if (g_obs_initialized) return true;
-
-    base_set_log_handler(obs_log_redirect, nullptr);
-
-    if (!obs_startup("en-US", nullptr, nullptr)) {
-        return false;
+static bool ensure_obs_init(int width, int height, int fps) {
+    bool already_initialized = g_obs_initialized.load();
+    if (!already_initialized) {
+        base_set_log_handler(obs_log_redirect, nullptr);
+        if (!obs_startup("en-US", nullptr, nullptr)) return false;
     }
 
     struct obs_video_info ovi = {};
     ovi.graphics_module = "libobs-d3d11.dll";
-    ovi.fps_num = 30;
+    ovi.fps_num = static_cast<uint32_t>(fps);
     ovi.fps_den = 1;
-    ovi.base_width = 1920;
-    ovi.base_height = 1080;
-    ovi.output_width = 1920;
-    ovi.output_height = 1080;
+    ovi.base_width = static_cast<uint32_t>(width);
+    ovi.base_height = static_cast<uint32_t>(height);
+    ovi.output_width = static_cast<uint32_t>(width);
+    ovi.output_height = static_cast<uint32_t>(height);
     ovi.output_format = VIDEO_FORMAT_NV12;
     ovi.adapter = 0;
     ovi.gpu_conversion = true;
@@ -296,9 +303,10 @@ static bool ensure_obs_init() {
     ovi.range = VIDEO_RANGE_PARTIAL;
     ovi.scale_type = OBS_SCALE_BILINEAR;
     if (obs_reset_video(&ovi) != OBS_VIDEO_SUCCESS) {
-        obs_shutdown();
+        if (!already_initialized) obs_shutdown();
         return false;
     }
+    if (already_initialized) return true;
 
     struct obs_audio_info oai = {};
     oai.samples_per_sec = 48000;
@@ -307,18 +315,30 @@ static bool ensure_obs_init() {
         obs_shutdown();
         return false;
     }
-
-    // Load modules
+    const auto bin_dir = runtime_bin_directory();
+    const auto runtime_dir = bin_dir.parent_path().parent_path();
     const char *mods[] = {
         "obs-ffmpeg", "obs-nvenc", "obs-x264", "obs-outputs", "win-capture", "win-wasapi"
     };
+    bool load_ok = true;
     for (const char *m : mods) {
         obs_module_t *mod = nullptr;
-        std::string p = std::string("d:/Documents/ClipMax/tools/obs/runtime/obs-plugins/64bit/") + m + ".dll";
-        obs_open_module(&mod, p.c_str(), nullptr);
-        obs_init_module(mod);
+        auto dll = runtime_dir / "obs-plugins" / "64bit" / (std::string(m) + ".dll");
+        auto data = runtime_dir / "data" / "obs-plugins" / m;
+        std::string dll_utf8 = dll.u8string();
+        std::string data_utf8 = data.u8string();
+        int code = obs_open_module(&mod, dll_utf8.c_str(), data_utf8.c_str());
+        if (code != MODULE_SUCCESS || !mod || !obs_init_module(mod)) {
+            std::cerr << "Failed to load OBS plugin " << m << ", code=" << code << std::endl;
+            if (std::string(m) != "obs-x264" && std::string(m) != "obs-nvenc")
+                load_ok = false;
+        }
     }
-
+    if (!load_ok) {
+        obs_shutdown();
+        return false;
+    }
+    obs_post_load_modules();
     g_obs_initialized = true;
     return true;
 }
@@ -331,8 +351,18 @@ static bool start_capture_session(const json &params, std::string &out_err) {
         return false;
     }
 
-    if (!ensure_obs_init()) {
-        out_err = "Failed to initialize OBS D3D11 graphics or audio engine";
+    const int requested_fps = params.value("fps", 30);
+    const int requested_width = params.value("width", 1920);
+    const int requested_height = params.value("height", 1080);
+    if (requested_fps < 1 || requested_fps > 120 ||
+        requested_width < 320 || requested_width > 7680 ||
+        requested_height < 240 || requested_height > 4320 ||
+        requested_width % 2 || requested_height % 2) {
+        out_err = "Unsupported capture dimensions or frame rate";
+        return false;
+    }
+    if (!ensure_obs_init(requested_width, requested_height, requested_fps)) {
+        out_err = "Failed to initialize OBS video/audio/plugins";
         return false;
     }
 
@@ -347,14 +377,26 @@ static bool start_capture_session(const json &params, std::string &out_err) {
     g_cap.encoder_id = params.value("encoder", "obs_nvenc_h264_tex");
     g_cap.duration_sec = params.value("duration_sec", 30);
     g_cap.buffer_mb = params.value("buffer_mb", 256);
-    g_cap.output_dir = params.value("output_dir", "D:\\Documents\\ClipMax\\Clips\\Originals");
+    g_cap.output_dir = params.value("output_dir", std::string{});
     g_cap.audio_mode = params.value("audio_mode", "system_fallback");
     g_cap.enable_mic = params.value("enable_mic", true);
     g_cap.mic_device_id = params.value("mic_device_id", "default");
     g_cap.system_device_id = params.value("system_device_id", "default");
 
-    // Ensure output dir exists
-    CreateDirectoryA(g_cap.output_dir.c_str(), nullptr);
+    std::error_code directory_error;
+    if (g_cap.output_dir.empty() ||
+        (!std::filesystem::create_directories(std::filesystem::u8path(g_cap.output_dir), directory_error) && directory_error)) {
+        out_err = "Unable to create originals directory";
+        return false;
+    }
+    if (g_cap.target_type != "monitor" && g_cap.target_type != "window") {
+        out_err = "Unknown capture target type";
+        return false;
+    }
+    if (g_cap.target_type == "window" && !g_cap.window_hwnd) {
+        out_err = "Window unavailable; refusing silent monitor fallback";
+        return false;
+    }
 
     // 1. Create Video Source
     if (g_cap.target_type == "window" && g_cap.window_hwnd) {
@@ -467,6 +509,11 @@ static bool start_capture_session(const json &params, std::string &out_err) {
         std::string a_name = "aac_track_" + std::to_string(t);
         obs_encoder_t *a_enc = obs_audio_encoder_create("ffmpeg_aac", a_name.c_str(), a_settings, static_cast<size_t>(t), nullptr);
         obs_data_release(a_settings);
+        if (!a_enc) {
+            out_err = "Could not create AAC audio encoder";
+            internal_stop_capture("audio_encoder_fail");
+            return false;
+        }
         obs_encoder_set_audio(a_enc, obs_get_audio());
         g_cap.audio_encoders.push_back(a_enc);
     }
@@ -518,8 +565,12 @@ static bool start_capture_session(const json &params, std::string &out_err) {
 static void internal_stop_capture(const std::string &reason) {
     if (g_cap.replay_output) {
         obs_output_stop(g_cap.replay_output);
-        while (obs_output_active(g_cap.replay_output)) {
+        auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+        while (obs_output_active(g_cap.replay_output) && std::chrono::steady_clock::now() < deadline)
             std::this_thread::sleep_for(std::chrono::milliseconds(20));
+        if (obs_output_active(g_cap.replay_output)) {
+            std::cerr << "Replay buffer stop deadline exceeded, forcing stop" << std::endl;
+            obs_output_force_stop(g_cap.replay_output);
         }
         obs_output_release(g_cap.replay_output);
         g_cap.replay_output = nullptr;
@@ -534,6 +585,10 @@ static void internal_stop_capture(const std::string &reason) {
         obs_encoder_release(a_enc);
     }
     g_cap.audio_encoders.clear();
+
+    obs_set_output_source(0, nullptr);
+    obs_set_output_source(1, nullptr);
+    obs_set_output_source(2, nullptr);
 
     if (g_cap.sys_audio_source) {
         obs_source_release(g_cap.sys_audio_source);
@@ -643,8 +698,11 @@ static json get_current_status() {
 
 // Main entry point
 int main(int argc, char **argv) {
-    // Set working directory to OBS runtime bin
-    SetCurrentDirectoryA("d:\\Documents\\ClipMax\\tools\\obs\\runtime\\bin\\64bit");
+    const auto bin_dir = runtime_bin_directory();
+    if (bin_dir.empty() || !SetCurrentDirectoryW(bin_dir.c_str())) {
+        std::cerr << "Unable to locate local OBS runtime directory" << std::endl;
+        return 2;
+    }
 
     // Start background stdin reader
     std::string line;
@@ -719,17 +777,11 @@ int main(int argc, char **argv) {
                 send_response(id, true, st);
             }
             else if (cmd == "stop_capture") {
-                {
-                    std::lock_guard<std::mutex> lock(g_state_mutex);
-                    internal_stop_capture("user_requested");
-                }
+                internal_stop_capture("user_requested");
                 send_response(id, true, {{"status", "Off"}});
             }
             else if (cmd == "shutdown") {
-                {
-                    std::lock_guard<std::mutex> lock(g_state_mutex);
-                    internal_stop_capture("shutdown");
-                }
+                internal_stop_capture("shutdown");
                 if (g_obs_initialized) {
                     obs_shutdown();
                     g_obs_initialized = false;
