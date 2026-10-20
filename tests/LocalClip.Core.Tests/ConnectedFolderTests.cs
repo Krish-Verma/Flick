@@ -217,4 +217,23 @@ public sealed class ConnectedFolderTests
         Assert.Equal(badContents, File.ReadAllText(original));
     }
 
+    [Fact]
+    public void LinkedFolderIdentityPreventsAccidentalExternalDeletionEvenWithLegacyKind()
+    {
+        using var env = new Sandbox();
+        var original = env.Video("legacy-clip.mkv");
+        var db = env.Storage();
+        var folder = db.ConnectFolder(env.Media);
+        var imported = new ClipMetadata
+        {
+            OriginalFilePath = original, SourceKind = "Flick",
+            ConnectedFolderId = folder.Id
+        };
+        Assert.True(imported.IsImported);
+        db.AddOrUpdateClip(imported);
+        Assert.True(db.DeleteClip(imported.Id));
+        Assert.True(File.Exists(original));
+        Assert.Empty(db.GetAllClips());
+    }
+
 }
