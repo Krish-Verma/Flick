@@ -49,6 +49,50 @@ jobs:
           path: TestResults/**/*.trx
           if-no-files-found: warn
 
-# Hardware NVENC, native libobs integration, installer smoke tests,
-# Discord desktop sharing and 2h/8h soaks require a qualified Windows GPU PC.
-# These are not represented as CI passes.
+  native:
+    name: Compile native libobs host (no GPU required)
+    runs-on: windows-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          update: false
+          install: >-
+            mingw-w64-ucrt-x86_64-gcc
+      - name: Download verified pinned OBS runtime
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $url = "https://github.com/obsproject/obs-studio/releases/download/32.2.2/OBS-Studio-32.2.2-Windows-x64.zip"
+          Invoke-WebRequest -Uri $url -OutFile "$env:RUNNER_TEMP/obs.zip"
+          $actual = (Get-FileHash "$env:RUNNER_TEMP/obs.zip" -Algorithm SHA256).Hash
+          $expected = "4D6E40E3AB155F56B30DE517380566A206D74B63CDF5AD49AA596924768F97E1"
+          if ($actual -ne $expected) { throw "OBS archive hash mismatch" }
+          New-Item -ItemType Directory -Path tools/obs/runtime -Force | Out-Null
+          Expand-Archive -Path "$env:RUNNER_TEMP/obs.zip" -DestinationPath tools/obs/runtime -Force
+          if (-not (Test-Path tools/obs/runtime/bin/64bit/obs.dll)) {
+            throw "Missing obs.dll after OBS runtime extraction"
+          }
+      - name: Compile native host with MinGW-w64
+        shell: msys2 {0}
+        run: |
+          mkdir -p native-ci
+          g++ --version
+          g++ -O2 -std=c++17 -static-libgcc -static-libstdc++ \
+            -Itools/obs/include/libobs -Isrc/LocalClip.CaptureHost \
+            src/LocalClip.CaptureHost/main.cpp \
+            -Ltools/obs/runtime/bin/64bit -Wl,-Bstatic -lwinpthread \
+            -Wl,-Bdynamic -lobs -ldwmapi -o native-ci/LocalClip.CaptureHost.exe
+      - name: Confirm native executable exists
+        shell: pwsh
+        run: |
+          if (-not (Test-Path native-ci/LocalClip.CaptureHost.exe)) {
+            throw "Native host compile did not produce an executable"
+          }
+
+# Native CI compiles the capture host; it does not perform NVIDIA NVENC
+# recording, real audio capture, game FPS checks, portable GUI launch,
+# Discord drag/paste or long-duration soaks. These require owner hardware.
+

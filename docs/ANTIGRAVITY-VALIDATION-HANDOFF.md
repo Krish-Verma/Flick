@@ -54,3 +54,12 @@
 1. Review PR #1 updates on branch `fix/backend-stability-and-ci-20261019`.
 2. Perform native drag/paste test of the exported MP4 (`dist/` or `TestOutput/Exports/`) directly into the real Discord desktop client.
 3. Once satisfied with backend performance, proceed to the planned minimal-to-polished WPF GUI transformation.
+
+
+## Follow-up qualification — practical UX and replay save integrity
+
+- Rebuild the native host after save-correlation edits; verify that the saved callback resolves `get_last_replay` for the active output, checks the requested timestamp/directory, and atomically renames the output to a **unique ID**. A missing/stale path must emit a fault and NEVER relabel an older MKV. Exercise two quick successive saves, a stale or missing path, stop during save, and Unicode/storage-device paths.
+- Launch the **complete packaged WPF app** (not just native `ping`) from a clean extraction, choose monitor/window, start replay from UI/global hotkey, save, select clip, preview/seek, trim, mix, export, copy/drag into Discord desktop without sending. Test fallback Open Player when Windows lacks MKV playback support.
+- Settings acceptance: 15–120 second duration, Light 720p30/Balanced 1080p30/Smooth 1080p60 NVENC presets, bounded 256 MiB compressed replay budget warning, microphone opt-in, configurable hotkeys, saved clips folder, optional HKCU per-user Run on sign-in and tray launch. All Windows logins and manual app launches must start with **capture disarmed**. Prove Settings Cancel and Restore Defaults do not edit existing clips or write a startup entry.
+- Use `scripts/check_motion.ps1 -Original <MKV> -Export <MP4>` on a genuine moving gameplay recording, then WATCH the originals and exports; check audio by LISTENING. An 854 KB 29-second 1080p export may be static; full decode alone is not visual-quality proof.
+- Confirm native GitHub CI build success and run actual host/hardware tests separately. Do not equate CI compile or unit tests to GPU verification. Keep PR draft until owner approval.
