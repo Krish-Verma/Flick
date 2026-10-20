@@ -34,7 +34,9 @@ Open **Settings** from the navigation rail or tray. **Opening Settings does not 
 | Microphone | Off by default; opt in to record it |
 | Sound | System audio loopback plus optional mic; this is **not** independently isolated game/Discord audio |
 | Hotkeys | Separate customizable Capture Toggle and Save Clip keys; incompatible or conflicting registrations show errors |
-| Saved clips | Select a full path for the originals folder; completed MKVs are not deleted when settings reset |
+| Saved Clips Folder | Choose where future replay MKVs are written; existing originals are not moved |
+| Export Folder | Choose a separate location for future Discord-ready MP4s; existing exports are not moved |
+| Connected Clip Folders | Link existing local MP4/MKV folders in place; nothing is uploaded or copied |
 | Windows startup | Optional per-user sign-in registration; always starts **disarmed** |
 | Open in tray | Optional hidden launch with tray controls, separate from capture status |
 | Clip Saved Overlay | Enabled by default; shows the full Flick logo in a temporary (~2 second) click-through banner after a validated save |
@@ -57,6 +59,18 @@ The notification is temporary and creates no permanent game overlay process. Nat
 The new compact capture bar is available at the top of the window. When replay is off, **Start Replay** is the primary action and **Save Last N Seconds** is disabled; when buffering or armed, **Save Last N Seconds** becomes the primary action. The same state is reflected in tray actions. The navigation rail contains **Your Clips** (focuses search) and **Settings** (opens existing preferences; an in-window settings redesign is a later slice).
 
 Changing capture source while recording asks for confirmation because it discards the current unsaved buffer. Declining retains the previous target. Closing Flick hides its window but does **not** stop replay; choose Stop Replay or Quit Flick explicitly.
+
+## 3.1 Import Clips From Other Recording Apps
+
+Click **+ Import Folder** in **Your Clips**, or **Settings → Connected Clip Folders → Manage Folders**. Select the folder containing videos from SteelSeries, OBS, NVIDIA or another local recorder. Confirm the folder link. Flick scans supported **MP4 and MKV** files and indexes them **in place**; the original file stays exactly where it was. Use **Include Subfolders** to include clips in game-specific subdirectories.
+
+Import is manually initiated, cancelable and limited to 10,000 videos / eight directory levels per scan. A scan can be paused to prioritize replay capture, and completed entries stay indexed for later rescans. Large libraries load thumbnails on demand to avoid expensive simultaneous video decodes.
+
+The library filters **All Clips**, **Flick** and **Imported** show the source, title, and duration of each video. If an external drive is disconnected, entries stay in Flick but appear **Offline** until the source returns. Use **Rescan** once reconnected; Flick does not continuously monitor external folders.
+
+Right-click a clip for contextual options. Choosing **Remove** on an imported clip takes it out of Flick's library and excludes it from future rescans of that linked folder; its original video and exported files **are never deleted**. **Unlink Folder** removes only that folder's imported entries from Flick, not files on disk. By contrast, **Delete** on a Flick-recorded original retains its explicit Recycle Bin behavior.
+
+**Saved Clips Folder** and **Export Folder** can be changed independently under Settings. A change applies to newly created files and never migrates or deletes existing media. No account, vendor integration or upload is required.
 
 ## 4. Limitations and troubleshooting
 

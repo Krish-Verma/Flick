@@ -44,6 +44,9 @@ jobs:
       - name: Validate Slice 2 shell and notification contract
         shell: pwsh
         run: ./scripts/check_gui_slice2.ps1
+      - name: Validate Slice 3 library and import contracts
+        shell: pwsh
+        run: ./scripts/check_gui_slice3.ps1
       - name: Build solution (Release)
         run: dotnet build LocalClip.slnx --configuration Release --no-restore --warnaserror
       - name: Run hardware-independent tests
