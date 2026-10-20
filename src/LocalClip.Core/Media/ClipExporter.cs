@@ -121,8 +121,8 @@ public class ClipExporter
         }
         Directory.CreateDirectory(exportsDir);
 
-        string fileNameWithoutExt = Path.GetFileNameWithoutExtension(clip.OriginalFilePath);
-        string finalExportPath = Path.Combine(exportsDir, $"{fileNameWithoutExt}_Discord_{settings.DiscordTargetSizeMb}MB.mp4");
+        string finalExportPath = Path.Combine(exportsDir,
+            ShareExportNaming.ForOriginal(clip.OriginalFilePath, settings.DiscordTargetSizeMb));
         // Keep temporary export on the final destination volume for atomic promotion.
         string tempExportPath = Path.Combine(exportsDir, $".flick-export-{Guid.NewGuid():N}.tmp.mp4");
         temporaryFileToDelete = tempExportPath;
