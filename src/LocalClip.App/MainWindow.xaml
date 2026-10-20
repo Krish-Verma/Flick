@@ -420,6 +420,7 @@
                             </StackPanel>
 
                             <Button Content="⚡ Export for Discord" Click="BtnExport_Click"
+                                    IsEnabled="{Binding SelectedClip.IsAvailable}"
                                     Background="#7953A8" FontWeight="Bold" Padding="16,8" HorizontalAlignment="Right"/>
                         </DockPanel>
 

@@ -500,6 +500,11 @@ public partial class MainWindow : Window
     private void BtnPlayPause_Click(object sender, RoutedEventArgs e)
     {
         if (_vm.SelectedClip == null || string.IsNullOrEmpty(_vm.SelectedClip.OriginalFilePath)) return;
+        if (!File.Exists(_vm.SelectedClip.OriginalFilePath))
+        {
+            _vm.StatusDetails = "Original Video Offline · Reconnect Its Linked Folder";
+            return;
+        }
 
         if (VideoPlayer.Source == null)
             VideoPlayer.Source = new Uri(_vm.SelectedClip.OriginalFilePath);
