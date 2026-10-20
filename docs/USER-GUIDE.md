@@ -18,13 +18,13 @@ Flick stores settings and metadata under `%LOCALAPPDATA%\LocalClip`; originals a
 4. When you want to capture a moment, press **Ctrl+Shift+F8**, or click **Save Last 30 Seconds** (or your configured duration). Flick saves the recent replay to an MKV original with a unique filename; subsequent saves do not intentionally replace old originals. Saving does **not** stop ongoing replay capture.
 5. Select your saved recording in **Your Clips**. The player opens the **Original** without autoplaying. Use **Play/Pause**, the seek slider or its arrow keys, and the small **Original / Export Preview** dropdown. If Windows cannot decode the MKV, click **Create Local Preview** for an explicitly requested, bounded H.264 MP4, or **Open in External Player**. Originals are never changed by preview generation.
 6. Use the **single Trim Clip timeline** to adjust both endpoints with drag handles, Tab/arrow keys (0.1s), Ctrl+arrow (1s), or precise Start/End fields in seconds or M:SS.ff. Click **Reset** to select the full clip; the minimum segment is 0.25s. Expand **Export Audio** to mute, adjust gain (0–200%) or Reset Mix. Trims persist after handle release, and audio changes save after a short pause. The original recording stays unchanged.
-7. Pick **20 MB**, **50 MB**, **100 MB**, or an editable **Custom 1–250 MB** target. Click **Export for Discord**. Flick makes a new H.264/stereo AAC MP4, verifies its duration, size cap and decode, and keeps the MKV original intact.
-8. Choose **Export Preview** in the player dropdown to watch and listen to the ready share file, including the applied trim/audio mix. Changing a trim or gain makes that exported preview stale until you export again. Drag the validated MP4 into Discord or use **Copy File** and paste. **Flick never automatically sends the file.**
+7. In the compact **Export for Discord** dock, choose the **20 MB default**, **10/50/100 MB** or **Custom 1–250 MB** decimal size limit, then click **Export Clip**. The honest progress stage appears while FFmpeg runs; **Cancel Export** stops owned encoding without altering the original. A successful export is verified as H.264/stereo AAC MP4 with correct duration, size cap and full decode.
+8. Choose **Export Preview** in the player to review the final mix. Once a valid share file is Ready, **drag the MP4 file tile** directly into Discord, or choose **Copy File** to paste via Windows clipboard; **Open Folder** reveals the output directory. Dragging starts only after you move the mouse. Modifying trim, gain or file-size cap invalidates outdated Ready status. **Flick does not automatically send any message.**
 9. Click **Stop Replay** to release the encoder, or quit Flick through the tray menu to stop all owned helpers. Closing the window hides it to the tray; minimizing is not the same as stopping capture.
 
 ## 3. Small, useful settings
 
-Open **Settings** from the navigation rail or tray. **Opening Settings does not stop recording.** Quality and duration changes apply the next time you manually start replay. Disabling an actively recording microphone requires explicit confirmation because it stops the current buffer to release the device.
+Open **Settings** from the navigation rail or tray. It now has six compact categories: **Recording, Audio, Shortcuts, Storage, General, Sharing**. Only the selected category is visible. **Opening Settings does not stop recording.** Quality and duration changes apply the next time you manually start replay. Disabling an actively recording microphone requires explicit confirmation because it stops the current buffer to release the device.
 
 | Setting | Options and behavior |
 |---|---|
@@ -42,11 +42,11 @@ Open **Settings** from the navigation rail or tray. **Opening Settings does not 
 | Clip Saved Overlay | Enabled by default; shows the full Flick logo in a temporary (~2 second) click-through banner after a validated save |
 | Confirmation Sound | Enabled by default, independently toggleable; quiet, short in-process chime (may be heard by system-loopback capture) |
 | Preview Notification | A button to see/hear sample feedback without saving preferences or starting capture |
-| Discord sharing | 20/50/100/custom MB file cap presets; optional encrypted webhook requires explicit confirmation for posting |
+| Discord sharing | 10/20/50/100 MB and Custom cap; 20 MB default, optional encrypted direct webhook disabled by default and requiring explicit per-send confirmation |
 
 Long/high-quality replays may exceed the compressed packet budget and retain less history. A video’s settings describe the requested profile, not a guarantee of actual hardware FPS or image quality. Flick does not silently switch to CPU-heavy x264 capture when NVENC cannot start.
 
-**Restore Defaults** resets the fields in the settings window; press **Save Settings** to apply them. **Cancel** leaves settings unchanged. Existing originals are never deleted by either action.
+**Restore Defaults** stages the factory preferences; press **Save Settings** to apply them. **Cancel** leaves saved preferences unchanged. Shortcut fields accept actual key chords, and each setting category uses Flick's shared typography and control sizes. Existing originals are never deleted by Restore or Cancel.
 
 ### Clip Saved Feedback
 
@@ -59,6 +59,14 @@ The notification is temporary and creates no permanent game overlay process. Nat
 The new compact capture bar is available at the top of the window. When replay is off, **Start Replay** is the primary action and **Save Last N Seconds** is disabled; when buffering or armed, **Save Last N Seconds** becomes the primary action. The same state is reflected in tray actions. The navigation rail contains **Your Clips** (focuses search) and **Settings** (opens existing preferences; an in-window settings redesign is a later slice).
 
 Changing capture source while recording asks for confirmation because it discards the current unsaved buffer. Declining retains the previous target. Closing Flick hides its window but does **not** stop replay; choose Stop Replay or Quit Flick explicitly.
+
+### Export for Discord and File Sharing
+
+The bottom export dock stays reachable while the editor scrolls. The file-size selector uses **decimal megabytes**: 20 MB means **20,000,000 bytes**, not 20 MiB. Use **10 MB** when the receiving Discord destination requires a smaller attachment. The upload limit may differ by destination or account; Flick never promises Discord will accept every exported cap.
+
+While exporting, an indeterminate progress strip shows the real stage, not a fabricated countdown. **Cancel Export** interrupts the owned worker and discards incomplete temporary output. Selecting a different clip during export does not make that other clip Ready; the finished export belongs to its original selected clip.
+
+The draggable tile represents the validated MP4 on disk, not a rendered screenshot, link, or virtual file. **Copy File** uses Windows' file-drop clipboard data. An advanced **Direct Posting** section remains collapsed; to send through a webhook you must explicitly enable it in Settings and separately confirm each send. Ordinary export never posts to Discord.
 
 ### Clip Editor and Non-Destructive Edits
 
