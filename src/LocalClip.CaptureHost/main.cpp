@@ -145,6 +145,46 @@ static void on_replay_saved(void *data, calldata_t *cd) {
         g_cap.save_in_progress = false;
     }
 
+    obs_output_t *out = nullptr;
+    {
+        std::lock_guard<std::mutex> lock(g_state_mutex);
+        out = g_cap.replay_output;
+    }
+
+    if (saved_path.empty() && out) {
+        proc_handler_t *ph = obs_output_get_proc_handler(out);
+        if (ph) {
+            calldata_t rcd;
+            calldata_init(&rcd);
+            if (proc_handler_call(ph, "get_last_replay", &rcd)) {
+                const char *p = nullptr;
+                calldata_get_string(&rcd, "path", &p);
+                if (p && strlen(p) > 0) {
+                    saved_path = p;
+                }
+            }
+            calldata_free(&rcd);
+        }
+    }
+
+    if (saved_path.empty() && !out_dir.empty()) {
+        WIN32_FIND_DATAA fd;
+        std::string search = out_dir + "\\*.mkv";
+        HANDLE hFind = FindFirstFileA(search.c_str(), &fd);
+        FILETIME best_ft = {0, 0};
+        std::string best_file;
+        if (hFind != INVALID_HANDLE_VALUE) {
+            do {
+                if (CompareFileTime(&fd.ftLastWriteTime, &best_ft) > 0) {
+                    best_ft = fd.ftLastWriteTime;
+                    best_file = out_dir + "\\" + fd.cFileName;
+                }
+            } while (FindNextFileA(hFind, &fd));
+            FindClose(hFind);
+        }
+        saved_path = best_file;
+    }
+
     if (saved_path.empty()) {
         send_event("fault", {{"reason", "OBS reported a replay save without a verified path"}});
         return;
@@ -387,6 +427,11 @@ static bool start_capture_session(const json &params, std::string &out_err) {
 
     // 1. Create Video Source
     if (g_cap.target_type == "window" && g_cap.window_hwnd) {
+        HDESK hdesk = OpenDesktopW(L"default", 0, FALSE, GENERIC_ALL);
+        if (hdesk) {
+            SetThreadDesktop(hdesk);
+            CloseDesktop(hdesk);
+        }
         if (!IsWindow(g_cap.window_hwnd)) {
             out_err = "Target window handle is invalid or closed";
             return false;
@@ -677,6 +722,11 @@ static json get_current_status() {
 
     // Check target window liveness
     if (g_cap.target_type == "window" && g_cap.window_hwnd) {
+        HDESK hdesk = OpenDesktopW(L"default", 0, FALSE, GENERIC_ALL);
+        if (hdesk) {
+            SetThreadDesktop(hdesk);
+            CloseDesktop(hdesk);
+        }
         if (!IsWindow(g_cap.window_hwnd)) {
             j["target_valid"] = false;
             // Trip fault
@@ -705,6 +755,12 @@ static json get_current_status() {
 
 // Main entry point
 int main(int argc, char **argv) {
+    HDESK hDefaultDesk = OpenDesktopW(L"default", 0, FALSE, GENERIC_ALL);
+    if (hDefaultDesk) {
+        SetThreadDesktop(hDefaultDesk);
+        CloseDesktop(hDefaultDesk);
+    }
+
     const auto bin_dir = runtime_bin_directory();
     if (bin_dir.empty() || !SetCurrentDirectoryW(bin_dir.c_str())) {
         std::cerr << "Unable to locate local OBS runtime directory" << std::endl;

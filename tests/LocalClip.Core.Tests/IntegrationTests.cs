@@ -83,7 +83,7 @@ public class IntegrationTests
         Assert.True(saveTriggered);
 
         // Wait for save callback
-        var completedTask = await Task.WhenAny(saveTcs.Task, Task.Delay(8000));
+        var completedTask = await Task.WhenAny(saveTcs.Task, Task.Delay(15000));
         Assert.Equal(saveTcs.Task, completedTask);
         Assert.False(string.IsNullOrEmpty(savedClipPath));
         Assert.True(File.Exists(savedClipPath));

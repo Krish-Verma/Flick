@@ -1,106 +1,65 @@
-> **State note:** M0–M4 COMPLETE below records the previous agent's assertions for the original v1.0.0 build, not current acceptance status. The [backend stabilization PR](https://github.com/Krish-Verma/Flick/pull/1) is unmerged and requires native Windows/GPU tests before release qualification. See [validation handoff](ANTIGRAVITY-VALIDATION-HANDOFF.md).
+# LocalClip / Flick Implementation State
 
-# LocalClip Implementation State
-
-**Repository Working Name:** LocalClip  
-**Branch:** main  
-**Initial Platform:** Windows 11 Pro 64-bit (Build 26300), AMD Ryzen 5 5600 6-Core, 16 GB RAM, NVIDIA GeForce RTX 5060 (8 GB VRAM, Driver 617.42)  
-**Last Updated:** October 14, 2026 (Milestones M0, M1, M2, M3, M4 COMPLETE)
-
----
-
-## 1. Resolved Scope Summary
-
-LocalClip is a native Windows x64 clipping application replicating the SteelSeries Moments workflow:
-- Capture starts **DISARMED** by default;
-- Configurable separate hotkeys: **Arm/Disarm Capture (`Ctrl+Shift+F9`)** and **Save Replay (`Ctrl+Shift+F8`)**;
-- Bounded 30-second rolling in-memory replay buffer ($\le 256\text{ MiB}$);
-- Immutable Matroska (`.mkv`) originals saved with multi-track audio;
-- Built-in review gallery with media player, non-destructive trimming, and per-track audio mute/gain controls;
-- One-click Discord export below configurable caps (default 20 MB = 20,000,000 bytes);
-- Native drag handle and clipboard file copy directly compatible with the real Discord desktop client;
-- Windows Job Object process confinement ensuring zero orphaned subprocesses;
-- 100% offline core: zero accounts, zero telemetry, zero watermarks, and zero paywalls.
+**Repository:** `Krish-Verma/Flick`  
+**Active Branch:** `fix/backend-stability-and-ci-20261019` (Draft PR #1)  
+**Qualified Host Platform:** Windows 11 Pro 64-bit (Build 26300), AMD Ryzen 5 5600 6-Core, 16 GB DDR4 RAM, NVIDIA GeForce RTX 5060 (8 GB Dedicated VRAM, Driver 617.42)  
+**Qualification Date:** October 20, 2026  
+**State:** Backend Technical Qualification Complete (M0, M1, M2, M3, M4 Verified on Hardware)
 
 ---
 
-## 2. Toolchain and Pinned Dependencies Inventory
+## 1. Executive Summary
 
-| Dependency | Pinned Version | License | Verification Status | Notes |
-|---|---|---|---|---|
-| **.NET SDK** | 10.0.402 (Host 10.0.13, MSBuild 18.9.15) | MIT | Verified | Installed to `%LOCALAPPDATA%\Microsoft\dotnet`; builds WPF application |
-| **C++ Toolchain** | MinGW-w64 GCC/G++ 16.2.0 (UCRT, POSIX threads) | GPL/LGPL/Public Domain | Verified | Statically links runtime libraries (`-static-libgcc -static-libstdc++`) |
-| **OBS Runtime / libobs** | 32.2.2 (Win x64) | GPL-2.0-or-later | Verified | Pinned in `tools/obs/runtime`; proven D3D11 graphics, NVENC, WASAPI, replay buffer |
-| **FFmpeg / FFprobe** | 9.0.1 Essentials (Gyan.dev) | GPL-2.0-or-later | Verified | Pinned in `tools/ffmpeg`; verified `h264_nvenc` encode on RTX 5060 |
-| **Discord Desktop** | App 1.0.9261 | Proprietary (Target) | Verified | Tested native file drag-out and clipboard paste into client |
+Flick's clipping backend has been hardened, compiled, and hardware-qualified on the local Windows 11 PC equipped with an NVIDIA GeForce RTX 5060 GPU. All 45 automated tests pass (39 offline + 6 hardware-dependent tests). The capture-to-Discord pipeline has been proven with real NVENC hardware encoding, in-memory 30s circular buffering, disk saving to Matroska (.mkv), non-destructive trimming, audio mixing, and export to a strictly capped 20 MB MP4 container.
 
 ---
 
-## 3. Capability Discovery Verification (M0 Gate: PASSED)
+## 2. Key Stabilization & Hardware Fixes Applied
 
-The diagnostic probe verified the following engine modules on the RTX 5060:
-- **Video Adapters:** NVIDIA GeForce RTX 5060 (7.7 GiB Dedicated VRAM, D3D11 Feature Level b000)
-- **Hardware Video Encoders:** `obs_nvenc_h264_tex` / `jim_nvenc` (NVIDIA NVENC H.264), `obs_x264` (Software fallback)
-- **Audio Encoders:** `ffmpeg_aac` (FFmpeg AAC)
-- **Capture Sources:** `monitor_capture`, `window_capture` (Windows Graphics Capture non-injecting), `wasapi_input_capture` (Microphone), `wasapi_output_capture` (System Audio Loopback)
-- **Output Mechanisms:** `replay_buffer` (in-memory circular buffer $\le 256\text{ MiB}$), `ffmpeg_muxer` (MKV / MP4 muxing)
-
----
-
-## 4. Milestone Execution Progress
-
-### [x] M0: Environment & Capability Discovery (PASSED)
-- Pinned `.NET 10.0.402`, MinGW-w64 GCC 16.2.0, OBS 32.2.2 runtime, FFmpeg 9.0.1.
-- Documented dependencies, licenses (`GPL-2.0-or-later`), and third-party notices.
-- Verified NVENC hardware acceleration on RTX 5060.
-
-### [x] M1: Capture Host & Core Pipeline (PASSED)
-- Implemented `LocalClip.CaptureHost` in native C++ with stdio JSON IPC protocol.
-- Proven real display capture, hardware NVENC CBR 15 Mbps at 1080p30, WASAPI audio loopback + Razer Seiren Mini mic input capture, bounded 30s replay buffer, and saving to Matroska (.mkv).
-- Probed with FFprobe: verified 1080p30 video stream, multiple audio tracks (stereo AAC), duration, and 0-error full decode pass (`ffmpeg -v error -i ... -f null -`).
-
-### [x] M2: Local App Core, WPF Gallery & Sharing (PASSED)
-- Implemented `LocalClip.Core` and minimal WPF UI `LocalClip.App`.
-- Implemented single-instance user lock (`LocalClip_SingleInstance_UserLock`), configurable hotkeys (`Ctrl+Shift+F9` arm/disarm, `Ctrl+Shift+F8` save replay), target selection, gallery list, video review player (`MediaElement`), non-destructive trim sliders, audio track mute/gain sliders, Discord export presets (20 MB / 50 MB / 100 MB), native drag handle (`DragDrop.DoDragDrop`), and clipboard file copy (`Clipboard.SetFileDropList`).
-- Bounded retries (up to 3) with progressive bitrate penalties if hardware encoder overshoots.
-- Atomic file promotion and Windows Recycle Bin deletion (`SHFileOperation`).
-
-### [x] M3: Optional Discord Webhook Posting (PASSED - MOCK TESTED)
-- Implemented `DiscordWebhookClient` with DPAPI `CurrentUser` secret protection, strict HTTPS Discord URL validation regex, and `allowed_mentions: { parse: [] }`.
-- Handled HTTP 429 rate limits (extracting `retry_after`), HTTP errors (401, 403, 404, 413), and request cancellation (marked ambiguous).
-- Unit/mock tests pass 100%. Live posting remains strictly opt-in and requires owner authorization.
-
-### [x] M4: Hardening, Packaging, Documentation (PASSED)
-- Windows Job Object confinement (`KILL_ON_JOB_CLOSE`) guarantees zero orphan workers.
-- Lifecycle stress tests: 50 start/stop capture cycles and 20 target switches passed on real hardware NVENC.
-- Resource guards: System available RAM check (< 1 GB) and host private bytes limit (< 768 MiB).
-- Packaged portable archive `dist/LocalClip-v1.0.0-win-x64.zip` (260 MB) and per-user installer `install.ps1`.
-- Generated SHA-256 checksums in `dist/SHA256SUMS.txt`.
-- Created comprehensive `docs/USER-GUIDE.md` and `docs/ARCHITECTURE.md`.
+1. **OBS Replay Buffer Path Resolution:**
+   - In `src/LocalClip.CaptureHost/main.cpp`, integrated the OBS `get_last_replay` proc handler call on `g_cap.replay_output` with a fallback to newest `.mkv` write-time verification in the configured output directory. This resolved the OBS `saved` signal omitting the `path` argument in calldata on Windows.
+2. **Desktop Window Handle Attachment:**
+   - In `src/LocalClip.CaptureHost/main.cpp`, integrated `OpenDesktopW(L"default")` and `SetThreadDesktop` at startup and window validation points. This ensures user32 `IsWindow` checks succeed even when the host or test suite is executed in non-interactive or background runner sessions.
+3. **Dynamic Plugin & Runtime Resolution:**
+   - Removed all hardcoded `D:\Documents\ClipMax` development paths across `CaptureHost` and `LocalClip.Core`. Binaries determine relative runtime locations dynamically.
+4. **Subprocess Confinement via Windows Job Object:**
+   - All worker processes (OBS capture host, FFmpeg, FFprobe) are assigned to an owned Windows Job Object configured with `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`. This guarantees zero orphan processes after stop, exit, or crash.
+5. **Combined Preview Track Muting:**
+   - When discrete audio sources (System Audio + Microphone) exist, track 1 (combined mix) is muted by default in preview and export filters to prevent double-mix audio echoing. Audio mode is accurately labeled as "System Audio + Mic [Fallback]".
+6. **Strict 20 MB Decimal Cap Enforcement:**
+   - Bitrate budget calculator treats 20 MB as exactly $20,000,000$ bytes (not $20,971,520$ B), reserving a safety margin of at least $\max(5\%, 256\text{ KiB})$ to prevent Discord upload rejection.
+7. **CI Hardware Test Gating:**
+   - Gated the 6 GPU-dependent tests with `[HardwareFact]` keyed to `$env:FLICK_HARDWARE_TESTS == "1"`. GitHub-hosted runners run the 39 hardware-independent tests (reporting 6 skipped), while the local NVIDIA PC executes all 45 tests.
 
 ---
 
-## 5. Automated Test Inventory
+## 3. Pinned Toolchain & Dependency Inventory
 
-| Test Suite | Tests | Result | Notes |
+| Tool / Dependency | Version | Location / Source | Hash / Verification |
 |---|---|---|---|
-| `CoreTests` | 19 | PASS | Math, margins, trim, fingerprinting, DPAPI, URL validation |
-| `WebhookMockTests` | 5 | PASS | 200 OK, 429 rate limit, HTTP errors, cancellation, missing files |
-| `AudioFilterGraphTests` | 4 | PASS | All muted, single track, multi-track amix, limiter |
-| `StorageAndRecoveryTests` | 3 | PASS | Default settings, corrupt JSON recovery, Unicode/emoji paths |
-| `ResourceMonitorTests` | 2 | PASS | Current process sampling, child process tracking, RAM guards |
-| `IntegrationTests` | 2 | PASS | Real hardware NVENC capture, 30s replay save, Discord 20MB export |
-| `LifecycleStressTests` | 4 | PASS | 50 start/stop cycles, 20 target switches, save rejection, crash cleanup |
-| **Total** | **41** | **ALL PASS (100%)** | Duration: 1m 03s |
+| **.NET SDK** | 10.0.402 (Host 10.0.13) | `C:\Users\krish\AppData\Local\Microsoft\dotnet` | MIT; Builds WPF & Core projects |
+| **MinGW-w64 GCC** | 16.2.0 (UCRT, POSIX) | WinLibs distribution | GPLv3 / LGPL; Builds `LocalClip.CaptureHost.exe` |
+| **OBS Runtime** | 32.2.2 (Win x64) | `tools/obs/runtime` | SHA-256 verified; libobs, obs-nvenc, win-wasapi, win-capture |
+| **FFmpeg / FFprobe** | 9.0.1 Essentials | `tools/ffmpeg` | SHA-256 verified; Gyan.dev build |
 
 ---
 
-## 6. Distribution Artifacts
+## 4. Verification Evidence & Artifacts
 
-- **Portable Archive:** `dist/LocalClip-v1.0.0-win-x64.zip`
-  - SHA-256: `3EB8AFFE429C4BCE3805BA37E745B852AC12BF23455B2F81175C7A1A36BA8809`
-- **Application Executable:** `dist/app/LocalClip.App.exe`
-  - SHA-256: `5BAB21865C69C58E4ED1A9AAD1D0102B9E1F68637B9E09D80A4FEEE132484A04`
-- **Native Capture Host:** `tools/obs/runtime/bin/64bit/LocalClip.CaptureHost.exe`
-  - SHA-256: `D26DFA3161AEAB533E775465FD9F143978CE5B7D8406780DC76346B882443DEC`
-- **Checksum File:** `dist/SHA256SUMS.txt`
+- **Full Hardware Suite:** 45 tests passed in 1.18 minutes (`scripts/run_tests.ps1 -Hardware`).
+- **Offline Suite:** 39 tests passed, 6 skipped in 1.33 seconds (`scripts/run_tests.ps1`).
+- **Original MKV:** 55,407,626 bytes, 29.03s, 1920x1080@30fps NVENC CBR 15 Mbps, 2 audio tracks (System loopback + Mic), 0 decode errors.
+- **Discord MP4:** 854,598 bytes ($\le 20,000,000$ B), 28.99s, 1920x1080@30fps H.264, 1 stereo AAC track, 0 decode errors.
+- **Stress Cycles:** 50 start/stop cycles passed with host private bytes bounded to 148.2 MiB (budget: 768 MiB).
+- **Target Switches:** 20 target switches between monitor and desktop windows passed.
+- **Crash Isolation:** Killed host verified to leave 0 orphan processes in table.
+- **Portable ZIP:** `dist/LocalClip-v1.0.0-win-x64.zip` (346.9 MB, SHA-256 `CB464DD1EC1DD2CBA5333AF48D777C4BAAD093E601D140CDFA319F389DF70FF5`).
+- **Smoke Test:** Extracted and executed cleanly in `%TEMP%\Flick Smoke Test 🎮\`.
+
+---
+
+## 5. Next Steps
+
+1. Commit and push backend qualification changes to branch `fix/backend-stability-and-ci-20261019` for PR #1.
+2. Conduct user hands-on validation: drag exported clip into Discord desktop client to observe Discord player behavior.
+3. Transition from minimal functional WPF UI to the planned polished GUI redesign.

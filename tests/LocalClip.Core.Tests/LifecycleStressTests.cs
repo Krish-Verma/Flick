@@ -139,16 +139,37 @@ public class LifecycleStressTests : IDisposable
             EnableMicrophone = false
         };
 
-        using var targetApp = System.Diagnostics.Process.Start("notepad.exe");
+        ulong targetHwnd = 0;
+        string targetTitle = "";
+        System.Diagnostics.Process? targetApp = null;
+
+        if (targets.Windows.Count > 0)
+        {
+            targetHwnd = targets.Windows[0].Hwnd;
+            targetTitle = targets.Windows[0].Title;
+            _output.WriteLine($"Selected live window target '{targetTitle}' with HWND=0x{targetHwnd:X}");
+        }
+        else
+        {
+            targetApp = System.Diagnostics.Process.Start(new ProcessStartInfo("cmd.exe", "/k title TestTarget") { UseShellExecute = true });
+            for (int r = 0; r < 10 && targetHwnd == 0; r++)
+            {
+                await Task.Delay(200);
+                targets = await client.GetTargetsAsync();
+                var found = targets.Windows.Find(w => w.Title.Contains("TestTarget")) ?? targets.Windows.FirstOrDefault();
+                if (found != null)
+                {
+                    targetHwnd = found.Hwnd;
+                    targetTitle = found.Title;
+                }
+            }
+            _output.WriteLine($"Launched cmd test window '{targetTitle}' with HWND=0x{targetHwnd:X}");
+        }
+
+        Assert.NotEqual(0UL, targetHwnd); // Never silently skip actual window capture.
+
         try
         {
-            await Task.Delay(500); // Allow window to create
-            targetApp.Refresh();
-            ulong targetHwnd = (ulong)targetApp.MainWindowHandle.ToInt64();
-            Assert.NotEqual(0UL, targetHwnd); // Never silently skip actual window capture.
-
-            _output.WriteLine($"Notepad test window launched with HWND=0x{targetHwnd:X}");
-
             // Switch targets 20 times by re-arming with alternating window/monitor targets
             for (int i = 1; i <= 20; i++)
             {
@@ -156,8 +177,8 @@ public class LifecycleStressTests : IDisposable
                 {
                     settings.TargetType = "Window";
                     settings.WindowHwnd = targetHwnd;
-                    settings.WindowTitle = "Notepad";
-                    _output.WriteLine($"Step {i}: switching to Window 'Notepad' (HWND=0x{targetHwnd:X})");
+                    settings.WindowTitle = targetTitle;
+                    _output.WriteLine($"Step {i}: switching to Window '{targetTitle}' (HWND=0x{targetHwnd:X})");
                 }
                 else
                 {
@@ -197,7 +218,7 @@ public class LifecycleStressTests : IDisposable
         {
             try
             {
-                if (!targetApp.HasExited)
+                if (targetApp != null && !targetApp.HasExited)
                 {
                     targetApp.Kill();
                 }

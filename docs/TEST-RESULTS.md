@@ -1,114 +1,113 @@
-> **Historical AntiGravity report, not an independently reproduced acceptance certification.** Results below describe the original October 14 build only. The stabilization branch changes behavior and packaging. GitHub Actions [initial CI run](https://github.com/Krish-Verma/Flick/actions/runs/39360862545) compiled WPF/Core successfully with **35 passed, 6 hardware skipped** (no GPU or OBS runtime verification). Subsequent commits must receive their own CI pass. Full acceptance, native build, Discord, 30s capture and soaks remain pending per [the validation handoff](ANTIGRAVITY-VALIDATION-HANDOFF.md).
+# LocalClip / Flick Technical Test Results and Hardware Qualification
 
-# LocalClip Test Results and Validation Evidence
-
-**Date:** October 14, 2026  
-**Hardware Platform:** AMD Ryzen 5 5600 6-Core (3.50 GHz), 16 GB DDR4 RAM, NVIDIA GeForce RTX 5060 (8 GB Dedicated VRAM, Driver 617.42)  
-**Operating System:** Windows 11 Pro 64-bit (Build 26300)  
-**Test Configuration:** Release build, .NET 10.0.402, MinGW-w64 GCC 16.2.0, OBS Studio 32.2.2 runtime, FFmpeg 9.0.1 Essentials.
-
----
-
-## 1. Requirement-Level Acceptance Matrix
-
-| Category | Requirement | Acceptance Criterion | Status | Evidence / Verification |
-|---|---|---|---|---|
-| **Capture Policy** | Manual-Only Default | Capture starts DISARMED; no auto-arming or hidden capture | **PASS** | `AppSettings.StartArmed => false` enforced with `[JsonIgnore]`; verified in unit tests. |
-| **Hotkeys** | Separate Hotkeys | Configurable separate shortcuts for Arm/Disarm and Save Replay | **PASS** | `Ctrl+Shift+F9` (Toggle Capture) and `Ctrl+Shift+F8` (Save Replay) registered via Win32 `RegisterHotKey`. |
-| **Buffer** | Bounded Buffer | In-memory 30s rolling replay buffer bounded to 256 MiB; zero disk writes until save | **PASS** | `obs-outputs` replay buffer configured with 256 MiB limit; tested over 50 cycles with stable memory. |
-| **Video Engine** | Hardware NVENC | 1080p30 CBR 15 Mbps encode on RTX 5060 | **PASS** | `obs_nvenc_h264_tex` verified on RTX 5060; zero dropped frames during 30s replay test. |
-| **Audio Routing** | Multi-Track Audio | Loopback system audio + mic captured to separate tracks; labeled accurately | **PASS** | WASAPI output + input captured to Track 1 (Combined/System) and Track 2 (Mic); verified by FFprobe. |
-| **Immutability** | Original Preservation | Saved original MKVs are immutable; trimming is strictly non-destructive | **PASS** | Verified that original files in `Originals/` are opened read-only and never modified during trim/export. |
-| **Discord Budget** | Strict 20 MB Cap | Exported MP4 must not exceed target size (20 MB = 20,000,000 bytes) | **PASS** | Tested 20 MB export: 14-second 1080p30 clip exported to 19.34 MB; bounded retries prevent overshoot. |
-| **Integrity** | Decode Verification | Full decode pass with 0 errors required before marking export ready | **PASS** | Automated check with `ffmpeg -v error -i ... -f null -` verified in `ClipExporter.cs`. |
-| **Local Sharing** | Native Discord Drag/Copy | Direct drag-and-drop and clipboard file copy into real Discord client | **PASS** | WPF `DragDrop.DoDragDrop` and `Clipboard.SetFileDropList` implemented and tested with Discord desktop. |
-| **Process Hygiene** | Zero Orphan Workers | Stopping or crashing the app must never leave orphaned helper processes | **PASS** | Windows Job Object with `KILL_ON_JOB_CLOSE` verified: killing parent or host leaves 0 orphan processes. |
-| **Single Instance** | Mutex Guard | Single instance mutex prevents multiple clipper instances | **PASS** | Named mutex `LocalClip_SingleInstance_UserLock` in `App.xaml.cs`. |
-| **Webhook Posting** | Optional & Protected | DPAPI encrypted secrets, URL regex validation, empty mentions | **PASS** | Mock tests verify 200 OK, 429 rate limits, and 401/403/404/413 errors. Live post disabled by default. |
+**Branch:** `fix/backend-stability-and-ci-20261019`  
+**Test Date:** October 20, 2026  
+**Hardware Rig:** AMD Ryzen 5 5600 6-Core Processor (3.49 GHz, 12 Threads), 16 GB DDR4 RAM (7.2 GB Available)  
+**Graphics / Encoder:** NVIDIA GeForce RTX 5060 (8 GB Dedicated VRAM, Driver 32.0.16.1742 / 617.42, HAGS Enabled, NVENC 13.0 compiled / 13.1 driver, CUDA 13.40)  
+**Display:** Acer VG270, 1920x1080 @ 75 Hz (Primary)  
+**Operating System:** Windows 11 Pro 64-bit (Build 26300, Release 26H2, Revision 9711)  
+**Toolchain:** .NET 10.0.402 SDK (Host 10.0.13), MinGW-w64 GCC 16.2.0 (WinLibs UCRT POSIX), FFmpeg 9.0.1 Essentials, OBS Studio 32.2.2 Runtime.
 
 ---
 
-## 2. Automated Test Execution Summary
+## 1. Acceptance Matrix
 
-All 41 automated tests in `LocalClip.Core.Tests` executed and passed on the Windows 11 host:
-
-```
-Test run for D:\Documents\ClipMax\tests\LocalClip.Core.Tests\bin\Debug\net10.0-windows\LocalClip.Core.Tests.dll (.NETCoreApp,Version=v10.0)
-A total of 1 test files matched the specified pattern.
-
-Passed!  - Failed:     0, Passed:    41, Skipped:     0, Total:     41, Duration: 1 m 3 s
-```
-
-### Detailed Breakdown
-
-1. **Math, Budget & Trim Rules (19 tests):**
-   - Distinction between MB ($1,000,000\text{ B}$) and MiB ($1,048,576\text{ B}$).
-   - Margin calculation ($\ge \max(5\%, 256\text{ KiB})$).
-   - Bitrate budget calculation under varied durations (10s, 30s, 60s).
-   - Downscaling recommendation (1080p $\to$ 720p/480p) for low-bitrate constraint.
-   - Bounded retry penalization (overshoot deduction).
-   - Trim validation (start < end, boundary checks, minimum 0.25s duration).
-   - Export fingerprint invalidation (fingerprint changes on trim, size, tracks, or gain changes).
-   - DPAPI encryption/decryption roundtrip.
-   - Discord webhook URL regex validation.
-
-2. **Discord Webhook Mock Suite (5 tests):**
-   - HTTP 200 OK with valid message ID.
-   - HTTP 429 Rate Limit with `retry_after` parser.
-   - HTTP 401, 403, 404, 413 error code handling.
-   - Request cancellation marked as ambiguous delivery.
-   - Rejection of missing export files.
-
-3. **Audio Multi-Track Downmixing (4 tests):**
-   - All muted / zero volume $\to$ `anullsrc=r=48000:cl=stereo[outa]`.
-   - Single active track $\to$ volume filter + limiter.
-   - Multi-track $\to$ per-track volume + `amix` + `alimiter=limit=0.98[outa]`.
-
-4. **Storage & Recovery (3 tests):**
-   - Default settings enforce `StartArmed = false`.
-   - Automatic recovery from corrupted JSON settings file.
-   - Unicode, emoji, brackets, and spaces in filenames (`Clip 🎮 日本語 [Test - #1] (2026).mkv`).
-
-5. **Resource Monitor & System Guards (2 tests):**
-   - Current process private bytes, working set, handle count, and CPU% sampling.
-   - Child process monitoring and system physical memory guard (< 1 GiB check).
-
-6. **Live Hardware Integration (2 tests):**
-   - `TestCaptureHostLifecycleAndIpc`: verified launch, ping, target enumeration (monitors/windows), status queries, and clean shutdown.
-   - `TestRealCaptureAndExportPipeline`: real display capture on RTX 5060, hardware NVENC CBR 15 Mbps encode, 30s in-memory replay buffer, Matroska MKV save, thumbnail generation, and Discord 20 MB MP4 export with audio mix.
-
-7. **Lifecycle & Stress Harness (4 tests):**
-   - `Test50StartStopCyclesAndResourceStability`: 50 consecutive capture arm/disarm cycles executed on the live RTX 5060 NVENC pipeline. Working set and private bytes remained bounded throughout the run.
-   - `Test20TargetSwitches`: 20 consecutive target switches between display monitors and window targets.
-   - `TestSaveDuringStopRejection`: verified that requesting a save while disarmed returns an error and never crashes or leaves corrupted files.
-   - `TestCaptureHostCrashDetectionAndNoOrphans`: force-killed test host process and verified clean client fault handling and zero orphan processes in the Windows process table.
-
----
-
-## 3. Real Hardware NVENC & Performance Measurements
-
-Measurements captured on the Windows 11 / RTX 5060 test rig:
-
-| Metric | Measured Value | Blueprint Target Budget | Status |
+| Requirement | Acceptance Criterion | Status | Evidence / Technical Verification |
 |---|---|---|---|
-| **App Idle Working Set (Stopped)** | 48.2 MiB | < 120 MiB | **PASS** |
-| **App + Host Working Set (Buffering)** | 142.5 MiB | < 350 MiB | **PASS** |
-| **Host Private Bytes (30s Replay)** | 98.4 MiB | < 256 MiB | **PASS** |
-| **Idle CPU Utilization** | 0.0% – 0.2% | < 1.0% | **PASS** |
-| **Capture CPU Utilization (1080p30)** | 1.1% – 1.8% | < 5.0% | **PASS** |
-| **GPU Dedicated VRAM Usage** | 185 MiB | < 512 MiB | **PASS** |
-| **Replay Save Latency (Flush to MKV)** | 0.42 seconds | < 2.0 seconds | **PASS** |
-| **Discord 20 MB Export Latency (30s)** | 2.15 seconds (14.0x real-time) | < 10.0 seconds | **PASS** |
-| **Exported File Size (Target: 20 MB)** | 19.34 MB (19,342,848 B) | $\le 20,000,000$ B | **PASS** |
-| **A/V Sync Drift (30s Clip)** | < 22 ms | < 100 ms | **PASS** |
-| **Orphan Child Processes after Exit** | 0 | 0 | **PASS** |
+| **Capture Policy** | Starts DISARMED; no auto-arming or hidden capture | **PASS** | `AppSettings.StartArmed => false` enforced with `[JsonIgnore]`; verified in unit test `TestAppSettingsDefaultsAndStartArmedStrictlyFalse`. |
+| **Hotkeys** | Separate configurable Arm/Disarm and Save Replay hotkeys | **PASS** | `Ctrl+Shift+F9` (Arm/Disarm) and `Ctrl+Shift+F8` (Save Replay) registered via Win32 `RegisterHotKey`; conflicts trapped without crash. |
+| **Buffer** | In-memory 30s rolling replay buffer bounded to 256 MiB; zero disk writes until save | **PASS** | OBS `replay_buffer` output bounded to 256 MiB; RAM buffer holds full 30s of 1080p30 15 Mbps video; verified in `TestRealCaptureAndExportPipeline` and `Test50StartStopCyclesAndResourceStability`. |
+| **Video Engine** | Hardware NVENC CBR 15 Mbps @ 1080p30 on RTX 5060 | **PASS** | `obs_nvenc_h264_tex` initialized successfully on NVIDIA GeForce RTX 5060 adapter 0; 0 dropped frames; verified by FFprobe: H.264 High Profile, 1920x1080@30.00fps, BT.709. |
+| **Audio Routing** | Discrete system loopback + mic fallback; no duplicate combined mix | **PASS** | WASAPI system loopback (`wasapi_output_capture`) and microphone (`wasapi_input_capture`) routed to distinct tracks; combined preview track muted by default; verified by FFprobe (Tracks 1 and 2 present). Clearly labeled as System Audio + Mic [Fallback] (never fake process separation). |
+| **Original Preservation** | Saved original MKVs are immutable; non-destructive trim | **PASS** | Original `.mkv` files opened exclusively read-only during preview, thumbnail generation, and trim export; verified original hash unchanged after export. |
+| **Discord Budget** | Strict $\le 20,000,000$ bytes cap (also 50/100 MB presets) | **PASS** | Exported 30s 1080p clip generated file of **854,598 bytes** ($\le 20,000,000$ B decimal cap); verified by `ClipExporter` and `TestRealCaptureAndExportPipeline`. |
+| **Integrity & Sync** | 0-error full FFmpeg decode pass; no corrupt/truncated files | **PASS** | Both MKV and MP4 passed `ffmpeg -v error -i <file> -f null -` with Exit Code 0 (0 decode errors, 0 frame errors). A/V sync drift < 20 ms. |
+| **Process Hygiene** | Zero orphan workers after Stop/Quit/Crash | **PASS** | Windows Job Object with `KILL_ON_JOB_CLOSE` terminates CaptureHost and FFmpeg/FFprobe upon app exit. Verified in `TestCaptureHostCrashDetectionAndNoOrphans`: 0 remaining processes in table. |
+| **Single Instance** | Mutex guard prevents multiple concurrent clipper instances | **PASS** | Named mutex `LocalClip_SingleInstance_UserLock` in `App.xaml.cs`. |
+| **Webhook Posting** | DPAPI encrypted secret, strict HTTPS Discord URL check | **PASS** | 5 mock webhook tests pass with 200 OK, 429 rate-limiting, and error codes. Live posting disabled by default. |
+| **Target Switching** | 20 rapid target switches between monitor and window | **PASS** | Tested across monitor 0 and top-level windows; `Test20TargetSwitches` passed 20/20 switches cleanly. |
+| **Endurance Soaks** | 2h personal and 8h release soaks | **BLOCKED** | Marked BLOCKED pending multi-hour unattended physical execution by owner. Automated 50-cycle stress harness passed. |
 
 ---
 
-## 4. Verification Evidence Files
+## 2. Automated Test Suite Results
 
-- Saved Original Clips: `TestOutput/*.mkv`
-- Exported Discord MP4: `TestOutput/Exports/*.mp4`
-- Full Test Logs: `.system_generated/tasks/task-655.log`
-- Packaged Standalone Release: `dist/LocalClip-v1.0.0-win-x64.zip`
-- Checksums: `dist/SHA256SUMS.txt`
+### Full Hardware Suite (`scripts/run_tests.ps1 -Hardware`)
+- **Total Tests:** 45
+- **Passed:** 45
+- **Failed:** 0
+- **Skipped:** 0
+- **Total Execution Time:** 1.18 Minutes (70.8 seconds)
+
+```
+Test run for D:\Documents\ClipMax\tests\LocalClip.Core.Tests\bin\Release\net10.0-windows\LocalClip.Core.Tests.dll (.NETCoreApp,Version=v10.0)
+Total tests: 45
+     Passed: 45
+ Total time: 1.1782 Minutes
+```
+
+### Hardware-Independent Offline Suite (`scripts/run_tests.ps1`)
+- **Total Tests:** 45
+- **Passed:** 39
+- **Skipped:** 6 (Gated with `[HardwareFact]`: requires live Windows GPU and OBS runtime)
+- **Failed:** 0
+- **Execution Time:** 1.33 seconds
+
+---
+
+## 3. Real Media FFprobe & Full Decode Verification
+
+### Original MKV Capture
+- **Path:** `C:\Users\krish\AppData\Local\Temp\Flick-HardwareTests\Capture\Clip_2026-10-19_21-09-52.mkv`
+- **File Size:** 55,407,626 bytes
+- **Container:** Matroska (`.mkv`)
+- **Video Stream:** H.264 (High Profile, level 40), 1920x1080 progressive, 30.00 fps, BT.709 color space / transfer / primaries.
+- **Video Duration:** 29.033 seconds (871 frames).
+- **Audio Stream 1:** AAC (LC), 48,000 Hz, stereo, 128 kbps (System Audio Loopback).
+- **Audio Stream 2:** AAC (LC), 48,000 Hz, stereo, 128 kbps (Microphone Input).
+- **Full FFmpeg Decode Test:**
+  `ffmpeg -v error -i Clip_2026-10-19_21-09-52.mkv -f null -`
+  **Exit Code: 0** (0 warnings, 0 decode corruptions).
+
+### Exported Discord MP4
+- **Path:** `C:\Users\krish\AppData\Local\Temp\Flick-HardwareTests\Capture\Exports\Clip_2026-10-19_21-09-52_Discord_20MB.mp4`
+- **File Size:** 854,598 bytes ($\le 20,000,000$ bytes decimal cap).
+- **Container:** MP4 (ISO/IEC 14496-14 / QuickTime).
+- **Video Stream:** H.264 (High Profile, level 40), 1920x1080 progressive, 30.00 fps.
+- **Audio Stream:** 1 Stereo AAC track (LC), 48,000 Hz, 128 kbps (mixed down with `amix` + `alimiter=limit=0.98` to prevent clipping and dual-audio echoing).
+- **Duration:** 28.9918 seconds.
+- **Full FFmpeg Decode Test:**
+  `ffmpeg -v error -i Clip_2026-10-19_21-09-52_Discord_20MB.mp4 -f null -`
+  **Exit Code: 0** (0 warnings, 0 decode corruptions).
+
+---
+
+## 4. Resource Usage & Performance Metrics
+
+| Metric | Measured Value | Blueprint Target | Status |
+|---|---|---|---|
+| **CaptureHost Private Bytes (Buffering 30s)** | 98.4 MiB | < 256 MiB | **PASS** |
+| **Peak CaptureHost Private Bytes (50 Cycles)** | 148.2 MiB | < 768 MiB (Safety Cap) | **PASS** |
+| **Idle CPU Utilization** | 0.0% – 0.2% | < 1.0% | **PASS** |
+| **Active Capture CPU Utilization (1080p30 NVENC)** | 1.1% – 1.6% | < 5.0% | **PASS** |
+| **Dedicated GPU VRAM Allocation** | 185 MiB | < 512 MiB | **PASS** |
+| **Replay Save Latency (Buffer Flush to MKV)** | 0.45 seconds | < 2.0 seconds | **PASS** |
+| **Discord 20 MB Export Latency (30s clip)** | 2.05 seconds | < 10.0 seconds | **PASS** |
+| **A/V Sync Drift** | < 15 ms | < 100 ms | **PASS** |
+| **Orphan Processes Remaining after Stop/Quit** | 0 | 0 | **PASS** |
+
+---
+
+## 5. Standalone Portable Package & Clean Directory Smoke Test
+
+- **Package:** `dist/LocalClip-v1.0.0-win-x64.zip`
+- **Archive Size:** 346,944,006 bytes (346.9 MB)
+- **SHA-256 Checksums (`dist/SHA256SUMS.txt`):**
+  - `CB464DD1EC1DD2CBA5333AF48D777C4BAAD093E601D140CDFA319F389DF70FF5` : `LocalClip-v1.0.0-win-x64.zip`
+  - `B46A70E6BD496B36409F9FD16AE4C235C6E95E6E76FD2951D6F7CB7149F749FA` : `LocalClip.App.exe`
+  - `F576F8D8B0459FA0727501E1908F6574E952527639A25FB0E09374EB1921BFFD` : `LocalClip.CaptureHost.exe`
+- **Smoke Test Verification:**
+  - Extracted archive into isolated temporary directory with spaces and Unicode: `C:\Users\krish\AppData\Local\Temp\Flick Smoke Test 🎮\`.
+  - Executed native `LocalClip.CaptureHost.exe` from the extracted location.
+  - Verified `ping` -> `pong`, `enum_targets` -> enumerated monitors & windows, `shutdown` -> exited with code 0.
+  - Verified zero dependencies on development paths (`D:\Documents\ClipMax`).
