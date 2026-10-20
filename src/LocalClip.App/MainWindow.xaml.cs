@@ -326,8 +326,7 @@ public partial class MainWindow : Window
         }
 
         _playerTimer.Stop();
-        _previewCancellation?.Cancel();
-        _previewCancellation?.Dispose();
+        CancelPendingPreview();
         _vm.ConfirmTargetReset = null;
         FlickBackdropService.Reset(this);
         _vm.ClipSavedConfirmed -= OnClipSavedConfirmed;
@@ -513,6 +512,7 @@ public partial class MainWindow : Window
 
     private void SuspendPlayback(bool clearSource)
     {
+        if (clearSource) CancelPendingPreview();
         _playerTimer.Stop();
         if (VideoPlayer is null) return;
         try
@@ -527,11 +527,25 @@ public partial class MainWindow : Window
 
     // Player/Editor Slice 4: WPF native preview first. An explicit, bounded
     // local MP4 can be created if this PC cannot decode the original MKV.
+    private void CancelPendingPreview()
+    {
+        var pending = _previewCancellation;
+        _previewCancellation = null;
+        if (pending != null)
+        {
+            // The in-flight async method owns disposal in its finally block.
+            try { pending.Cancel(); } catch (ObjectDisposedException) { }
+        }
+        if (BtnBuildPreview != null)
+        {
+            BtnBuildPreview.Content = "Create Local Preview";
+            BtnBuildPreview.IsEnabled = _vm.SelectedClip?.IsAvailable == true;
+        }
+    }
+
     private void ResetPlayerForSelection()
     {
-        _previewCancellation?.Cancel();
-        _previewCancellation?.Dispose();
-        _previewCancellation = null;
+        CancelPendingPreview();
 
         _playerTimer.Stop();
         _playerIsPlaying = false;
@@ -664,12 +678,16 @@ public partial class MainWindow : Window
             _vm.StatusDetails = "Export this clip first to preview its final audio mix.";
             return;
         }
+        CancelPendingPreview();
         SetPreviewSource(_vm.ReadyExportFilePath, PlayerView.Exported, true);
         _vm.StatusDetails = "Export Preview · H.264/AAC MP4 with the selected audio mix";
     }
 
-    private void PreviewOriginal_Click(object sender, RoutedEventArgs e) =>
+    private void PreviewOriginal_Click(object sender, RoutedEventArgs e)
+    {
+        CancelPendingPreview();
         ShowOriginalPreview(startPlaying: true);
+    }
 
     private void PlayerSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
     {
@@ -749,8 +767,7 @@ public partial class MainWindow : Window
             return;
         }
         bool forceTranscode = _playerView == PlayerView.LocalCopy;
-        _previewCancellation?.Cancel();
-        _previewCancellation?.Dispose();
+        CancelPendingPreview();
         var cancellation = new CancellationTokenSource();
         _previewCancellation = cancellation;
         BtnBuildPreview.IsEnabled = false;
