@@ -66,7 +66,7 @@
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
-                    <TextBlock Text="Originals Folder:" VerticalAlignment="Center"/>
+                    <TextBlock Text="Saved Clips Folder" VerticalAlignment="Center"/>
                     <TextBox x:Name="TxtOriginalsFolder" Grid.Column="1" Margin="0,0,8,0"/>
                     <Button Grid.Column="2" Content="Browse..." Click="BrowseOriginals_Click"/>
                 </Grid>
@@ -74,18 +74,18 @@
                 <Separator Background="#27272A" Margin="0,10,0,15"/>
 
                 <!-- Capture -->
-                <TextBlock Text="Replay &amp; quality" FontWeight="SemiBold" FontSize="15" Foreground="#60A5FA" Margin="0,0,0,8"/>
+                <TextBlock Text="Replay &amp; Quality" FontWeight="SemiBold" FontSize="15" Foreground="#60A5FA" Margin="0,0,0,8"/>
                 <Grid Margin="0,0,0,12">
                     <Grid.ColumnDefinitions><ColumnDefinition Width="180"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
-                    <TextBlock Text="Save the last:" VerticalAlignment="Center" Margin="0,4"/>
+                    <TextBlock Text="Replay Duration" VerticalAlignment="Center" Margin="0,4"/>
                     <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="0,4">
                         <TextBox x:Name="TxtDuration" Width="56" TextChanged="CaptureProfile_Changed"/>
                         <TextBlock Text="seconds (15–120)" VerticalAlignment="Center" Margin="8,0,0,0"/>
                     </StackPanel>
-                    <TextBlock Grid.Row="1" Text="Recording quality:" VerticalAlignment="Center" Margin="0,4"/>
+                    <TextBlock Grid.Row="1" Text="Recording Quality" VerticalAlignment="Center" Margin="0,4"/>
                     <ComboBox Grid.Row="1" Grid.Column="1" x:Name="CmbQuality" Width="265" HorizontalAlignment="Left"
                               Background="#27272A" Foreground="#FAFAFA" SelectionChanged="CaptureProfile_Changed">
                         <ComboBoxItem Content="Light — 720p / 30 FPS" Tag="Light"/>
@@ -102,7 +102,7 @@
                 <Separator Background="#27272A" Margin="0,10,0,15"/>
 
                 <!-- Startup -->
-                <TextBlock Text="Launch &amp; tray" FontWeight="SemiBold" FontSize="15" Foreground="#60A5FA" Margin="0,0,0,8"/>
+                <TextBlock Text="Windows Startup &amp; Tray" FontWeight="SemiBold" FontSize="15" Foreground="#60A5FA" Margin="0,0,0,8"/>
                 <CheckBox x:Name="ChkStartWithWindows" Content="Launch Flick when I sign in to Windows"
                           Foreground="#E4E4E7" Margin="0,0,0,6"/>
                 <CheckBox x:Name="ChkStartMinimized" Content="Open in the tray (hide the window)"
@@ -129,7 +129,7 @@
                 <Separator Background="{DynamicResource Flick.Brush.Border}" Margin="0,10,0,15"/>
 
                 <!-- Discord Webhook -->
-                <TextBlock Text="Discord Webhook (Optional M3)" FontWeight="SemiBold" FontSize="15" Foreground="#60A5FA" Margin="0,0,0,8"/>
+                <TextBlock Text="Discord Webhook (Advanced)" FontWeight="SemiBold" FontSize="15" Foreground="#60A5FA" Margin="0,0,0,8"/>
                 <TextBlock Text="Secret is securely encrypted using Windows DPAPI (CurrentUser) and never stored in plain text." Foreground="#A1A1AA" FontSize="11" Margin="0,0,0,8"/>
                 <Grid Margin="0,0,0,12">
                     <Grid.ColumnDefinitions>

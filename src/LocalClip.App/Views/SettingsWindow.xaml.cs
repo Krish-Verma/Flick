@@ -12,14 +12,16 @@ namespace LocalClip.App.Views;
 public partial class SettingsWindow : Window
 {
     private readonly AppSettings _settings;
+    private readonly bool _captureActive;
 
     // Only an explicit preview opens an overlay before settings are saved.
     public event Action<bool, bool>? PreviewNotificationRequested;
 
-    public SettingsWindow(AppSettings settings)
+    public SettingsWindow(AppSettings settings, bool captureActive = false)
     {
         InitializeComponent();
         _settings = settings;
+        _captureActive = captureActive;
         Populate(settings);
     }
 
@@ -109,6 +111,14 @@ public partial class SettingsWindow : Window
         {
             MessageBox.Show(error, "Invalid webhook URL");
             return;
+        }
+
+        if (_captureActive && _settings.EnableMicrophone && ChkMicrophone.IsChecked != true)
+        {
+            var answer = MessageBox.Show(
+                "Disabling the microphone will stop the current replay buffer and discard unsaved footage. Continue?",
+                "Disable Microphone", MessageBoxButton.YesNo, MessageBoxImage.Warning);
+            if (answer != MessageBoxResult.Yes) return;
         }
 
         try

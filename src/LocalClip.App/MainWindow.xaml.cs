@@ -226,7 +226,6 @@ public partial class MainWindow : Window
             _ => "Replay Off"
         };
 
-        var accent = (System.Windows.Media.Brush)FindResource("Flick.Brush.Accent");
         var neutral = (System.Windows.Media.Brush)FindResource("Flick.Brush.TextMuted");
         var green = (System.Windows.Media.Brush)FindResource("Flick.Brush.Success");
         var amber = (System.Windows.Media.Brush)FindResource("Flick.Brush.Warning");
