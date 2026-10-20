@@ -31,6 +31,7 @@
 - **Imported clip:** `Remove` removes the item from Flick's index, persists an ignored-path tombstone, and **never deletes or modifies the source original or any export**. A rescan doesn't silently re-add excluded files.
 - **Unlink folder:** removes its imported references from Flick but does not remove any external videos. It does not move/export/rewrite the source clips. These are distinct actions.
 - Data and source registries save via temporary JSON plus atomic rename on the same volume. A failure to write metadata must not be displayed as successful import.
+- Corrupt/unreadable JSON registries are preserved verbatim and block subsequent overwrites until repaired/backed up. Linked-folder identity also prevents accidental external file deletion if legacy source-kind metadata is inconsistent. The two JSON files are independently atomic, not a single cross-file transaction; failure and recovery must be tested.
 - Every imported video is probed for video dimensions/duration before indexing. External multi-audio containers do not inherit Flick-specific track labels or assumptions; first track is the cautious default and users can edit the export mix later.
 
 ### User interface

@@ -26,6 +26,8 @@ AssertContains $model 'public bool IsImported' "Imported ownership must be expli
 AssertContains $model 'public bool IsAvailable' "Offline library metadata must remain visible"
 AssertContains $storage 'connected_sources.json' "Linked folders must persist"
 AssertContains $storage 'SaveJsonAtomic' "Metadata saves must be atomic"
+AssertContains $storage '_indexReadFailed' "Corrupt clip index must not be overwritten"
+AssertContains $storage '_sourcesReadFailed' "Corrupt folder registry must not be overwritten"
 AssertContains $storage 'Keep OFFLINE entries across unplug/restart' "LoadIndex must preserve missing paths"
 AssertContains $storage 'if \(clip.IsImported\)' "Delete imported video must unlink instead"
 AssertContains $storage '_ignoredImportedPaths.Add' "Excluded imports must not return on rescan"
