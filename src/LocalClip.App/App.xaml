@@ -1,9 +1,16 @@
-﻿<Application x:Class="LocalClip.App.App"
+<Application x:Class="LocalClip.App.App"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:local="clr-namespace:LocalClip.App"
              StartupUri="MainWindow.xaml">
     <Application.Resources>
-         
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <!-- Explicit styles preserve the qualified V1 shell until Slice 2. -->
+                <ResourceDictionary Source="Resources/Theme/Flick.Colors.xaml"/>
+                <ResourceDictionary Source="Resources/Theme/Flick.Metrics.xaml"/>
+                <ResourceDictionary Source="Resources/Theme/Flick.Typography.xaml"/>
+                <ResourceDictionary Source="Resources/Theme/Flick.Controls.xaml"/>
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
     </Application.Resources>
 </Application>
