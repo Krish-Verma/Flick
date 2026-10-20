@@ -61,6 +61,11 @@ public partial class MainWindow : Window
         _playerTimer.Tick += PlayerTimer_Tick;
 
         Loaded += MainWindow_Loaded;
+        PreviewKeyDown += MainWindow_PreviewKeyDown;
+        StateChanged += (_, _) =>
+        {
+            if (WindowState == WindowState.Minimized) SuspendPlayback(clearSource: true);
+        };
         SourceInitialized += (_, _) => _ = FlickBackdropService.TryApplyMica(this);
     }
 
@@ -88,7 +93,15 @@ public partial class MainWindow : Window
         _vm.PropertyChanged += (s, ev) =>
         {
             if (ev.PropertyName == nameof(MainViewModel.CaptureStatus))
+            {
                 UpdateStatusBadgeColor();
+                if (_vm.CaptureStatus == "Starting")
+                {
+                    // A real gameplay session always outranks a preview decoder.
+                    _previewCancellation?.Cancel();
+                    SuspendPlayback(clearSource: true);
+                }
+            }
             else if (ev.PropertyName == nameof(MainViewModel.SelectedClip))
             {
                 ResetPlayerForSelection();
@@ -286,6 +299,7 @@ public partial class MainWindow : Window
         Show();
         WindowState = WindowState.Normal;
         Activate();
+        if (VideoPlayer.Source is null) ResetPlayerForSelection();
     }
 
     private void RealQuit()
@@ -299,6 +313,7 @@ public partial class MainWindow : Window
         if (!_isRealClosing)
         {
             e.Cancel = true;
+            SuspendPlayback(clearSource: true);
             Hide();
             if (!_trayHintShown)
             {
@@ -479,6 +494,35 @@ public partial class MainWindow : Window
     private void BtnDelete_Click(object sender, RoutedEventArgs e)
     {
         _vm.DeleteSelectedClip();
+    }
+
+    private void MainWindow_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Space || Keyboard.Modifiers != ModifierKeys.None) return;
+        // Space is a preview shortcut only when the user is pointing at the
+        // player, never while typing in trim boxes or operating source controls.
+        if (Keyboard.FocusedElement is TextBox ||
+            Keyboard.FocusedElement is ComboBox ||
+            Keyboard.FocusedElement is Slider) return;
+        if (VideoPlayer.IsMouseOver || BtnPlayPause.IsKeyboardFocused)
+        {
+            BtnPlayPause_Click(BtnPlayPause, new RoutedEventArgs());
+            e.Handled = true;
+        }
+    }
+
+    private void SuspendPlayback(bool clearSource)
+    {
+        _playerTimer.Stop();
+        if (VideoPlayer is null) return;
+        try
+        {
+            VideoPlayer.Stop();
+            if (clearSource) VideoPlayer.Source = null;
+        }
+        catch (Exception) { /* Safe display-only teardown. */ }
+        _playerIsPlaying = false;
+        if (BtnPlayPause != null) BtnPlayPause.Content = "▶ Play";
     }
 
     // Player/Editor Slice 4: WPF native preview first. An explicit, bounded
