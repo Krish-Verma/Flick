@@ -63,6 +63,7 @@ Copy-Item (Join-Path $RootDir "tools\obs\runtime") (Join-Path $ToolsDest "obs\")
 # Copy Licenses & Legal Notices
 Copy-Item (Join-Path $RootDir "LICENSE") $PackageDir -Force
 Copy-Item (Join-Path $RootDir "THIRD-PARTY-NOTICES.md") $PackageDir -Force
+Copy-Item (Join-Path $RootDir "docs") (Join-Path $PackageDir "docs") -Recurse -Force
 
 # Generate Installer / Uninstaller PowerShell Scripts
 $InstallScript = @"

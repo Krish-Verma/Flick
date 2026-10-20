@@ -11,7 +11,7 @@
 - Integrated minimal WPF review gallery with instant playback, non-destructive trimming, and per-track audio mute/gain adjustments.
 - Guaranteed **Discord Export** strictly within byte budgets (default 20 MB = $20,000,000\text{ bytes}$, plus 50 MB and 100 MB presets), including automated safety margin ($\ge \max(5\%, 256\text{ KiB})$), progressive retry penalty loop, three-tier verification (size check, stream probe, full decode corruption test), and atomic file promotion.
 - Native drag handle (`DragDrop.DoDragDrop`) and clipboard file copy (`Clipboard.SetFileDropList`) directly compatible with the real Discord desktop client.
-- Zero orphan helper processes guaranteed via Windows Job Object confinement (`KILL_ON_JOB_CLOSE`).
+- Capture and media helpers use Windows Job Object confinement (`KILL_ON_JOB_CLOSE`); the start-to-assignment race and crash behavior still need real-machine validation.
 - 100% free and offline core: zero accounts, zero telemetry, zero watermarks, and zero paywalls.
 
 ---
