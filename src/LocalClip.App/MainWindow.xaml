@@ -250,8 +250,8 @@
                                             <ColumnDefinition Width="60"/>
                                         </Grid.ColumnDefinitions>
                                         <TextBlock Text="{Binding Name}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
-                                        <CheckBox Grid.Column="1" Content="Mute" IsChecked="{Binding IsMuted, Mode=TwoWay}" VerticalAlignment="Center" Foreground="#EF4444"/>
-                                        <Slider Grid.Column="2" Minimum="0" Maximum="2.0" Value="{Binding Gain, Mode=TwoWay}" VerticalAlignment="Center"/>
+                                        <CheckBox Grid.Column="1" Content="Mute" IsChecked="{Binding IsMuted, Mode=TwoWay}" Click="AudioMuteChanged" VerticalAlignment="Center" Foreground="#EF4444"/>
+                                        <Slider Grid.Column="2" Minimum="0" Maximum="2.0" Value="{Binding Gain, Mode=TwoWay}" ValueChanged="AudioGainChanged" VerticalAlignment="Center"/>
                                         <TextBlock Grid.Column="3" Text="{Binding Gain, StringFormat='{}{0:P0}'}" HorizontalAlignment="Right" VerticalAlignment="Center" Foreground="#A1A1AA"/>
                                     </Grid>
                                 </DataTemplate>

@@ -200,8 +200,7 @@ public partial class MainWindow : Window
 
     private async void BtnRescan_Click(object sender, RoutedEventArgs e)
     {
-        await _vm.RefreshTargetsAsync();
-        _vm.ReloadClips();
+        await _vm.RescanLibraryAsync();
     }
 
     private void BtnRename_Click(object sender, RoutedEventArgs e)
@@ -312,8 +311,18 @@ public partial class MainWindow : Window
             {
                 SliderTrimEnd.Value = Math.Min(SliderTrimStart.Value + 1.0, SliderTrimStart.Maximum);
             }
-            _vm.InvalidateExportReady();
+            _vm.SaveClipEdits();
         }
+    }
+
+    private void AudioMuteChanged(object sender, RoutedEventArgs e)
+    {
+        _vm.SaveClipEdits();
+    }
+
+    private void AudioGainChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+    {
+        _vm.SaveClipEdits();
     }
 
     // Preset Clicks

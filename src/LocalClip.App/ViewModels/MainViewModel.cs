@@ -261,6 +261,12 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
         {
             StatusDetails = "Target refresh error: " + ex.Message;
         }
+        finally
+        {
+            // Target discovery must not leave an idle native helper running.
+            if (CaptureStatus == "Off")
+                await _captureHost.ShutdownAsync();
+        }
     }
 
     private void OnTargetChanged()
@@ -305,25 +311,40 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
 
     public async Task StartCaptureAsync()
     {
+        if (CaptureStatus == "Starting" || CaptureStatus == "Stopping") return;
         CaptureStatus = "Starting";
-        StatusDetails = "Initializing hardware NVENC encoder and audio...";
-
-        bool ok = await _captureHost.StartCaptureAsync(_settings);
-        if (!ok)
+        StatusDetails = "Initializing capture encoder and audio...";
+        try
+        {
+            if (!await _captureHost.StartCaptureAsync(_settings))
+            {
+                CaptureStatus = "Faulted";
+                StatusDetails = "Capture host refused to start. Check target, encoder and logs.";
+            }
+        }
+        catch (Exception ex)
         {
             CaptureStatus = "Faulted";
-            StatusDetails = "Failed to start capture host session.";
+            StatusDetails = "Capture startup failed: " + ex.Message;
         }
     }
 
     public async Task StopCaptureAsync()
     {
+        if (CaptureStatus == "Stopping") return;
         CaptureStatus = "Stopping";
-        await _captureHost.StopCaptureAsync();
-        CaptureStatus = "Off";
-        IsArmed = false;
-        BufferedDurationText = $"0.0s / {_settings.ReplayDurationSeconds}.0s";
-        StatusDetails = "Capture stopped cleanly. Encoder released.";
+        bool stopped = false;
+        try { stopped = await _captureHost.StopCaptureAsync(); }
+        catch (Exception ex) { StatusDetails = "Capture stop error: " + ex.Message; }
+        finally
+        {
+            await _captureHost.ShutdownAsync();
+            CaptureStatus = "Off";
+            IsArmed = false;
+            BufferedDurationText = $"0.0s / {_settings.ReplayDurationSeconds}.0s";
+            StatusDetails = stopped ? "Capture stopped; native helper exited." :
+                "Capture was force-terminated. Check the previous clip before restarting.";
+        }
     }
 
     public async Task SaveReplayAsync()
@@ -336,10 +357,14 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
 
         StatusDetails = "Snapshotting replay buffer to original MKV...";
         string saveId = "clip_" + DateTime.Now.ToString("yyyyMMdd_HHmmss");
-        bool ok = await _captureHost.SaveReplayAsync(saveId, "Clip");
-        if (!ok)
+        try
         {
-            StatusDetails = "Failed to trigger replay save.";
+            if (!await _captureHost.SaveReplayAsync(saveId, "Clip"))
+                StatusDetails = "Failed to trigger replay save.";
+        }
+        catch (Exception ex)
+        {
+            StatusDetails = "Replay save failed: " + ex.Message;
         }
     }
 
@@ -423,6 +448,19 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
         }
     }
 
+    public async Task RescanLibraryAsync()
+    {
+        await _storage.RescanMediaFolderAsync(_settings.OriginalsFolder);
+        ReloadClips();
+    }
+
+    public void SaveClipEdits()
+    {
+        if (SelectedClip == null) return;
+        InvalidateExportReady();
+        _storage.AddOrUpdateClip(SelectedClip);
+    }
+
     public void ReloadClips()
     {
         _allClips.Clear();
@@ -492,7 +530,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
 
     public async Task ExportForDiscordAsync()
     {
-        if (SelectedClip == null) return;
+        if (SelectedClip == null || IsExporting) return;
 
         IsExporting = true;
         ExportProgress = 0.0;
@@ -506,8 +544,19 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
 
         _settings.DiscordTargetSizeMb = TargetSizeMb;
 
-        var result = await _exporter.ExportForDiscordAsync(SelectedClip, _settings, progress);
-        IsExporting = false;
+        ExportResult result;
+        try
+        {
+            result = await _exporter.ExportForDiscordAsync(SelectedClip, _settings, progress);
+        }
+        catch (Exception ex)
+        {
+            result = new ExportResult { Success = false, ErrorMessage = ex.Message };
+        }
+        finally
+        {
+            IsExporting = false;
+        }
 
         if (result.Success)
         {
