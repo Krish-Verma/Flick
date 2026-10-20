@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Threading;
 using System.Windows;
 
@@ -22,6 +23,10 @@ public partial class App : System.Windows.Application
             Shutdown();
             return;
         }
+
+        // Designer-only opt-in: normal users still start the same qualified main window.
+        if (e.Args.Any(arg => arg.Equals("--design-preview", StringComparison.OrdinalIgnoreCase)))
+            StartupUri = new Uri("Views/DesignSystemPreviewWindow.xaml", UriKind.Relative);
 
         base.OnStartup(e);
     }
