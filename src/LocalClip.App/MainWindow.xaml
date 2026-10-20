@@ -416,7 +416,7 @@
                             <TextBlock Grid.Column="2" x:Name="TxtPlayerTime"
                                        Text="0:00 / 0:00" Style="{StaticResource Flick.Text.Caption}"
                                        VerticalAlignment="Center" Margin="10,0"
-                                       FontFamily="Consolas"/>
+                                       FontFamily="{StaticResource Flick.Font.UI}" Typography.NumeralAlignment="Tabular"/>
                             <Button Grid.Column="3" x:Name="BtnPreviewMode"
                                     Content="Original ▾" Click="BtnPreviewMode_Click"
                                     Style="{StaticResource Flick.Button.Ghost}"

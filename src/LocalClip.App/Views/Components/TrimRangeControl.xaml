@@ -44,9 +44,19 @@
                               AutomationProperties.Name="Trim Start Handle">
                 <primitives:Thumb.Template>
                     <ControlTemplate TargetType="{x:Type primitives:Thumb}">
-                        <Border Background="{DynamicResource Flick.Brush.Accent}"
+                        <Border x:Name="Grip" Background="{DynamicResource Flick.Brush.Accent}"
                                 BorderBrush="{DynamicResource Flick.Brush.Focus}"
                                 BorderThickness="1" CornerRadius="4"/>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="Grip" Property="BorderThickness" Value="2"/>
+                                <Setter TargetName="Grip" Property="Background"
+                                        Value="{DynamicResource Flick.Brush.AccentHover}"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="Grip" Property="Opacity" Value=".45"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
                     </ControlTemplate>
                 </primitives:Thumb.Template>
             </primitives:Thumb>
@@ -60,9 +70,19 @@
                               AutomationProperties.Name="Trim End Handle">
                 <primitives:Thumb.Template>
                     <ControlTemplate TargetType="{x:Type primitives:Thumb}">
-                        <Border Background="{DynamicResource Flick.Brush.Accent}"
+                        <Border x:Name="Grip" Background="{DynamicResource Flick.Brush.Accent}"
                                 BorderBrush="{DynamicResource Flick.Brush.Focus}"
                                 BorderThickness="1" CornerRadius="4"/>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="Grip" Property="BorderThickness" Value="2"/>
+                                <Setter TargetName="Grip" Property="Background"
+                                        Value="{DynamicResource Flick.Brush.AccentHover}"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="Grip" Property="Opacity" Value=".45"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
                     </ControlTemplate>
                 </primitives:Thumb.Template>
             </primitives:Thumb>
