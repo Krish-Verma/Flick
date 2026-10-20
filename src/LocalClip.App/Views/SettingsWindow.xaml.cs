@@ -13,6 +13,9 @@ public partial class SettingsWindow : Window
 {
     private readonly AppSettings _settings;
 
+    // Only an explicit preview opens an overlay before settings are saved.
+    public event Action<bool, bool>? PreviewNotificationRequested;
+
     public SettingsWindow(AppSettings settings)
     {
         InitializeComponent();
@@ -35,6 +38,8 @@ public partial class SettingsWindow : Window
         ChkMicrophone.IsChecked = s.EnableMicrophone;
         ChkStartWithWindows.IsChecked = s.StartWithWindows;
         ChkStartMinimized.IsChecked = s.StartMinimizedToTray;
+        ChkClipSavedOverlay.IsChecked = s.ShowClipSavedOverlay;
+        ChkClipSavedSound.IsChecked = s.PlayClipSavedSound;
         TxtWebhookChannel.Text = s.DiscordWebhookChannelName;
         TxtWebhookUrl.Password = DiscordWebhookClient.UnprotectSecret(s.MaskedWebhookUrl);
         UpdateBufferWarning();
@@ -117,6 +122,8 @@ public partial class SettingsWindow : Window
             _settings.EnableMicrophone = ChkMicrophone.IsChecked == true;
             _settings.StartWithWindows = ChkStartWithWindows.IsChecked == true;
             _settings.StartMinimizedToTray = ChkStartMinimized.IsChecked == true;
+            _settings.ShowClipSavedOverlay = ChkClipSavedOverlay.IsChecked == true;
+            _settings.PlayClipSavedSound = ChkClipSavedSound.IsChecked == true;
             RecordingProfiles.TryApply(Preset(), _settings);
             _settings.DiscordWebhookChannelName = TxtWebhookChannel.Text.Trim();
             _settings.MaskedWebhookUrl = string.IsNullOrEmpty(hook)
@@ -130,6 +137,11 @@ public partial class SettingsWindow : Window
         {
             MessageBox.Show("Settings could not be saved: " + ex.Message, "Flick settings");
         }
+    }
+
+    private void PreviewNotification_Click(object sender, RoutedEventArgs e)
+    {
+        PreviewNotificationRequested?.Invoke(true, ChkClipSavedSound.IsChecked == true);
     }
 
     private void Cancel_Click(object sender, RoutedEventArgs e)

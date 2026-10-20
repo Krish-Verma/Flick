@@ -56,6 +56,11 @@ public class AppSettings
     // App Behavior
     public bool StartWithWindows { get; set; } = false;
     public bool StartMinimizedToTray { get; set; } = false;
+
+    // Clip feedback is independently opt-out. No overlay or sound engine is
+    // resident until a confirmed saved clip or a user-initiated preview.
+    public bool ShowClipSavedOverlay { get; set; } = true;
+    public bool PlayClipSavedSound { get; set; } = true;
     // ALWAYS FALSE by specification: "Capture starts DISARMED"
     [JsonIgnore]
     public bool StartArmed => false;

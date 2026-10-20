@@ -1,7 +1,7 @@
 <Window x:Class="LocalClip.App.Views.SettingsWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Flick Settings" Height="620" Width="625"
+        Title="Flick Settings" Height="670" Width="625"
         WindowStartupLocation="CenterOwner"
         Background="#18181B" Foreground="#FAFAFA">
     <Window.Resources>
@@ -110,6 +110,23 @@
                 <TextBlock Text="Flick always starts with replay capture OFF, including Windows startup."
                            Foreground="#A1A1AA" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,8"/>
                 <Separator Background="#27272A" Margin="0,10,0,15"/>
+
+                <!-- Slice 2: small clip feedback, not an always-on game overlay. -->
+                <TextBlock Text="Clip Notifications" FontWeight="SemiBold" FontSize="15"
+                           Foreground="{DynamicResource Flick.Brush.Accent}" Margin="0,0,0,8"/>
+                <CheckBox x:Name="ChkClipSavedOverlay" Content="Show Clip Saved Overlay"
+                          Foreground="{DynamicResource Flick.Brush.TextPrimary}"
+                          Margin="0,0,0,8" ToolTip="Temporary, non-activating branded confirmation"/>
+                <CheckBox x:Name="ChkClipSavedSound" Content="Play Confirmation Sound"
+                          Foreground="{DynamicResource Flick.Brush.TextPrimary}"
+                          Margin="0,0,0,8" ToolTip="Short Flick confirmation tone; may be audible in system audio loopback"/>
+                <TextBlock Text="Both are enabled by default. They work independently and never activate capture."
+                           TextWrapping="Wrap" Foreground="{DynamicResource Flick.Brush.TextSecondary}"
+                           FontSize="12" Margin="0,0,0,8"/>
+                <Button Content="Preview Notification" Click="PreviewNotification_Click"
+                        Style="{StaticResource Flick.Button.Secondary}" HorizontalAlignment="Left"
+                        Margin="0,0,0,6"/>
+                <Separator Background="{DynamicResource Flick.Brush.Border}" Margin="0,10,0,15"/>
 
                 <!-- Discord Webhook -->
                 <TextBlock Text="Discord Webhook (Optional M3)" FontWeight="SemiBold" FontSize="15" Foreground="#60A5FA" Margin="0,0,0,8"/>
