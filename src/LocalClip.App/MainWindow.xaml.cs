@@ -337,7 +337,14 @@ public partial class MainWindow : Window
     {
         if (e.OriginalSource is not DependencyObject node) return;
         while (node != null && node is not ListBoxItem)
-            node = System.Windows.Media.VisualTreeHelper.GetParent(node);
+        {
+            if (node is System.Windows.Media.Visual ||
+                node is System.Windows.Media.Media3D.Visual3D)
+                node = System.Windows.Media.VisualTreeHelper.GetParent(node);
+            else if (node is FrameworkContentElement content)
+                node = content.Parent;
+            else break;
+        }
         if (node is ListBoxItem item)
             item.IsSelected = true;
     }

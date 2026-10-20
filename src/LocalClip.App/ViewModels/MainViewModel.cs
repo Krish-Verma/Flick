@@ -607,7 +607,8 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
             ImportStatusText = result.FolderUnavailable
                 ? "Folder Unavailable · Original videos and library entries were preserved."
                 : $"Complete · {result.Imported:N0} Added, " +
-                  $"{result.AlreadyIndexed:N0} Already Indexed, {result.Failed:N0} Unavailable";
+                  $"{result.AlreadyIndexed:N0} Already Indexed, {result.Failed:N0} Unavailable" +
+                  (result.ScanLimitReached ? " · 10,000-File Safety Limit Reached; Use Smaller Folders" : "");
             return result;
         }
         catch (OperationCanceledException)
@@ -676,6 +677,11 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
     public void OpenOriginalFolder()
     {
         string path = SelectedClip?.OriginalFilePath ?? _settings.OriginalsFolder;
+        if (SelectedClip != null && !File.Exists(path))
+        {
+            StatusDetails = "Original Video Offline · Reconnect Its Linked Folder";
+            return;
+        }
         if (File.Exists(path))
             Process.Start(new ProcessStartInfo("explorer.exe", $"/select,\"{path}\"")
             { UseShellExecute = true });

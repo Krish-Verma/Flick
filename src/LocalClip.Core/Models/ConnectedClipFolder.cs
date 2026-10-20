@@ -42,4 +42,5 @@ public sealed class ClipImportSummary
     public int Ignored { get; init; }
     public int Failed { get; init; }
     public bool FolderUnavailable { get; init; }
+    public bool ScanLimitReached { get; init; }
 }

@@ -108,6 +108,8 @@ public sealed class ClipStorage
             var existing = _folders.FirstOrDefault(f =>
                 ClipLibraryPaths.FileComparer.Equals(f.Path, normalized));
             if (existing != null) return CopyFolder(existing);
+            if (_folders.Count >= 32)
+                throw new InvalidOperationException("Flick supports at most 32 linked folders. Unlink an unused folder or choose a parent directory.");
 
             var folder = new ConnectedClipFolder
             {
@@ -328,7 +330,8 @@ public sealed class ClipStorage
             return new ClipImportSummary
             {
                 TotalDiscovered = media.Count, Imported = imported,
-                AlreadyIndexed = already, Ignored = skipped, Failed = failed
+                AlreadyIndexed = already, Ignored = skipped, Failed = failed,
+                ScanLimitReached = media.Count >= ClipLibraryPaths.MaximumMediaFilesPerScan
             };
         }
         finally
