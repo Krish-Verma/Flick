@@ -263,7 +263,6 @@
                             </ListBox.ItemTemplate>
                         </ListBox>
                         <TextBlock Text="No Clips Found. Save a Replay or Import a Folder."
-                                   Style="{StaticResource Flick.Text.Caption}"
                                    TextWrapping="Wrap" HorizontalAlignment="Center"
                                    VerticalAlignment="Center" TextAlignment="Center"
                                    Margin="20" IsHitTestVisible="False">
