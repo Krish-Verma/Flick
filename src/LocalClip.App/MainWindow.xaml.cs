@@ -841,22 +841,6 @@ public partial class MainWindow : Window
             ShowOriginalPreview(startPlaying: false);
     }
 
-    private void AudioMuteChanged(object sender, RoutedEventArgs e)
-    {
-        if (!IsLoaded || !_vm.CanEditClip) return;
-        _vm.ScheduleAudioEdit();
-        if (_playerView == PlayerView.Exported)
-            ShowOriginalPreview(startPlaying: false);
-    }
-
-    private void AudioGainChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
-    {
-        if (!IsLoaded || !_vm.CanEditClip) return;
-        _vm.ScheduleAudioEdit();
-        if (_playerView == PlayerView.Exported)
-            ShowOriginalPreview(startPlaying: false);
-    }
-
     private void ResetAudioMix_Click(object sender, RoutedEventArgs e)
     {
         _vm.ResetAudioMix();

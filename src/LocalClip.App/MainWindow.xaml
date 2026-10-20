@@ -475,14 +475,12 @@
                                                                VerticalAlignment="Center" Margin="0,0,9,0"/>
                                                     <CheckBox Grid.Column="1" Content="Mute"
                                                               IsChecked="{Binding IsMuted, Mode=TwoWay}"
-                                                              Click="AudioMuteChanged"
                                                               VerticalAlignment="Center"
                                                               Foreground="{DynamicResource Flick.Brush.TextSecondary}"
                                                               FontSize="12"/>
                                                     <Slider Grid.Column="2" Minimum="0" Maximum="2"
                                                             Style="{StaticResource Flick.Input.Slider}"
                                                             Value="{Binding Gain, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                                            ValueChanged="AudioGainChanged"
                                                             VerticalAlignment="Center"
                                                             AutomationProperties.Name="Export Audio Volume"
                                                             Margin="0,0,8,0"/>

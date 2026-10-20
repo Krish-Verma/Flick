@@ -43,6 +43,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
     // Audio UI changes are reflected instantly but index writes are debounced.
     private readonly DispatcherTimer _audioEditCommitTimer;
     private ClipMetadata? _pendingAudioClip;
+    private readonly System.Collections.Generic.List<AudioTrackInfo> _subscribedAudioTracks = new();
 
     // Capture state
     private string _captureStatus = "Off";
@@ -212,7 +213,9 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
             if (_selectedClip != value)
             {
                 FlushPendingAudioEdits();
+                UnsubscribeAudioEvents();
                 _selectedClip = value;
+                SubscribeAudioEvents();
                 OnPropertyChanged();
                 OnPropertyChanged(nameof(CanEditClip));
                 OnSelectedClipChanged();
@@ -736,6 +739,29 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
         }
     }
 
+    private void UnsubscribeAudioEvents()
+    {
+        foreach (var track in _subscribedAudioTracks)
+            track.PropertyChanged -= AudioTrackPropertyChanged;
+        _subscribedAudioTracks.Clear();
+    }
+
+    private void SubscribeAudioEvents()
+    {
+        if (_selectedClip is null) return;
+        foreach (var track in _selectedClip.AudioTracks)
+        {
+            track.PropertyChanged += AudioTrackPropertyChanged;
+            _subscribedAudioTracks.Add(track);
+        }
+    }
+
+    private void AudioTrackPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName is nameof(AudioTrackInfo.Gain) or nameof(AudioTrackInfo.IsMuted))
+            ScheduleAudioEdit(); // Only a real changed model value invalidates Ready.
+    }
+
     public void ScheduleAudioEdit()
     {
         if (SelectedClip is null || !SelectedClip.IsAvailable) return;
@@ -1035,6 +1061,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
     public void Dispose()
     {
         FlushPendingAudioEdits();
+        UnsubscribeAudioEvents();
         _importCancellation?.Cancel();
         _thumbnailCancellation?.Cancel();
         _pollTimer.Stop();
