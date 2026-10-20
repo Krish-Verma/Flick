@@ -67,6 +67,9 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
     private string _readyExportFilePath = "";
 
     public event PropertyChangedEventHandler? PropertyChanged;
+    // Fired ONLY after the saved original is validated and indexed.
+    public event Action<ClipMetadata>? ClipSavedConfirmed;
+    public event Action<string>? ReplaySaveFailed;
 
     public AppSettings Settings => _settings;
     public CaptureHostClient CaptureHost => _captureHost;
@@ -365,11 +368,15 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
         try
         {
             if (!await _captureHost.SaveReplayAsync(saveId, "Clip"))
+            {
                 StatusDetails = "Failed to trigger replay save.";
+                ReplaySaveFailed?.Invoke(StatusDetails);
+            }
         }
         catch (Exception ex)
         {
             StatusDetails = "Replay save failed: " + ex.Message;
+            ReplaySaveFailed?.Invoke(StatusDetails);
         }
     }
 
@@ -407,11 +414,15 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
                     string targetName = SelectedTarget?.DisplayName ?? "Screen";
                     var clip = await _storage.RegisterNewOriginalAsync(filePath, targetName, trackNames);
                     ReloadClips();
-                    SelectedClip = clip;
+                    // A hotkey save must not interrupt somebody editing another clip.
+                    if (SelectedClip is null)
+                        SelectedClip = clip;
+                    ClipSavedConfirmed?.Invoke(clip);
                 }
                 catch (Exception ex)
                 {
                     StatusDetails = "Saved clip could not be indexed: " + ex.Message;
+                    ReplaySaveFailed?.Invoke(StatusDetails);
                 }
             }
         });
@@ -426,7 +437,10 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
         var dispatcher = Application.Current?.Dispatcher;
         if (dispatcher != null)
             _ = dispatcher.BeginInvoke(new Action(() =>
-                StatusDetails = "Replay save failed: " + reason));
+            {
+                StatusDetails = "Replay save failed: " + reason;
+                ReplaySaveFailed?.Invoke(reason);
+            }));
         // Save errors leave an otherwise healthy replay buffer armed.
     }
 
