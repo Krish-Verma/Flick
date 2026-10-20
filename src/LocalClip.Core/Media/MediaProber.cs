@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 using LocalClip.Core.Models;
 using LocalClip.Core.Process;
@@ -47,7 +48,8 @@ public class MediaProber
         return name;
     }
 
-    public async Task<ProbeResult> ProbeFileAsync(string filePath)
+    public async Task<ProbeResult> ProbeFileAsync(string filePath,
+        CancellationToken cancellationToken = default)
     {
         if (!File.Exists(filePath))
         {
@@ -72,8 +74,17 @@ public class MediaProber
             try { if (!proc.HasExited) proc.Kill(entireProcessTree: true); } catch { }
             throw new InvalidOperationException("Failed to confine ffprobe worker");
         }
-        string output = await proc.StandardOutput.ReadToEndAsync();
-        await proc.WaitForExitAsync();
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(12));
+        using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeout.Token);
+        using var interrupt = linked.Token.Register(() =>
+        {
+            try { if (!proc.HasExited) proc.Kill(entireProcessTree: true); }
+            catch { }
+        });
+        Task<string> stderr = proc.StandardError.ReadToEndAsync(linked.Token);
+        string output = await proc.StandardOutput.ReadToEndAsync(linked.Token);
+        await proc.WaitForExitAsync(linked.Token);
+        _ = await stderr;
 
         if (proc.ExitCode != 0 || string.IsNullOrWhiteSpace(output))
         {
@@ -171,7 +182,8 @@ public class MediaProber
         }
     }
 
-    public async Task<string> GenerateThumbnailAsync(string videoPath, string outputThumbnailPath, double positionSec = 1.0)
+    public async Task<string> GenerateThumbnailAsync(string videoPath, string outputThumbnailPath,
+        double positionSec = 1.0, CancellationToken cancellationToken = default)
     {
         string dir = Path.GetDirectoryName(outputThumbnailPath)!;
         Directory.CreateDirectory(dir);
@@ -179,7 +191,7 @@ public class MediaProber
         var psi = new ProcessStartInfo
         {
             FileName = _ffmpegPath,
-            Arguments = $"-y -ss {positionSec.ToString("F2", CultureInfo.InvariantCulture)} -i \"{videoPath}\" -vframes 1 -q:v 2 \"{outputThumbnailPath}\"",
+            Arguments = $"-hide_banner -loglevel error -nostats -y -ss {positionSec.ToString("F2", CultureInfo.InvariantCulture)} -i \"{videoPath}\" -vframes 1 -q:v 2 \"{outputThumbnailPath}\"",
             UseShellExecute = false,
             CreateNoWindow = true
         };
@@ -192,7 +204,14 @@ public class MediaProber
             try { if (!proc.HasExited) proc.Kill(entireProcessTree: true); } catch { }
             throw new InvalidOperationException("Failed to confine thumbnail worker");
         }
-        await proc.WaitForExitAsync();
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+        using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeout.Token);
+        using var interrupt = linked.Token.Register(() =>
+        {
+            try { if (!proc.HasExited) proc.Kill(entireProcessTree: true); }
+            catch { }
+        });
+        await proc.WaitForExitAsync(linked.Token);
         return proc.ExitCode == 0 && File.Exists(outputThumbnailPath) ? outputThumbnailPath : "";
     }
 }
