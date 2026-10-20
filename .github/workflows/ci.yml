@@ -50,6 +50,9 @@ jobs:
       - name: Validate Slice 4 player/trim/audio contracts
         shell: pwsh
         run: ./scripts/check_gui_slice4.ps1
+      - name: Validate Slice 5 sharing and grouped settings contract
+        shell: pwsh
+        run: ./scripts/check_gui_slice5.ps1
       - name: Build solution (Release)
         run: dotnet build LocalClip.slnx --configuration Release --no-restore --warnaserror
       - name: Run hardware-independent tests
