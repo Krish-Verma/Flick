@@ -170,4 +170,15 @@ public class CoreTests
         bool isValid = DiscordWebhookClient.ValidateWebhookUrl(url, out string err);
         Assert.Equal(expectedValid, isValid);
     }
+    [Fact]
+    public void TestShortClipHighCustomCapCannotOverflowBitrate()
+    {
+        var budget = LocalClip.Core.Rules.BitrateBudgetCalculator.Calculate(250, 0.25);
+        Assert.InRange(budget.VideoBitrateBps,
+            LocalClip.Core.Rules.BitrateBudgetCalculator.VIDEO_RATE_FLOOR_BPS,
+            LocalClip.Core.Rules.BitrateBudgetCalculator.VIDEO_RATE_CEILING_BPS);
+        Assert.True(budget.VideoBitrateBps > 0);
+        Assert.Equal(250_000_000L, budget.TargetBytes);
+    }
+
 }

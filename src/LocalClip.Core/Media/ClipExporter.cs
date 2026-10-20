@@ -369,7 +369,7 @@ public class ClipExporter
         string filterComplex = $"[0:v]{scaleFilter},format=yuv420p[outv];{audioFilter}";
 
         var args = new StringBuilder();
-        args.Append($"-y -ss {startStr} -t {durStr} -i \"{inputPath}\" ");
+        args.Append($"-hide_banner -loglevel error -nostats -y -ss {startStr} -t {durStr} -i \"{inputPath}\" ");
         args.Append($"-filter_complex \"{filterComplex}\" ");
         args.Append($"-map \"[outv]\" -map \"[outa]\" ");
         args.Append($"-t {durStr} -shortest ");

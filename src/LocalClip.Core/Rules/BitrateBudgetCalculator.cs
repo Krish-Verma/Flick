@@ -20,6 +20,7 @@ public static class BitrateBudgetCalculator
     public const long BYTES_PER_MIB = 1_048_576L;
 
     public const int VIDEO_RATE_FLOOR_BPS = 500_000;    // 500 kbps floor
+    public const int VIDEO_RATE_CEILING_BPS = 40_000_000; // Bound pathological short/high-cap exports
     public const int AUDIO_RATE_FLOOR_BPS = 64_000;     // 64 kbps floor
     public const int AUDIO_RATE_DEFAULT_BPS = 128_000;  // 128 kbps standard
 
@@ -73,11 +74,10 @@ public static class BitrateBudgetCalculator
             audioBps = AUDIO_RATE_FLOOR_BPS;
         }
 
-        int videoBps = (int)(totalBps - audioBps);
-        if (videoBps < VIDEO_RATE_FLOOR_BPS)
-        {
-            videoBps = VIDEO_RATE_FLOOR_BPS;
-        }
+        // Casting a huge double directly to int can wrap on short trims with
+        // a large custom cap. Bound the requested encoder rate before casting.
+        int videoBps = (int)Math.Clamp(totalBps - audioBps,
+            VIDEO_RATE_FLOOR_BPS, VIDEO_RATE_CEILING_BPS);
 
         // Recommend resolution downscaling if bitrate is too low for 1080p
         int recWidth = sourceWidth;
