@@ -17,6 +17,8 @@ public partial class ToastOverlayWindow : Window
     private const int WsExTransparent = 0x20;
     private const int WsExToolwindow = 0x80;
     private const int WsExNoactivate = 0x08000000;
+    private const uint SwpNoactivate = 0x0010;
+    private const uint SwpNozorder = 0x0004;
 
     [DllImport("user32.dll", EntryPoint = "GetWindowLongW", SetLastError = true)]
     private static extern int GetWindowLong(IntPtr hwnd, int index);
@@ -26,6 +28,11 @@ public partial class ToastOverlayWindow : Window
 
     [DllImport("user32.dll")]
     private static extern IntPtr GetForegroundWindow();
+
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool SetWindowPos(IntPtr hwnd, IntPtr insertAfter,
+        int x, int y, int cx, int cy, uint flags);
 
     public ToastOverlayWindow()
     {
@@ -55,12 +62,22 @@ public partial class ToastOverlayWindow : Window
             : Screen.PrimaryScreen;
         if (display is null) return;
 
-        // Windows Screen returns physical pixels; WPF positions use DIPs.
-        // Windows mixed-DPI screens require on-device testing (see handoff).
+        // Position in the monitor's physical coordinate system through Win32.
+        // Avoid dividing absolute virtual-screen coordinates by WPF DPI, which
+        // can place a toast on the wrong display under mixed scaling.
+        IntPtr hwnd = new WindowInteropHelper(this).Handle;
         var dpi = VisualTreeHelper.GetDpi(this);
-        double dx = dpi.DpiScaleX > 0 ? dpi.DpiScaleX : 1d;
-        double dy = dpi.DpiScaleY > 0 ? dpi.DpiScaleY : 1d;
-        Left = display.WorkingArea.Right / dx - Width - 18;
-        Top = display.WorkingArea.Top / dy + 18;
+        int width = (int)Math.Ceiling(Width * Math.Max(1d, dpi.DpiScaleX));
+        int height = (int)Math.Ceiling(Height * Math.Max(1d, dpi.DpiScaleY));
+        int x = display.WorkingArea.Right - width - 18;
+        int y = display.WorkingArea.Top + 18;
+        if (!SetWindowPos(hwnd, IntPtr.Zero, x, y, width, height,
+                SwpNoactivate | SwpNozorder))
+        {
+            // A failed DWM move must not leave a toast at an arbitrary location.
+            Left = display.WorkingArea.Right / Math.Max(1d, dpi.DpiScaleX)
+                - Width - 18;
+            Top = display.WorkingArea.Top / Math.Max(1d, dpi.DpiScaleY) + 18;
+        }
     }
 }
