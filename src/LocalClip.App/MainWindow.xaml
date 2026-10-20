@@ -566,7 +566,7 @@
             </Grid>
         </Grid>
 
-        <!-- Bottom Status Bar -->>
+        <!-- Bottom Status Bar -->
         <Border Grid.Row="2" Grid.Column="1" Background="#11121D" BorderBrush="#242436" BorderThickness="0,1,0,0" Padding="12,6">
             <Grid>
                 <Grid.ColumnDefinitions>
