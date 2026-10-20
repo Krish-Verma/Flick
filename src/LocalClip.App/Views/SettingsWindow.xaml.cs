@@ -88,7 +88,7 @@ public partial class SettingsWindow : Window
         var toggle = TxtToggleHotkey.Text.Trim();
         var save = TxtSaveHotkey.Text.Trim();
         if (!HotkeyManager.IsValidHotkey(toggle) || !HotkeyManager.IsValidHotkey(save) ||
-            string.Equals(toggle, save, StringComparison.OrdinalIgnoreCase))
+            HotkeyManager.AreEquivalentHotkeys(toggle, save))
         {
             MessageBox.Show("Choose two distinct valid hotkeys, such as Ctrl+Shift+F9 and Ctrl+Shift+F8.", "Invalid shortcuts");
             return;
@@ -109,7 +109,7 @@ public partial class SettingsWindow : Window
         try
         {
             // Windows startup registration is explicit; failure must not silently claim success.
-            WindowsStartupRegistration.Apply(ChkStartWithWindows.IsChecked == true);
+            WindowsStartupRegistration.Apply(ChkStartWithWindows.IsChecked == true, ChkStartMinimized.IsChecked == true);
             _settings.CaptureToggleHotkey = toggle;
             _settings.SaveReplayHotkey = save;
             _settings.OriginalsFolder = folder;

@@ -555,16 +555,14 @@ static bool start_capture_session(const json &params, std::string &out_err) {
     obs_data_set_int(v_settings, "keyint_sec", 2);
     g_cap.video_encoder = obs_video_encoder_create(g_cap.encoder_id.c_str(), "h264_enc", v_settings, nullptr);
     if (!g_cap.video_encoder) {
-        // Fallback to jim_nvenc or obs_x264
+        // Hardware-only fallback: never silently burden gameplay with x264.
         g_cap.video_encoder = obs_video_encoder_create("jim_nvenc", "h264_enc", v_settings, nullptr);
-        if (!g_cap.video_encoder) {
-            g_cap.video_encoder = obs_video_encoder_create("obs_x264", "h264_enc", v_settings, nullptr);
-        }
+        if (g_cap.video_encoder) g_cap.encoder_id = "jim_nvenc";
     }
     obs_data_release(v_settings);
 
     if (!g_cap.video_encoder) {
-        out_err = "Failed to initialize video encoder";
+        out_err = "NVIDIA NVENC hardware encoder unavailable; capture not started";
         internal_stop_capture("encoder_fail");
         return false;
     }
@@ -746,6 +744,8 @@ static json get_current_status() {
     j["max_sec"] = g_cap.duration_sec;
     j["is_armed"] = g_cap.is_armed.load();
     j["target_type"] = g_cap.target_type;
+    j["encoder"] = g_cap.encoder_id;
+    j["buffered_duration_estimated"] = true;
     j["tracks"] = g_cap.track_names;
 
     // Check target window liveness

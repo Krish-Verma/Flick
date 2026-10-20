@@ -7,7 +7,7 @@ namespace LocalClip.Core.Models;
 
 public class AppSettings
 {
-    public int SchemaVersion { get; set; } = 1;
+    public int SchemaVersion { get; set; } = 2;
 
     // Capture Target
     public string TargetType { get; set; } = "Monitor"; // "Monitor" or "Window"
@@ -93,7 +93,17 @@ public class AppSettings
             {
                 string json = File.ReadAllText(path);
                 var loaded = JsonSerializer.Deserialize<AppSettings>(json);
-                if (loaded != null) return loaded;
+                if (loaded != null)
+                {
+                    // Legacy settings enabled the microphone without a user-facing toggle.
+                    if (loaded.SchemaVersion < 2)
+                    {
+                        loaded.EnableMicrophone = false;
+                        loaded.SchemaVersion = 2;
+                        loaded.Save();
+                    }
+                    return loaded;
+                }
             }
         }
         catch { }
