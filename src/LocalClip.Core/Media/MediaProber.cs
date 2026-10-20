@@ -6,6 +6,7 @@ using System.IO;
 using System.Text.Json;
 using System.Threading.Tasks;
 using LocalClip.Core.Models;
+using LocalClip.Core.Process;
 
 namespace LocalClip.Core.Media;
 
@@ -38,11 +39,11 @@ public class MediaProber
     {
         string probe1 = Path.Combine(baseDir, name);
         string probe2 = Path.Combine(baseDir, "tools", "ffmpeg", name);
-        string probe3 = Path.Combine(@"D:\Documents\ClipMax\tools\ffmpeg", name);
-
+        // Development builds: project bin/{config}/{tfm} is five levels below root.
+        string devPath = Path.GetFullPath(Path.Combine(baseDir, "..", "..", "..", "..", "..", "tools", "ffmpeg", name));
         if (File.Exists(probe1)) return probe1;
         if (File.Exists(probe2)) return probe2;
-        if (File.Exists(probe3)) return probe3;
+        if (File.Exists(devPath)) return devPath;
         return name;
     }
 
@@ -64,7 +65,13 @@ public class MediaProber
         };
 
         using var proc = new System.Diagnostics.Process { StartInfo = psi };
+        using var job = new JobObject();
         proc.Start();
+        if (!job.AssignProcess(proc))
+        {
+            try { if (!proc.HasExited) proc.Kill(entireProcessTree: true); } catch { }
+            throw new InvalidOperationException("Failed to confine ffprobe worker");
+        }
         string output = await proc.StandardOutput.ReadToEndAsync();
         await proc.WaitForExitAsync();
 
@@ -133,6 +140,7 @@ public class MediaProber
                             StreamIndex = streamIdx,
                             TrackIndex = audioIndex,
                             Name = title,
+                            Codec = stream.TryGetProperty("codec_name", out var ac) ? ac.GetString() ?? "" : "",
                             IsMuted = false,
                             Gain = 1.0
                         });
@@ -141,9 +149,13 @@ public class MediaProber
                 }
             }
 
+            // Track zero is a combined preview mix when dedicated tracks exist.
+            // Default share export must not remix it with its own constituent tracks.
+            if (audioTracks.Count > 1) audioTracks[0].IsMuted = true;
+
             return new ProbeResult
             {
-                IsValid = true,
+                IsValid = duration > 0 && width > 0 && height > 0 && !string.IsNullOrEmpty(videoCodec),
                 DurationSeconds = duration,
                 FileSizeBytes = size,
                 Width = width,
@@ -173,8 +185,14 @@ public class MediaProber
         };
 
         using var proc = new System.Diagnostics.Process { StartInfo = psi };
+        using var job = new JobObject();
         proc.Start();
+        if (!job.AssignProcess(proc))
+        {
+            try { if (!proc.HasExited) proc.Kill(entireProcessTree: true); } catch { }
+            throw new InvalidOperationException("Failed to confine thumbnail worker");
+        }
         await proc.WaitForExitAsync();
-        return File.Exists(outputThumbnailPath) ? outputThumbnailPath : "";
+        return proc.ExitCode == 0 && File.Exists(outputThumbnailPath) ? outputThumbnailPath : "";
     }
 }

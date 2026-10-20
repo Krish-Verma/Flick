@@ -8,6 +8,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using LocalClip.Core.Models;
 using LocalClip.Core.Rules;
+using LocalClip.Core.Process;
 
 namespace LocalClip.Core.Media;
 
@@ -33,6 +34,7 @@ public class ClipExporter
 {
     private readonly string _ffmpegPath;
     private readonly MediaProber _prober;
+    private static readonly SemaphoreSlim ExportGate = new(1, 1);
 
     public ClipExporter(string? ffmpegPath = null, MediaProber? prober = null)
     {
@@ -59,6 +61,10 @@ public class ClipExporter
         IProgress<ExportProgress>? progress = null,
         CancellationToken ct = default)
     {
+        await ExportGate.WaitAsync(ct);
+        string? temporaryFileToDelete = null;
+        try
+        {
         if (!File.Exists(clip.OriginalFilePath))
         {
             return new ExportResult { Success = false, ErrorMessage = "Original file does not exist: " + clip.OriginalFilePath };
@@ -92,7 +98,9 @@ public class ClipExporter
             clip.IsExportReady)
         {
             long existingSize = new FileInfo(clip.ExportedFilePath).Length;
-            if (existingSize <= targetCapBytes)
+            if (existingSize <= targetCapBytes &&
+                IsValidShareMedia(await _prober.ProbeFileAsync(clip.ExportedFilePath), duration) &&
+                await VerifyFullDecodeAsync(clip.ExportedFilePath, ct))
             {
                 return new ExportResult
                 {
@@ -115,8 +123,9 @@ public class ClipExporter
 
         string fileNameWithoutExt = Path.GetFileNameWithoutExtension(clip.OriginalFilePath);
         string finalExportPath = Path.Combine(exportsDir, $"{fileNameWithoutExt}_Discord_{settings.DiscordTargetSizeMb}MB.mp4");
-        string tempExportPath = Path.Combine(settings.TempFolder, $"temp_{Guid.NewGuid():N}.mp4");
-        Directory.CreateDirectory(settings.TempFolder);
+        // Keep temporary export on the final destination volume for atomic promotion.
+        string tempExportPath = Path.Combine(exportsDir, $".flick-export-{Guid.NewGuid():N}.tmp.mp4");
+        temporaryFileToDelete = tempExportPath;
 
         // Bounded retries (up to 3 attempts)
         const int MAX_ATTEMPTS = 3;
@@ -168,10 +177,12 @@ public class ClipExporter
 
             if (!encodeSuccess || !File.Exists(tempExportPath))
             {
+                try { File.Delete(tempExportPath); } catch { }
+                if (attempt < MAX_ATTEMPTS) continue;
                 return new ExportResult
                 {
                     Success = false,
-                    ErrorMessage = $"FFmpeg encoding failed on attempt {attempt}.",
+                    ErrorMessage = $"FFmpeg encoding failed after {attempt} attempts.",
                     AttemptsUsed = attempt
                 };
             }
@@ -208,7 +219,7 @@ public class ClipExporter
             });
 
             var probeOut = await _prober.ProbeFileAsync(tempExportPath);
-            if (!probeOut.IsValid)
+            if (!IsValidShareMedia(probeOut, duration))
             {
                 try { File.Delete(tempExportPath); } catch { }
                 return new ExportResult
@@ -249,10 +260,6 @@ public class ClipExporter
 
             try
             {
-                if (File.Exists(finalExportPath))
-                {
-                    File.Delete(finalExportPath);
-                }
                 File.Move(tempExportPath, finalExportPath, overwrite: true);
             }
             catch (Exception ex)
@@ -283,7 +290,21 @@ public class ClipExporter
             ErrorMessage = "Export aborted after maximum retry attempts.",
             AttemptsUsed = attempt
         };
+        }
+        finally
+        {
+            if (!string.IsNullOrEmpty(temporaryFileToDelete))
+                try { File.Delete(temporaryFileToDelete); } catch { }
+            ExportGate.Release();
+        }
     }
+
+    private static bool IsValidShareMedia(ProbeResult media, double requestedDuration) =>
+        media.IsValid &&
+        media.VideoCodec.Equals("h264", StringComparison.OrdinalIgnoreCase) &&
+        media.AudioTracks.Count == 1 &&
+        media.AudioTracks[0].Codec.Equals("aac", StringComparison.OrdinalIgnoreCase) &&
+        Math.Abs(media.DurationSeconds - requestedDuration) <= 1.0;
 
     public static string BuildAudioMixFilter(List<AudioTrackInfo>? tracks)
     {
@@ -351,6 +372,7 @@ public class ClipExporter
         args.Append($"-y -ss {startStr} -t {durStr} -i \"{inputPath}\" ");
         args.Append($"-filter_complex \"{filterComplex}\" ");
         args.Append($"-map \"[outv]\" -map \"[outa]\" ");
+        args.Append($"-t {durStr} -shortest ");
         args.Append($"-c:v {vEncoder} -b:v {budget.VideoBitrateBps} -maxrate {budget.VideoBitrateBps} -bufsize {budget.VideoBitrateBps * 2} ");
         args.Append($"-c:a aac -b:a {budget.AudioBitrateBps} -ar 48000 -ac 2 ");
         args.Append("-movflags +faststart ");
@@ -366,26 +388,29 @@ public class ClipExporter
         };
 
         using var proc = new System.Diagnostics.Process { StartInfo = psi };
+        using var job = new JobObject();
         proc.Start();
-
-        var registration = ct.Register(() =>
+        if (!job.AssignProcess(proc))
         {
-            try { proc.Kill(); } catch { }
+            try { if (!proc.HasExited) proc.Kill(entireProcessTree: true); } catch { }
+            throw new InvalidOperationException("Failed to confine FFmpeg encode worker");
+        }
+        Task<string> stderr = proc.StandardError.ReadToEndAsync();
+        using var registration = ct.Register(() =>
+        {
+            try { if (!proc.HasExited) proc.Kill(entireProcessTree: true); } catch { }
         });
 
         try
         {
             await proc.WaitForExitAsync(ct);
+            await stderr;
             return proc.ExitCode == 0;
         }
         catch (OperationCanceledException)
         {
-            try { proc.Kill(); } catch { }
+            try { if (!proc.HasExited) proc.Kill(entireProcessTree: true); } catch { }
             return false;
-        }
-        finally
-        {
-            await registration.DisposeAsync();
         }
     }
 
@@ -401,11 +426,16 @@ public class ClipExporter
         };
 
         using var proc = new System.Diagnostics.Process { StartInfo = psi };
+        using var job = new JobObject();
         proc.Start();
-
-        var registration = ct.Register(() =>
+        if (!job.AssignProcess(proc))
         {
-            try { proc.Kill(); } catch { }
+            try { if (!proc.HasExited) proc.Kill(entireProcessTree: true); } catch { }
+            throw new InvalidOperationException("Failed to confine FFmpeg validation worker");
+        }
+        using var registration = ct.Register(() =>
+        {
+            try { if (!proc.HasExited) proc.Kill(entireProcessTree: true); } catch { }
         });
 
         try
@@ -417,10 +447,6 @@ public class ClipExporter
         catch
         {
             return false;
-        }
-        finally
-        {
-            await registration.DisposeAsync();
         }
     }
 }

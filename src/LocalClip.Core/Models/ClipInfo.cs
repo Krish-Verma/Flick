@@ -9,6 +9,7 @@ public class AudioTrackInfo
     public int StreamIndex { get; set; }
     public int TrackIndex { get; set; }
     public string Name { get; set; } = "";
+    public string Codec { get; set; } = "";
     public bool IsMuted { get; set; } = false;
     public double Gain { get; set; } = 1.0; // 0.0 to 2.0 (1.0 = unity)
 }

@@ -164,7 +164,7 @@ public class ClipStorage
             {
                 if (moveToRecycleBin)
                 {
-                    SendToRecycleBin(clip.OriginalFilePath);
+                    if (!SendToRecycleBin(clip.OriginalFilePath)) return false;
                 }
                 else
                 {
@@ -190,7 +190,7 @@ public class ClipStorage
         }
     }
 
-    private static void SendToRecycleBin(string path)
+    private static bool SendToRecycleBin(string path)
     {
         try
         {
@@ -200,11 +200,12 @@ public class ClipStorage
                 pFrom = path + '\0' + '\0',
                 fFlags = FOF_ALLOWUNDO | FOF_NOCONFIRMATION
             };
-            SHFileOperation(ref shf);
+            return SHFileOperation(ref shf) == 0 && !shf.fAnyOperationsAborted && !File.Exists(path);
         }
         catch
         {
-            File.Delete(path);
+            // Never silently permanently-delete a file when Recycle Bin fails.
+            return false;
         }
     }
 
