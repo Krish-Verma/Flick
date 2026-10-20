@@ -91,9 +91,18 @@ public class ClipExporter
 
         long targetCapBytes = BitrateBudgetCalculator.TargetMbToBytes(settings.DiscordTargetSizeMb);
 
-        // Check if existing export is already valid
+        string exportsDir = settings.ExportsFolder;
+        if (string.IsNullOrWhiteSpace(exportsDir))
+            exportsDir = Path.Combine(Path.GetDirectoryName(clip.OriginalFilePath)!, "..", "Exports");
+        string finalExportPath = Path.Combine(exportsDir,
+            ShareExportNaming.ForOriginal(clip.OriginalFilePath, settings.DiscordTargetSizeMb));
+
+        // Never reuse an old export at a different destination or one with a
+        // legacy filename that another imported clip may have overwritten.
         if (!string.IsNullOrEmpty(clip.ExportedFilePath) &&
             File.Exists(clip.ExportedFilePath) &&
+            string.Equals(Path.GetFullPath(clip.ExportedFilePath),
+                Path.GetFullPath(finalExportPath), StringComparison.OrdinalIgnoreCase) &&
             clip.LastExportFingerprint == fingerprint &&
             clip.IsExportReady)
         {
@@ -114,15 +123,7 @@ public class ClipExporter
             }
         }
 
-        string exportsDir = settings.ExportsFolder;
-        if (string.IsNullOrWhiteSpace(exportsDir))
-        {
-            exportsDir = Path.Combine(Path.GetDirectoryName(clip.OriginalFilePath)!, "..", "Exports");
-        }
         Directory.CreateDirectory(exportsDir);
-
-        string finalExportPath = Path.Combine(exportsDir,
-            ShareExportNaming.ForOriginal(clip.OriginalFilePath, settings.DiscordTargetSizeMb));
         // Keep temporary export on the final destination volume for atomic promotion.
         string tempExportPath = Path.Combine(exportsDir, $".flick-export-{Guid.NewGuid():N}.tmp.mp4");
         temporaryFileToDelete = tempExportPath;

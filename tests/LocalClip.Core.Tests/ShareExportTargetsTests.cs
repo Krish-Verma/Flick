@@ -31,13 +31,14 @@ public sealed class ShareExportTargetsTests
     [Fact]
     public void StaleOrMissingFilesNeverBecomeDraggable()
     {
-        string file = Path.Combine(Path.GetTempPath(), $"flick-share-{Guid.NewGuid():N}.mp4");
+        string original = Path.Combine(Path.GetTempPath(), $"flick-original-{Guid.NewGuid():N}.mkv");
+        string file = Path.Combine(Path.GetTempPath(), ShareExportNaming.ForOriginal(original, 20));
         try
         {
             File.WriteAllBytes(file, new byte[4096]);
             var clip = new ClipMetadata
             {
-                OriginalFilePath = Path.Combine(Path.GetTempPath(), "original.mkv"),
+                OriginalFilePath = original,
                 DurationSeconds = 30,
                 TrimEndSeconds = 30,
                 ExportedFilePath = file,
