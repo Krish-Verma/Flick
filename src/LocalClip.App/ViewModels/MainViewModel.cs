@@ -705,7 +705,9 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
         if (selectedId != null)
         {
             var previous = _allClips.FirstOrDefault(c => c.Id == selectedId);
-            if (previous != null && SelectedClip?.Id != selectedId)
+            if (previous == null)
+                SelectedClip = null; // Never keep editing a removed/unlinked entry.
+            else if (!ReferenceEquals(SelectedClip, previous))
                 SelectedClip = previous;
         }
         UpdateLibrarySummary();
