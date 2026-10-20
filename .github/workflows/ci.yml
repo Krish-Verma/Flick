@@ -1,0 +1,46 @@
+name: Flick Windows CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: flick-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  dotnet:
+    name: WPF build and hardware-independent tests
+    runs-on: windows-latest
+    timeout-minutes: 25
+    env:
+      FLICK_HARDWARE_TESTS: '0'
+      DOTNET_NOLOGO: 'true'
+      DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.402'
+      - name: Restore solution
+        run: dotnet restore LocalClip.slnx
+      - name: Build solution (Release)
+        run: dotnet build LocalClip.slnx --configuration Release --no-restore --warnaserror
+      - name: Run hardware-independent tests
+        run: dotnet test LocalClip.slnx --configuration Release --no-build --logger "trx;LogFileName=Flick-Tests.trx" --results-directory TestResults
+      - name: Publish test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: flick-unit-test-results
+          path: TestResults/**/*.trx
+          if-no-files-found: warn
+
+# Hardware NVENC, native libobs integration, installer smoke tests,
+# Discord desktop sharing and 2h/8h soaks require a qualified Windows GPU PC.
+# These are not represented as CI passes.
