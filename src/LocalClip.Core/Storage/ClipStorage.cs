@@ -199,6 +199,19 @@ public sealed class ClipStorage
                 if (!string.IsNullOrWhiteSpace(trackNames[i]))
                     probe.AudioTracks[i].Name = trackNames[i];
 
+        if (source != null)
+        {
+            // An external OBS/SteelSeries MKV's first track is not necessarily
+            // Flick's combined preview mix. Do not invent game/Discord labels
+            // or automatically mix every unknown track twice.
+            foreach (var track in probe.AudioTracks)
+            {
+                track.IsMuted = track.TrackIndex != 0;
+                if (track.Name == "Combined Audio")
+                    track.Name = "Audio Track 1";
+            }
+        }
+
         var info = new FileInfo(normalized);
         var clip = new ClipMetadata
         {
