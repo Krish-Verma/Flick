@@ -26,6 +26,8 @@ public sealed class ClipStorage
     private readonly HashSet<string> _ignoredImportedPaths = new(ClipLibraryPaths.FileComparer);
     private readonly object _lock = new();
     private readonly SemaphoreSlim _scanGate = new(1, 1);
+    private int _unflushedImportedEntries;
+    private const int ImportIndexBatchSize = 32;
 
     public string LastLoadWarning { get; private set; } = "";
 
@@ -239,7 +241,13 @@ public sealed class ClipStorage
             if (source != null && !_folders.Any(f => f.Id == source.Id))
                 throw new InvalidOperationException("The folder was disconnected during indexing.");
             _clips.Add(clip);
-            try { SaveIndexLocked(); }
+            try
+            {
+                if (source == null)
+                    SaveIndexLocked();
+                else if (++_unflushedImportedEntries >= ImportIndexBatchSize)
+                    SaveIndexLocked();
+            }
             catch { _clips.Remove(clip); throw; }
         }
         return clip;
@@ -292,7 +300,7 @@ public sealed class ClipStorage
                         existing.Remove(path); // Later manual rescan may retry.
                     }
                 }
-                if (examined % 5 == 0 || examined == media.Count)
+                if (examined % 25 == 0 || examined == media.Count)
                 {
                     progress?.Report(new ClipImportProgress
                     {
@@ -300,8 +308,8 @@ public sealed class ClipStorage
                         Imported = imported, AlreadyIndexed = already,
                         Ignored = skipped, Failed = failed
                     });
-                    if (examined % 20 == 0)
-                        await Task.Delay(15, cancellationToken);
+                    if (examined % 100 == 0)
+                        await Task.Delay(25, cancellationToken);
                 }
             }
             return new ClipImportSummary
@@ -310,7 +318,17 @@ public sealed class ClipStorage
                 AlreadyIndexed = already, Ignored = skipped, Failed = failed
             };
         }
-        finally { _scanGate.Release(); }
+        finally
+        {
+            // Bound metadata writes while processing huge libraries and save
+            // partial progress even when the user cancels to resume gameplay.
+            try
+            {
+                lock (_lock)
+                    if (_unflushedImportedEntries > 0) SaveIndexLocked();
+            }
+            finally { _scanGate.Release(); }
+        }
     }
 
     public async Task RescanMediaFolderAsync(string originalsDir,
@@ -494,7 +512,11 @@ public sealed class ClipStorage
         }
     }
 
-    private void SaveIndexLocked() => SaveJsonAtomic(_metadataFile, _clips);
+    private void SaveIndexLocked()
+    {
+        SaveJsonAtomic(_metadataFile, _clips);
+        _unflushedImportedEntries = 0;
+    }
 
     private void SaveSourcesLocked() => SaveJsonAtomic(_sourcesFile,
         new SourcesState
