@@ -297,7 +297,7 @@ public class MediaProber
             "-movflags", "+faststart", temp
         }) psi.ArgumentList.Add(value);
 
-        using var process = new Process { StartInfo = psi };
+        using var process = new System.Diagnostics.Process { StartInfo = psi };
         using var job = new JobObject();
         using var maxTime = new CancellationTokenSource(TimeSpan.FromSeconds(90));
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(
