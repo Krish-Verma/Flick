@@ -125,4 +125,65 @@ public class IntegrationTests
         Assert.Equal("h264", exportProbe.VideoCodec);
         Assert.Single(exportProbe.AudioTracks); // Exactly 1 mixed stereo track for Discord share
     }
+    // A save immediately after another must NEVER relabel an old MKV.
+    // This hardware test also catches OBS paths that are not finalized yet.
+    [HardwareFact]
+    public async Task TestBackToBackReplaySavesAreDistinctAndImmutable()
+    {
+        var settings = AppSettings.CreateDefault();
+        settings.ReplayDurationSeconds = 5;
+        settings.EnableMicrophone = false;
+        settings.OriginalsFolder = Path.Combine(
+            Environment.GetEnvironmentVariable("FLICK_TEST_OUTPUT_DIR")
+                ?? Path.Combine(Path.GetTempPath(), "Flick-HardwareTests"), "RapidSaves");
+        Directory.CreateDirectory(settings.OriginalsFolder);
+        using var client = new CaptureHostClient();
+        client.Start();
+        Assert.True(await client.StartCaptureAsync(settings));
+        await Task.Delay(TimeSpan.FromSeconds(6));
+
+        async Task<string> SaveOnceAsync(string id)
+        {
+            var complete = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+            void Handler(string observedId, string path)
+            {
+                if (observedId == id) complete.TrySetResult(path);
+            }
+            client.ReplaySaved += Handler;
+            try
+            {
+                Assert.True(await client.SaveReplayAsync(id), "OBS rejected replay save request: " + id);
+                var winningTask = await Task.WhenAny(complete.Task, Task.Delay(15000));
+                Assert.Equal(complete.Task, winningTask);
+                var path = await complete.Task;
+                Assert.True(File.Exists(path), "Completed save path does not exist");
+                Assert.True(new FileInfo(path).Length > 1024);
+                return path;
+            }
+            finally
+            {
+                client.ReplaySaved -= Handler;
+            }
+        }
+
+        try
+        {
+            string first = await SaveOnceAsync("first_" + Guid.NewGuid().ToString("N"));
+            byte[] digest;
+            using (var firstStream = File.OpenRead(first))
+                digest = System.Security.Cryptography.SHA256.HashData(firstStream);
+            string second = await SaveOnceAsync("second_" + Guid.NewGuid().ToString("N"));
+            Assert.NotEqual(first, second);
+            Assert.True(File.Exists(first));
+            Assert.True(File.Exists(second));
+            using var afterSecond = File.OpenRead(first);
+            Assert.Equal(digest, System.Security.Cryptography.SHA256.HashData(afterSecond));
+        }
+        finally
+        {
+            await client.ShutdownAsync();
+        }
+    }
+
+
 }

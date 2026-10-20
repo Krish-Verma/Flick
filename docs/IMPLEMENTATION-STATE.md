@@ -1,3 +1,5 @@
+> **Follow-up stabilization active:** The “backend qualification complete” status below applied to the prior hardware revision only. New native save-correlation and lightweight UX settings are unqualified on hardware until AntiGravity reruns. PR remains draft; no new release. See [current acceptance handoff](ANTIGRAVITY-VALIDATION-HANDOFF.md).
+
 # LocalClip / Flick Implementation State
 
 **Repository:** `Krish-Verma/Flick`  

@@ -4,7 +4,7 @@
 
 Flick is a **free, open-source Windows gameplay clipper** in development. The goal is simple: save the moments you care about, make quick edits, and share them without a heavyweight background application.
 
-We are building Flick for people who want a fast, dependable alternative to bloated gameplay recording tools—with transparency and performance as first-class priorities.
+We are building Flick for people who want a fast, dependable alternative to bloated gameplay recording tools—with transparency and performance as first-class priorities.\n\nCurrent development also includes adjustable 15–120s replay duration, three practical NVENC quality presets, microphone opt-in, user-controlled hotkeys and clip folder, optional Windows startup/tray launch, and custom share-size limits. Recording **never starts automatically**, even when Flick launches with Windows.
 
 > [!WARNING]
 > **In active development — not ready for everyday or public release use.** The current code and `v1.0.0` archives are experimental and predate final hardware acceptance. Please don't treat a successful CI build as proof that recording, audio, exporting, or installation works on every PC.

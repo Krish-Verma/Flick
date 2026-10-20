@@ -1,3 +1,5 @@
+> **Follow-up qualification pending.** The results below are historical evidence from commit `42a584f`, before replay-save integrity changes and new settings/UX. They must be rerun on real Windows GPU hardware. Hosted CI cannot prove gameplay motion, mic audibility, Discord drag/paste, or soaks; see [validation handoff](ANTIGRAVITY-VALIDATION-HANDOFF.md).
+
 # LocalClip / Flick Technical Test Results and Hardware Qualification
 
 **Branch:** `fix/backend-stability-and-ci-20261019`  

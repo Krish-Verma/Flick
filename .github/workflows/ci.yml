@@ -29,6 +29,15 @@ jobs:
           dotnet-version: '10.0.402'
       - name: Restore solution
         run: dotnet restore LocalClip.slnx
+      - name: Validate PowerShell script syntax
+        shell: pwsh
+        run: |
+          Get-ChildItem scripts -Filter '*.ps1' | ForEach-Object {
+            $tokens = $null
+            $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile($_.FullName, [ref]$tokens, [ref]$errors) | Out-Null
+            if ($errors.Count -gt 0) { throw "PowerShell syntax failed: $($_.Name) — $errors" }
+          }
       - name: Build solution (Release)
         run: dotnet build LocalClip.slnx --configuration Release --no-restore --warnaserror
       - name: Run hardware-independent tests

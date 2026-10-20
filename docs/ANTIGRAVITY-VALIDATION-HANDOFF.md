@@ -63,3 +63,17 @@
 - Settings acceptance: 15–120 second duration, Light 720p30/Balanced 1080p30/Smooth 1080p60 NVENC presets, bounded 256 MiB compressed replay budget warning, microphone opt-in, configurable hotkeys, saved clips folder, optional HKCU per-user Run on sign-in and tray launch. All Windows logins and manual app launches must start with **capture disarmed**. Prove Settings Cancel and Restore Defaults do not edit existing clips or write a startup entry.
 - Use `scripts/check_motion.ps1 -Original <MKV> -Export <MP4>` on a genuine moving gameplay recording, then WATCH the originals and exports; check audio by LISTENING. An 854 KB 29-second 1080p export may be static; full decode alone is not visual-quality proof.
 - Confirm native GitHub CI build success and run actual host/hardware tests separately. Do not equate CI compile or unit tests to GPU verification. Keep PR draft until owner approval.
+
+
+## Third-pass user-flow acceptance: NOT complete until hardware rerun
+
+Follow-up commits added the replay-save correlation hardening, real capture-quality settings, optional per-user Windows startup, mic opt-in and migration, stable custom Discord size cap, working tray launch, player fallback, hotkeys, source validation and a back-to-back rapid-save test. **The previous 45/45 report predates these changes.** Do not reuse those test results as current acceptance evidence.
+
+Mandatory acceptance must demonstrate, with raw logs and playable media:
+- `scripts/run_tests.ps1 -Hardware` now exercises **seven** live hardware cases including distinct rapid consecutive saves. Explicitly select an allowed mic test input and prove **combined, system and mic** streams really contain expected independent sounds; a stream existing is not proof of audible signal.
+- Real moving game footage, not a static desktop. Run `scripts/check_motion.ps1 -Original ... -Export ...` and visually compare the entire original versus MP4 for black frames, freezing, severe artifacts, motion quality and audio/video sync; an unusually small output needs explanation.
+- Open the FULL portable WPF GUI from an unrelated Unicode/spaces folder, confirm initial state Off and manual hotkeys, clip playback/seek (or Open Player), trim, audio controls, one-click export, real Windows file drag/copy into Discord composer. Actual Discord sending remains opt-in and is **not authorized**.
+- Settings: verify 15/30/60/120s buffer duration, Light/Balanced/Smooth profile switching, video dimensions/FPS/bitrate with NVENC only (no silent x264), optional mic, save folder, two custom hotkeys including conflicts, 20/50/100/custom MB presets, run-on-login opt in, minimize to tray, Cancel and Restore Defaults. Registry change must be under HKCU only. Capture always starts disarmed; Windows launch never arms it.
+- Replay save failure must not substitute a pre-existing clip. Check stale/missing get_last_replay, rapid saves, ID uniqueness, no overwrite, source window closed, stop during save, cleanup after faults and Unicode paths. Verify original file hashes unchanged by trimming/export.
+- GitHub CI now has a Windows native C++ compile job and a .NET+PowerShell syntax job. These are compiler checks, **not** a substitute for GPU, Discord, audio or installation tests.
+- Rerun 50/20 stress and manual soak tests after these changes and update PASS/FAIL/BLOCKED without invented results. Keep PR draft; no merge/release without owner consent.
