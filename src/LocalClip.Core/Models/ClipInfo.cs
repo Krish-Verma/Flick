@@ -38,7 +38,9 @@ public class ClipMetadata : INotifyPropertyChanged
     public string SourceLabel { get; set; } = "";
 
     [JsonIgnore]
-    public bool IsImported => SourceKind == "Imported";
+    public bool IsImported =>
+        string.Equals(SourceKind, "Imported", StringComparison.OrdinalIgnoreCase) ||
+        !string.IsNullOrWhiteSpace(ConnectedFolderId);
 
     [JsonIgnore]
     public bool IsAvailable => File.Exists(OriginalFilePath);
