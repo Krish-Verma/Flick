@@ -63,6 +63,40 @@ public sealed class ShareExportTargetsTests
     }
 
     [Fact]
+    public void OldExportDirectoryIsNotPresentedAsShareReadyAfterStorageChange()
+    {
+        string baseDir = Path.Combine(Path.GetTempPath(), "flick-share-" + Guid.NewGuid().ToString("N"));
+        string previous = Path.Combine(baseDir, "Old");
+        string current = Path.Combine(baseDir, "New");
+        Directory.CreateDirectory(previous);
+        Directory.CreateDirectory(current);
+        var source = Path.Combine(baseDir, "original.mkv");
+        string output = Path.Combine(previous, ShareExportNaming.ForOriginal(source, 20));
+        try
+        {
+            File.WriteAllBytes(output, new byte[4096]);
+            var clip = new ClipMetadata
+            {
+                OriginalFilePath = source,
+                DurationSeconds = 30,
+                TrimEndSeconds = 30,
+                ExportedFilePath = output,
+                ExportedFileSizeBytes = 4096,
+                IsExportReady = true
+            };
+            clip.LastExportFingerprint = ExportFingerprint.Compute(source, 0, 30, clip.AudioTracks, 20);
+
+            Assert.True(ReadyShareFile.TryGet(clip, 20, out _, previous));
+            Assert.False(ReadyShareFile.TryGet(clip, 20, out _, current));
+            Assert.True(File.Exists(output)); // Invalidation never deletes valid older export.
+        }
+        finally
+        {
+            try { Directory.Delete(baseDir, recursive: true); } catch { }
+        }
+    }
+
+    [Fact]
     public void SharePathMustBeMP4RatherThanAnOriginalOrOtherFormat()
     {
         var clip = new ClipMetadata

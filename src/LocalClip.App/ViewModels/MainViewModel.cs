@@ -274,7 +274,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
     {
         path = "";
         return !IsExporting && IsExportReady &&
-               ReadyShareFile.TryGet(SelectedClip, TargetSizeMb, out path) &&
+               ReadyShareFile.TryGet(SelectedClip, TargetSizeMb, out path, _settings.ExportsFolder) &&
                string.Equals(path, ReadyExportFilePath, StringComparison.OrdinalIgnoreCase);
     }
 
@@ -879,7 +879,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
             _ = EnsureSelectedThumbnailAsync(SelectedClip);
 
         // A Ready tile requires both the matching current edits and actual MP4 bytes.
-        if (ReadyShareFile.TryGet(SelectedClip, TargetSizeMb, out var ready))
+        if (ReadyShareFile.TryGet(SelectedClip, TargetSizeMb, out var ready, _settings.ExportsFolder))
         {
             IsExportReady = true;
             ReadyExportFilePath = ready;
@@ -975,7 +975,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
                     _targetSizeMb == snapshot.DiscordTargetSizeMb)
                 {
                     ReadyExportFilePath = result.ExportFilePath;
-                    IsExportReady = ReadyShareFile.TryGet(clip, TargetSizeMb, out _);
+                    IsExportReady = ReadyShareFile.TryGet(clip, TargetSizeMb, out _, _settings.ExportsFolder);
                     ExportProgress = 100;
                     ExportStatusMessage = IsExportReady
                         ? $"Ready to Drag Into Discord · {mb:F2} MB"

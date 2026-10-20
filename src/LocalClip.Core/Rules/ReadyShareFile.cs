@@ -10,7 +10,8 @@ namespace LocalClip.Core.Rules;
 /// </summary>
 public static class ReadyShareFile
 {
-    public static bool TryGet(ClipMetadata? selected, int targetMb, out string path)
+    public static bool TryGet(ClipMetadata? selected, int targetMb, out string path,
+        string? expectedExportDirectory = null)
     {
         path = "";
         if (selected is null || !selected.IsExportReady ||
@@ -21,6 +22,18 @@ public static class ReadyShareFile
 
         try
         {
+            // A storage preference change cannot leave an old-folder MP4
+            // presented as Ready in the currently selected destination.
+            if (expectedExportDirectory != null)
+            {
+                string expected = Path.TrimEndingDirectorySeparator(
+                    Path.GetFullPath(expectedExportDirectory));
+                string actual = Path.TrimEndingDirectorySeparator(
+                    Path.GetFullPath(Path.GetDirectoryName(selected.ExportedFilePath)!));
+                if (!string.Equals(expected, actual, StringComparison.OrdinalIgnoreCase))
+                    return false;
+            }
+
             // A legacy same-name export may have been overwritten by a
             // different linked clip. Keep it on disk but require re-export.
             if (!string.Equals(Path.GetFileName(selected.ExportedFilePath),
