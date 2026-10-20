@@ -23,7 +23,7 @@
                            Text="{Binding Detail, ElementName=Root}"
                            TextTrimming="CharacterEllipsis" TextWrapping="NoWrap"/>
             </StackPanel>
-            <Path Grid.Column="2" Data="M 2,9 L 7,14 L 16,4"
+            <Path x:Name="ResultGlyph" Grid.Column="2" Data="M 2,9 L 7,14 L 16,4"
                   Stroke="{DynamicResource Flick.Brush.Success}"
                   StrokeThickness="2" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"
                   Width="16" Height="18" Stretch="Uniform"

@@ -1,0 +1,17 @@
+<Window x:Class="LocalClip.App.Views.ToastOverlayWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:components="clr-namespace:LocalClip.App.Views.Components"
+        Title="Flick Notification" Width="294" Height="80"
+        WindowStyle="None" ResizeMode="NoResize"
+        AllowsTransparency="True" Background="Transparent"
+        Topmost="True" ShowActivated="False"
+        ShowInTaskbar="False" Focusable="False"
+        IsHitTestVisible="False"
+        UseLayoutRounding="True" SnapsToDevicePixels="True">
+    <!-- Noninteractive, briefly shown on a successful saved/registered clip. -->
+    <Grid Margin="8" IsHitTestVisible="False">
+        <components:FlickClipToast x:Name="NotificationBody"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
+    </Grid>
+</Window>
