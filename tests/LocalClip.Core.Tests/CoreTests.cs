@@ -181,4 +181,20 @@ public class CoreTests
         Assert.Equal(250_000_000L, budget.TargetBytes);
     }
 
+    [Fact]
+    public void TestSmallAudioOrTrimEditCannotReuseOutdatedExport()
+    {
+        var tracks = new List<AudioTrackInfo>
+        {
+            new() { StreamIndex = 1, TrackIndex = 0, Gain = 1.0 }
+        };
+        var baseFingerprint = ExportFingerprint.Compute("clip.mkv", 0.0, 30.0, tracks, 20);
+        tracks[0].Gain = 1.004;
+        Assert.NotEqual(baseFingerprint,
+            ExportFingerprint.Compute("clip.mkv", 0.0, 30.0, tracks, 20));
+        tracks[0].Gain = 1.0;
+        Assert.NotEqual(baseFingerprint,
+            ExportFingerprint.Compute("clip.mkv", 0.0004, 30.0, tracks, 20));
+    }
+
 }
