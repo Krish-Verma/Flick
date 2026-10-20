@@ -16,10 +16,10 @@ Flick stores settings and metadata under `%LOCALAPPDATA%\LocalClip`; originals a
 2. Choose a specific monitor or game window in the target dropdown. Click **Start Replay**, or press **Ctrl+Shift+F9** (configurable).
 3. Play normally while Flick fills a bounded replay buffer. The UI displays an **estimated** buffered duration; a 256 MiB compressed packet limit can shorten a high-bitrate, long clip.
 4. When you want to capture a moment, press **Ctrl+Shift+F8**, or click **Save Last 30 Seconds** (or your configured duration). Flick saves the recent replay to an MKV original with a unique filename; subsequent saves do not intentionally replace old originals. Saving does **not** stop ongoing replay capture.
-5. Select your saved recording in the gallery. Play/seek, rename, search, open its folder or explicitly delete it. Choose **Open Player** if Windows cannot preview MKV in its built-in MediaElement.
-6. Adjust **Trim Start / End** and the recorded audio tracks' **Mute / Gain** values. These are saved edit decisions; the MKV original is unchanged. The editor's original playback may not reflect the export mix until you export.
+5. Select your saved recording in **Your Clips**. The player opens the **Original** without autoplaying. Use **Play/Pause**, the seek slider or its arrow keys, and the small **Original / Export Preview** dropdown. If Windows cannot decode the MKV, click **Create Local Preview** for an explicitly requested, bounded H.264 MP4, or **Open in External Player**. Originals are never changed by preview generation.
+6. Use the **single Trim Clip timeline** to adjust both endpoints with drag handles, Tab/arrow keys (0.1s), Ctrl+arrow (1s), or precise Start/End fields in seconds or M:SS.ff. Click **Reset** to select the full clip; the minimum segment is 0.25s. Expand **Export Audio** to mute, adjust gain (0–200%) or Reset Mix. Trims persist after handle release, and audio changes save after a short pause. The original recording stays unchanged.
 7. Pick **20 MB**, **50 MB**, **100 MB**, or an editable **Custom 1–250 MB** target. Click **Export for Discord**. Flick makes a new H.264/stereo AAC MP4, verifies its duration, size cap and decode, and keeps the MKV original intact.
-8. Click **Export MP4** in the player to preview the share copy and its audio mix. Then drag the ready file into the Discord desktop composer or use **Copy File** and paste (where supported). **Flick does not automatically send a message.**
+8. Choose **Export Preview** in the player dropdown to watch and listen to the ready share file, including the applied trim/audio mix. Changing a trim or gain makes that exported preview stale until you export again. Drag the validated MP4 into Discord or use **Copy File** and paste. **Flick never automatically sends the file.**
 9. Click **Stop Replay** to release the encoder, or quit Flick through the tray menu to stop all owned helpers. Closing the window hides it to the tray; minimizing is not the same as stopping capture.
 
 ## 3. Small, useful settings
@@ -60,6 +60,16 @@ The new compact capture bar is available at the top of the window. When replay i
 
 Changing capture source while recording asks for confirmation because it discards the current unsaved buffer. Declining retains the previous target. Closing Flick hides its window but does **not** stop replay; choose Stop Replay or Quit Flick explicitly.
 
+### Clip Editor and Non-Destructive Edits
+
+The editor is a compact workflow: clip title, player, transport, a single trim timeline and collapsed **Export Audio** section. The Discord export dock remains accessible below the scrollable player and editing tools.
+
+Trim handles support keyboard focus. The handles accept Left/Right (0.1s), Ctrl+Left/Right (1s), Home and End. Start and End fields accept decimal seconds, `M:SS.ff`, or `H:MM:SS.ff`, and reject invalid ranges. Each edit invalidates the previously marked-ready share file without changing the original. A selected 30s clip can be trimmed precisely to any valid segment of at least a quarter second.
+
+Expanding **Export Audio** shows only actual tracks present in the recorded or imported source, not invented individual game/Discord channels. Mute is independent of gain. Reset Mix restores the appropriate conservative defaults and preserves the original. Audio edits are debounced for lightweight indexing while still invalidating a stale export immediately.
+
+The player stops its decoding work when Flick is hidden to the tray or a new gameplay capture begins, to keep resource use low. A codec compatibility preview exists solely under Flick's local cache; it is not a new original or a Discord-ready export and is never uploaded.
+
 ## 3.1 Import Clips From Other Recording Apps
 
 Click **+ Import Folder** in **Your Clips**, or **Settings → Connected Clip Folders → Manage Folders**. Select the folder containing videos from SteelSeries, OBS, NVIDIA or another local recorder. Confirm the folder link. Flick scans supported **MP4 and MKV** files and indexes them **in place**; the original file stays exactly where it was. Use **Include Subfolders** to include clips in game-specific subdirectories.
@@ -77,7 +87,9 @@ Right-click a clip for contextual options. Choosing **Remove** on an imported cl
 - **No video captured:** Confirm replay is manually armed, the correct target is selected, and the NVIDIA hardware encoder is available. Closing the selected window must not silently fall back to a monitor.
 - **Clip is shorter than selected duration:** Replay duration is bounded by capture startup time, keyframe boundaries and the 256 MiB compressed buffer. Try Balanced or Light, or shorten the requested replay.
 - **Audio sounds doubled:** Use the dedicated system/mic tracks for export; don't mix the combined preview track with its source tracks. Check headset monitoring if mic sound is already in system audio.
-- **MKV playback fails:** Use the **Open Player** fallback, then preview the exported H.264/AAC MP4.
+- **MKV playback fails:** Use **Create Local Preview** to make a temporary compatible MP4 **only when requested** (maximum first 180 seconds of a long imported recording, maximum 120 MB, and 90-second worker timeout). If a remuxed preview still fails, try **Try Compatible Preview** for an explicit reencode; otherwise use **Open in External Player**. Conversion does not run during active replay or exporting.
+- **Audio mix preview differs from original:** Original playback is untouched. After editing, export a new MP4 and choose **Export Preview** to hear the actual share mix.
+- **Editing controls disabled:** Trim and audio controls require an available clip; they are disabled during export or if the original is offline.
 - **Hotkey unavailable:** Choose a different combination in Settings; Windows may reserve shortcuts used by another program.
 - **Export unavailable:** Review the file cap, selected trim, storage space and encoder. Invalid exports must not be marked Ready.
 - **Discord upload fails:** Drag a fully validated MP4; use a smaller file-size cap if your Discord account or destination allows less.
