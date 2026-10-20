@@ -27,6 +27,7 @@ public partial class MainWindow : Window
     private System.Windows.Forms.ToolStripMenuItem? _trayReplayItem;
     private System.Windows.Forms.ToolStripMenuItem? _traySaveItem;
     private System.Drawing.Icon? _trayBrandIcon;
+    private bool _ownsTrayBrandIcon;
     private readonly FlickNotificationService _notificationService;
     private bool _trayHintShown;
     private readonly DispatcherTimer _playerTimer;
@@ -126,7 +127,12 @@ public partial class MainWindow : Window
             using var stream = asset.Stream;
             using var bitmap = new System.Drawing.Bitmap(stream);
             IntPtr native = bitmap.GetHicon();
-            try { return (System.Drawing.Icon)System.Drawing.Icon.FromHandle(native).Clone(); }
+            try
+            {
+                var copy = (System.Drawing.Icon)System.Drawing.Icon.FromHandle(native).Clone();
+                _ownsTrayBrandIcon = true;
+                return copy;
+            }
             finally { _ = DestroyIcon(native); }
         }
         catch
@@ -305,8 +311,8 @@ public partial class MainWindow : Window
             _notifyIcon.Dispose();
             _notifyIcon = null;
         }
-        if (_trayBrandIcon != null && !ReferenceEquals(_trayBrandIcon, System.Drawing.SystemIcons.Application))
-            _trayBrandIcon.Dispose();
+        if (_ownsTrayBrandIcon)
+            _trayBrandIcon?.Dispose();
         _vm.Dispose();
     }
 
@@ -368,8 +374,16 @@ public partial class MainWindow : Window
 
     private async System.Threading.Tasks.Task StopCaptureForMicPrivacyAsync()
     {
-        await _vm.StopCaptureAsync();
-        _vm.StatusDetails = "Microphone disabled and capture stopped. Manually start replay when ready.";
+        try
+        {
+            await _vm.StopCaptureAsync();
+            _vm.StatusDetails = "Microphone disabled and capture stopped. Manually start replay when ready.";
+        }
+        catch (Exception ex)
+        {
+            _vm.StatusDetails = "Couldn't stop the capture worker to release the microphone: " +
+                                ex.Message + ". Quit Flick if the input remains active.";
+        }
     }
 
     // Gallery Handlers
