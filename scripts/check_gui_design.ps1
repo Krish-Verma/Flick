@@ -54,6 +54,10 @@ foreach ($match in $refs) {
     if (-not $keys.ContainsKey($key)) { throw "Reference to unknown Flick token: $key" }
 }
 
+$project = Get-Content -LiteralPath (Join-Path $root "src/LocalClip.App/LocalClip.App.csproj") -Raw
+if ($project -notlike '*<Resource Include="Assets\Brand\FlickLogo.png"*') {
+    throw "The logo must be embedded as a WPF Resource for portable distribution."
+}
 $logo = Join-Path $root "src/LocalClip.App/Assets/Brand/FlickLogo.png"
 if (-not (Test-Path -LiteralPath $logo -PathType Leaf)) { throw "Flick full-logo image missing" }
 $bytes = [System.IO.File]::ReadAllBytes($logo)
