@@ -244,8 +244,14 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
         set
         {
             if (!ShareExportTargets.IsValid(value) || _targetSizeMb == value) return;
+            int previous = _settings.DiscordTargetSizeMb;
             _settings.DiscordTargetSizeMb = value;
-            _settings.Save();
+            try { _settings.Save(); }
+            catch
+            {
+                _settings.DiscordTargetSizeMb = previous;
+                throw;
+            }
             _targetSizeMb = value;
             OnPropertyChanged();
             OnSelectedClipChanged();

@@ -949,7 +949,11 @@ public partial class MainWindow : Window
 
     private async void BtnExport_Click(object sender, RoutedEventArgs e)
     {
-        await _vm.ExportForDiscordAsync();
+        CancelPendingPreview();
+        SuspendPlayback(clearSource: true);
+        var operation = _vm.ExportForDiscordAsync();
+        UpdateSharePresetSelection(); // Disable size switching as soon as export starts.
+        await operation;
         UpdateSharePresetSelection();
     }
 
