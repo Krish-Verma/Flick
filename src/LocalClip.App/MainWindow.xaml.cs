@@ -279,14 +279,16 @@ public partial class MainWindow : Window
             double dur = VideoPlayer.NaturalDuration.TimeSpan.TotalSeconds;
             PlayerSlider.Maximum = dur;
 
-            if (_vm.SelectedClip != null)
+            // Never replace ORIGINAL trim bounds with the (shorter) export length.
+            if (_vm.SelectedClip != null &&
+                string.Equals(VideoPlayer.Source?.LocalPath, _vm.SelectedClip.OriginalFilePath,
+                    StringComparison.OrdinalIgnoreCase))
             {
-                SliderTrimStart.Maximum = dur;
-                SliderTrimEnd.Maximum = dur;
+                double originalDuration = _vm.SelectedClip.DurationSeconds;
+                SliderTrimStart.Maximum = originalDuration;
+                SliderTrimEnd.Maximum = originalDuration;
                 if (_vm.SelectedClip.TrimEndSeconds <= 0.0)
-                {
-                    _vm.SelectedClip.TrimEndSeconds = dur;
-                }
+                    _vm.SelectedClip.TrimEndSeconds = originalDuration;
             }
         }
         _playerTimer.Start();
