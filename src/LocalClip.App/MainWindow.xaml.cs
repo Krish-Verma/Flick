@@ -13,6 +13,8 @@ using Color = System.Windows.Media.Color;
 using LocalClip.App.Hotkeys;
 using LocalClip.App.ViewModels;
 using LocalClip.App.Views;
+using LocalClip.App.Services;
+using System.Runtime.InteropServices;
 using LocalClip.Core.Models;
 
 namespace LocalClip.App;
@@ -22,6 +24,11 @@ public partial class MainWindow : Window
     private readonly MainViewModel _vm;
     private readonly HotkeyManager _hotkeyManager;
     private System.Windows.Forms.NotifyIcon? _notifyIcon;
+    private System.Windows.Forms.ToolStripMenuItem? _trayReplayItem;
+    private System.Windows.Forms.ToolStripMenuItem? _traySaveItem;
+    private System.Drawing.Icon? _trayBrandIcon;
+    private readonly FlickNotificationService _notificationService;
+    private bool _trayHintShown;
     private readonly DispatcherTimer _playerTimer;
     private bool _isDraggingSlider = false;
     private bool _isRealClosing = false;
@@ -31,6 +38,9 @@ public partial class MainWindow : Window
         InitializeComponent();
         _vm = new MainViewModel();
         DataContext = _vm;
+        _notificationService = new FlickNotificationService(Dispatcher);
+        _vm.ClipSavedConfirmed += OnClipSavedConfirmed;
+        _vm.ReplaySaveFailed += OnReplaySaveFailed;
 
         _hotkeyManager = new HotkeyManager();
         _hotkeyManager.OnCaptureToggleHotkeyPressed += async () => await _vm.ToggleCaptureAsync();
@@ -97,65 +107,159 @@ public partial class MainWindow : Window
                 _vm.Settings.Save();
             }
         }
-        BtnSaveReplay.Content = $"SAVE CLIP ({_vm.Settings.SaveReplayHotkey})";
+        BtnSaveReplay.ToolTip = $"Save a replay ({_vm.Settings.SaveReplayHotkey})";
+    }
+
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool DestroyIcon(IntPtr handle);
+
+    private System.Drawing.Icon CreateTrayIcon()
+    {
+        try
+        {
+            var asset = System.Windows.Application.GetResourceStream(
+                new Uri("pack://application:,,,/Assets/Brand/FlickLogo.png"));
+            if (asset == null) return System.Drawing.SystemIcons.Application;
+            using var stream = asset.Stream;
+            using var bitmap = new System.Drawing.Bitmap(stream);
+            IntPtr native = bitmap.GetHicon();
+            try { return (System.Drawing.Icon)System.Drawing.Icon.FromHandle(native).Clone(); }
+            finally { _ = DestroyIcon(native); }
+        }
+        catch
+        {
+            return System.Drawing.SystemIcons.Application;
+        }
     }
 
     private void SetupSystemTray()
     {
+        _trayBrandIcon = CreateTrayIcon();
         _notifyIcon = new System.Windows.Forms.NotifyIcon
         {
-            Icon = System.Drawing.SystemIcons.Application,
-            Text = "Flick - Manual Gameplay Clipper",
+            Icon = _trayBrandIcon,
+            Text = "Flick — Replay Off",
             Visible = true
         };
 
         var menu = new System.Windows.Forms.ContextMenuStrip();
-        menu.Items.Add("Open Flick", null, (s, e) => ShowAndRestoreWindow());
+        menu.Items.Add("Open Flick", null, (sender, args) =>
+            _ = Dispatcher.BeginInvoke(new Action(ShowAndRestoreWindow)));
         menu.Items.Add(new System.Windows.Forms.ToolStripSeparator());
-        menu.Items.Add("Start/Stop Replay", null, async (s, e) => await _vm.ToggleCaptureAsync());
-        menu.Items.Add("Save Replay Clip", null, async (s, e) => await _vm.SaveReplayAsync());
+
+        _trayReplayItem = new System.Windows.Forms.ToolStripMenuItem("Start Replay");
+        _trayReplayItem.Click += (sender, args) =>
+            _ = Dispatcher.BeginInvoke(new Action(async () => await _vm.ToggleCaptureAsync()));
+        menu.Items.Add(_trayReplayItem);
+
+        _traySaveItem = new System.Windows.Forms.ToolStripMenuItem("Save Last 30 Seconds")
+        {
+            Enabled = false
+        };
+        _traySaveItem.Click += (sender, args) =>
+            _ = Dispatcher.BeginInvoke(new Action(async () => await _vm.SaveReplayAsync()));
+        menu.Items.Add(_traySaveItem);
         menu.Items.Add(new System.Windows.Forms.ToolStripSeparator());
-        menu.Items.Add("Quit", null, (s, e) => RealQuit());
+
+        menu.Items.Add("Settings", null, (sender, args) =>
+            _ = Dispatcher.BeginInvoke(new Action(() => OpenSettings())));
+        menu.Items.Add("Quit Flick", null, (sender, args) =>
+            _ = Dispatcher.BeginInvoke(new Action(RealQuit)));
 
         _notifyIcon.ContextMenuStrip = menu;
-        _notifyIcon.DoubleClick += (s, e) => ShowAndRestoreWindow();
+        _notifyIcon.DoubleClick += (sender, args) =>
+            _ = Dispatcher.BeginInvoke(new Action(ShowAndRestoreWindow));
+    }
 
-        // Only report a confirmed saved file, from the UI dispatcher.
-        _vm.CaptureHost.ReplaySaved += (id, path) =>
-            Dispatcher.BeginInvoke(new Action(() =>
-            {
-                if (File.Exists(path))
-                    _notifyIcon?.ShowBalloonTip(2000, "Flick",
-                        $"Saved replay clip: {Path.GetFileName(path)}", System.Windows.Forms.ToolTipIcon.Info);
-            }));
+    private void OnClipSavedConfirmed(ClipMetadata clip)
+    {
+        if (_isRealClosing) return;
+        // Only the verified, indexed file produces a success indication.
+        try
+        {
+            _notificationService.NotifySaved(
+                clip.Title, clip.DurationSeconds,
+                _vm.Settings.ShowClipSavedOverlay,
+                _vm.Settings.PlayClipSavedSound);
+        }
+        catch (Exception)
+        {
+            // Nonessential overlays must never break capture or file persistence.
+            if (_vm.Settings.ShowClipSavedOverlay)
+                _notifyIcon?.ShowBalloonTip(1800, "Flick · Clip Saved",
+                    System.IO.Path.GetFileName(clip.OriginalFilePath),
+                    System.Windows.Forms.ToolTipIcon.Info);
+        }
+    }
+
+    private void OnReplaySaveFailed(string reason)
+    {
+        if (_isRealClosing) return;
+        try
+        {
+            _notificationService.NotifySaveFailed(reason, _vm.Settings.ShowClipSavedOverlay);
+        }
+        catch
+        {
+            // Real failure remains visible in the application's status bar.
+        }
     }
 
     private void UpdateStatusBadgeColor()
     {
-        if (_vm.CaptureStatus == "Armed")
+        string status = _vm.CaptureStatus;
+        bool ready = status == "Armed";
+        bool buffering = status == "Buffering";
+        bool active = ready || buffering;
+        bool transitional = status == "Starting" || status == "Stopping";
+        bool fault = status == "Faulted";
+
+        TxtCaptureStatus.Text = status switch
         {
-            StatusBadge.Background = new SolidColorBrush(Color.FromRgb(34, 197, 94)); // Green
-            BtnToggleCapture.Content = $"DISARM REPLAY ({_vm.Settings.CaptureToggleHotkey})";
-            BtnToggleCapture.Background = new SolidColorBrush(Color.FromRgb(220, 38, 38)); // Red
-        }
-        else if (_vm.CaptureStatus == "Buffering")
+            "Armed" => "Replay Ready",
+            "Buffering" => "Buffering Replay",
+            "Starting" => "Starting Replay",
+            "Stopping" => "Stopping Replay",
+            "Faulted" => "Capture Error",
+            "Paused" => "Replay Paused",
+            _ => "Replay Off"
+        };
+
+        var accent = (System.Windows.Media.Brush)FindResource("Flick.Brush.Accent");
+        var neutral = (System.Windows.Media.Brush)FindResource("Flick.Brush.TextMuted");
+        var green = (System.Windows.Media.Brush)FindResource("Flick.Brush.Success");
+        var amber = (System.Windows.Media.Brush)FindResource("Flick.Brush.Warning");
+        var danger = (System.Windows.Media.Brush)FindResource("Flick.Brush.Danger");
+        CaptureStateDot.Fill = ready ? green : buffering || transitional ? amber :
+            fault ? danger : neutral;
+        StatusBadge.Background = new SolidColorBrush(Color.FromArgb(225, 47, 38, 60));
+
+        BtnToggleCapture.Content = active || transitional ? "Stop Replay" : "Start Replay";
+        BtnToggleCapture.Style = (Style)FindResource(
+            active || transitional ? "Flick.Button.Secondary" : "Flick.Button.Primary");
+        BtnToggleCapture.IsEnabled = !transitional;
+        BtnToggleCapture.ToolTip = $"Toggle Replay ({_vm.Settings.CaptureToggleHotkey})";
+
+        string saveLabel = $"Save Last {_vm.Settings.ReplayDurationSeconds} Seconds";
+        BtnSaveReplay.Content = saveLabel;
+        BtnSaveReplay.ToolTip = $"Save a replay ({_vm.Settings.SaveReplayHotkey})";
+        BtnSaveReplay.IsEnabled = active;
+        BtnSaveReplay.Style = (Style)FindResource(
+            active ? "Flick.Button.Primary" : "Flick.Button.Secondary");
+
+        if (_trayReplayItem != null)
         {
-            StatusBadge.Background = new SolidColorBrush(Color.FromRgb(234, 179, 8)); // Yellow
-            BtnToggleCapture.Content = $"DISARM REPLAY ({_vm.Settings.CaptureToggleHotkey})";
-            BtnToggleCapture.Background = new SolidColorBrush(Color.FromRgb(220, 38, 38)); // Red
+            _trayReplayItem.Text = active || transitional ? "Stop Replay" : "Start Replay";
+            _trayReplayItem.Enabled = !transitional;
         }
-        else if (_vm.CaptureStatus == "Faulted")
+        if (_traySaveItem != null)
         {
-            StatusBadge.Background = new SolidColorBrush(Color.FromRgb(239, 68, 68)); // Red
-            BtnToggleCapture.Content = $"ARM REPLAY ({_vm.Settings.CaptureToggleHotkey})";
-            BtnToggleCapture.Background = new SolidColorBrush(Color.FromRgb(22, 163, 74)); // Green
+            _traySaveItem.Text = saveLabel;
+            _traySaveItem.Enabled = active;
         }
-        else
-        {
-            StatusBadge.Background = new SolidColorBrush(Color.FromRgb(63, 63, 70)); // Gray
-            BtnToggleCapture.Content = $"ARM REPLAY ({_vm.Settings.CaptureToggleHotkey})";
-            BtnToggleCapture.Background = new SolidColorBrush(Color.FromRgb(22, 163, 74)); // Green
-        }
+        if (_notifyIcon != null)
+            _notifyIcon.Text = $"Flick — {TxtCaptureStatus.Text}";
     }
 
     private void ShowAndRestoreWindow()
@@ -177,11 +281,20 @@ public partial class MainWindow : Window
         {
             e.Cancel = true;
             Hide();
-            _notifyIcon?.ShowBalloonTip(2000, "Flick", "Running in system tray. Right click tray icon to quit.", System.Windows.Forms.ToolTipIcon.Info);
+            if (!_trayHintShown)
+            {
+                _trayHintShown = true;
+                _notifyIcon?.ShowBalloonTip(1800, "Flick",
+                    "Still in the tray. Right-click Flick to stop replay or quit.",
+                    System.Windows.Forms.ToolTipIcon.Info);
+            }
             return;
         }
 
         _playerTimer.Stop();
+        _vm.ClipSavedConfirmed -= OnClipSavedConfirmed;
+        _vm.ReplaySaveFailed -= OnReplaySaveFailed;
+        _notificationService.Dispose();
         _hotkeyManager.Dispose();
         if (_notifyIcon != null)
         {
@@ -189,7 +302,14 @@ public partial class MainWindow : Window
             _notifyIcon.Dispose();
             _notifyIcon = null;
         }
+        if (_trayBrandIcon != null && !ReferenceEquals(_trayBrandIcon, System.Drawing.SystemIcons.Application))
+            _trayBrandIcon.Dispose();
         _vm.Dispose();
+    }
+
+    private void BtnNavClips_Click(object sender, RoutedEventArgs e)
+    {
+        TxtClipSearch.Focus();
     }
 
     // Top Bar Handlers
@@ -208,22 +328,37 @@ public partial class MainWindow : Window
         await _vm.RefreshTargetsAsync();
     }
 
-    private async void BtnSettings_Click(object sender, RoutedEventArgs e)
+    private void BtnSettings_Click(object sender, RoutedEventArgs e) => OpenSettings();
+
+    private void OpenSettings()
     {
-        if (_vm.CaptureStatus != "Off")
+        bool isCapturing = _vm.CaptureStatus == "Armed" ||
+                           _vm.CaptureStatus == "Buffering";
+        bool oldMic = _vm.Settings.EnableMicrophone;
+        var dialog = new SettingsWindow(_vm.Settings, isCapturing) { Owner = this };
+        dialog.PreviewNotificationRequested += (show, sound) =>
         {
-            if (MessageBox.Show("Recording settings require stopping the current replay buffer. Stop and open settings?",
-                "Flick settings", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
-                return;
-            await _vm.StopCaptureAsync();
-        }
-        var dlg = new SettingsWindow(_vm.Settings) { Owner = this };
-        if (dlg.ShowDialog() == true)
+            try { _notificationService.Preview(sound); } catch { }
+        };
+        if (dialog.ShowDialog() != true) return;
+
+        RegisterHotkeys();
+        UpdateStatusBadgeColor();
+        // Mic opt-out must release the device instead of leaving it open.
+        if (isCapturing && oldMic && !_vm.Settings.EnableMicrophone)
         {
-            RegisterHotkeys();
-            UpdateStatusBadgeColor();
-            _vm.StatusDetails = "Preferences saved. Replay capture remains disarmed until manually started.";
+            _ = StopCaptureForMicPrivacyAsync();
+            return;
         }
+        _vm.StatusDetails = isCapturing
+            ? "Preferences saved. New capture profile takes effect on the next manual replay start."
+            : "Preferences saved. Replay remains off until manually started.";
+    }
+
+    private async System.Threading.Tasks.Task StopCaptureForMicPrivacyAsync()
+    {
+        await _vm.StopCaptureAsync();
+        _vm.StatusDetails = "Microphone disabled and capture stopped. Manually start replay when ready.";
     }
 
     // Gallery Handlers
