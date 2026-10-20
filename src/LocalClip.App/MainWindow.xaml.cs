@@ -16,6 +16,7 @@ using LocalClip.App.Views;
 using LocalClip.App.Services;
 using System.Runtime.InteropServices;
 using LocalClip.Core.Models;
+using LocalClip.Core.Rules;
 using LocalClip.Core.Media;
 using LocalClip.App.Views.Components;
 using System.Threading;
