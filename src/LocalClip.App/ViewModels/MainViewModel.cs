@@ -575,8 +575,8 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
     public async Task<ClipImportSummary> ImportFolderAsync(
         string folderPath, bool includeSubfolders = true)
     {
-        if (CaptureActive)
-            throw new InvalidOperationException("Stop replay before importing. Your gameplay should take priority.");
+        if (CaptureActive || IsExporting)
+            throw new InvalidOperationException("Finish the active replay or export before importing. Gameplay and sharing take priority.");
         if (IsImporting)
             throw new InvalidOperationException("An import is already in progress.");
         var folder = _storage.ConnectFolder(folderPath, includeSubfolders);
@@ -586,8 +586,8 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
 
     public async Task<ClipImportSummary> RescanConnectedFolderAsync(string folderId)
     {
-        if (CaptureActive)
-            throw new InvalidOperationException("Stop replay before scanning external clips.");
+        if (CaptureActive || IsExporting)
+            throw new InvalidOperationException("Finish the active replay or export before scanning external clips.");
         if (IsImporting)
             throw new InvalidOperationException("A folder is already being scanned.");
 
@@ -642,9 +642,9 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
 
     public async Task RescanLibraryAsync()
     {
-        if (CaptureActive)
+        if (CaptureActive || IsExporting)
         {
-            StatusDetails = "Stop replay before a full library rescan. Capture has priority.";
+            StatusDetails = "Finish replay or export before a full library rescan.";
             return;
         }
         if (IsImporting)
@@ -811,6 +811,9 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
     public async Task ExportForDiscordAsync()
     {
         if (SelectedClip == null || IsExporting) return;
+        // Prioritize a user-requested share export over passive folder indexing.
+        _importCancellation?.Cancel();
+        _thumbnailCancellation?.Cancel();
 
         IsExporting = true;
         ExportProgress = 0.0;
