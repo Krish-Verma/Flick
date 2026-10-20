@@ -57,6 +57,12 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
     private ObservableCollection<ClipMetadata> _filteredClips = new();
     private ClipMetadata? _selectedClip;
     private string _searchQuery = "";
+    private string _clipSourceFilter = "All Clips";
+    private string _librarySummaryText = "0 Clips";
+    private string _importStatusText = "";
+    private bool _isImporting;
+    private CancellationTokenSource? _importCancellation;
+    private readonly ObservableCollection<ConnectedClipFolder> _connectedFolders = new();
 
     // Export & Sharing
     private int _targetSizeMb = 20;
@@ -75,6 +81,56 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
     // WPF shell supplies consent before an active source change discards replay.
     public Func<bool>? ConfirmTargetReset { get; set; }
     public CaptureHostClient CaptureHost => _captureHost;
+    public ObservableCollection<ConnectedClipFolder> ConnectedFolders => _connectedFolders;
+
+    public string ClipSourceFilter
+    {
+        get => _clipSourceFilter;
+        set
+        {
+            if (value != "All Clips" && value != "Flick" && value != "Imported") return;
+            if (_clipSourceFilter == value) return;
+            _clipSourceFilter = value;
+            OnPropertyChanged();
+            ApplyFilter();
+        }
+    }
+
+    public string LibrarySummaryText
+    {
+        get => _librarySummaryText;
+        private set { _librarySummaryText = value; OnPropertyChanged(); }
+    }
+
+    public string ImportStatusText
+    {
+        get => _importStatusText;
+        private set { _importStatusText = value; OnPropertyChanged(); }
+    }
+
+    public bool IsImporting
+    {
+        get => _isImporting;
+        private set { _isImporting = value; OnPropertyChanged(); }
+    }
+
+    private bool CaptureActive => CaptureStatus is "Starting" or "Buffering" or "Armed" or "Stopping";
+
+    public void RefreshConnectedFolders()
+    {
+        _connectedFolders.Clear();
+        foreach (var folder in _storage.GetConnectedFolders())
+            _connectedFolders.Add(folder);
+        UpdateLibrarySummary();
+    }
+
+    private void UpdateLibrarySummary()
+    {
+        int all = _storage.GetAllClips().Count;
+        int folders = _connectedFolders.Count;
+        LibrarySummaryText = $"{all} {(all == 1 ? "Clip" : "Clips")} · " +
+                             $"{folders} {(folders == 1 ? "Folder" : "Folders")}";
+    }
 
     public string CaptureStatus
     {
@@ -236,8 +292,11 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
         _pollTimer.Tick += OnPollTick;
         _pollTimer.Start();
 
-        // Load library
+        // Load library and user-authorized linked sources (no scanning on startup).
+        RefreshConnectedFolders();
         ReloadClips();
+        if (!string.IsNullOrWhiteSpace(_storage.LastLoadWarning))
+            StatusDetails = _storage.LastLoadWarning;
     }
 
     public async Task InitializeAsync()
@@ -335,6 +394,8 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
     public async Task StartCaptureAsync()
     {
         if (CaptureStatus == "Starting" || CaptureStatus == "Stopping") return;
+        // Never let folder indexing compete with the live gameplay encoder.
+        _importCancellation?.Cancel();
         CaptureStatus = "Starting";
         StatusDetails = "Initializing capture encoder and audio...";
         try
@@ -512,10 +573,116 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
         }
     }
 
+    public async Task<ClipImportSummary> ImportFolderAsync(
+        string folderPath, bool includeSubfolders = true)
+    {
+        if (CaptureActive)
+            throw new InvalidOperationException("Stop replay before importing. Your gameplay should take priority.");
+        if (IsImporting)
+            throw new InvalidOperationException("An import is already in progress.");
+        var folder = _storage.ConnectFolder(folderPath, includeSubfolders);
+        RefreshConnectedFolders();
+        return await RescanConnectedFolderAsync(folder.Id);
+    }
+
+    public async Task<ClipImportSummary> RescanConnectedFolderAsync(string folderId)
+    {
+        if (CaptureActive)
+            throw new InvalidOperationException("Stop replay before scanning external clips.");
+        if (IsImporting)
+            throw new InvalidOperationException("A folder is already being scanned.");
+
+        using var cancellation = new CancellationTokenSource();
+        _importCancellation = cancellation;
+        IsImporting = true;
+        ImportStatusText = "Finding Videos…";
+        var progress = new Progress<ClipImportProgress>(p =>
+        {
+            ImportStatusText = $"Checking {p.Examined:N0} of {p.TotalDiscovered:N0} Videos · " +
+                               $"{p.Imported:N0} Added · {p.Failed:N0} Unavailable";
+        });
+        try
+        {
+            var result = await _storage.ScanConnectedFolderAsync(
+                folderId, progress, cancellation.Token);
+            ImportStatusText = result.FolderUnavailable
+                ? "Folder Unavailable · Original videos and library entries were preserved."
+                : $"Complete · {result.Imported:N0} Added, " +
+                  $"{result.AlreadyIndexed:N0} Already Indexed, {result.Failed:N0} Unavailable";
+            return result;
+        }
+        catch (OperationCanceledException)
+        {
+            ImportStatusText = "Scan Cancelled · Already Indexed Clips Were Kept";
+            throw;
+        }
+        finally
+        {
+            _importCancellation = null;
+            IsImporting = false;
+            ReloadClips();
+            RefreshConnectedFolders();
+        }
+    }
+
+    public void CancelImport() => _importCancellation?.Cancel();
+
+    public bool RemoveConnectedFolder(string folderId)
+    {
+        if (IsImporting) throw new InvalidOperationException("Cancel the active scan first.");
+        var removed = _storage.DisconnectFolder(folderId);
+        if (removed)
+        {
+            ReloadClips();
+            RefreshConnectedFolders();
+            ImportStatusText = "Folder Unlinked · Source Videos Were Not Deleted";
+        }
+        return removed;
+    }
+
     public async Task RescanLibraryAsync()
     {
-        await _storage.RescanMediaFolderAsync(_settings.OriginalsFolder);
-        ReloadClips();
+        if (CaptureActive)
+        {
+            StatusDetails = "Stop replay before a full library rescan. Capture has priority.";
+            return;
+        }
+        if (IsImporting)
+        {
+            StatusDetails = "A library scan is already running.";
+            return;
+        }
+
+        try
+        {
+            await _storage.RescanMediaFolderAsync(_settings.OriginalsFolder);
+            foreach (var folder in _storage.GetConnectedFolders())
+            {
+                if (Directory.Exists(folder.Path))
+                    await RescanConnectedFolderAsync(folder.Id);
+            }
+            StatusDetails = "Library refreshed. Linked videos stay in their original folders.";
+        }
+        catch (OperationCanceledException)
+        {
+            StatusDetails = "Library rescan paused to prioritize gameplay.";
+        }
+        catch (Exception ex)
+        {
+            StatusDetails = "Couldn't refresh the library: " + ex.Message;
+        }
+        finally { ReloadClips(); }
+    }
+
+    public void OpenOriginalFolder()
+    {
+        string path = SelectedClip?.OriginalFilePath ?? _settings.OriginalsFolder;
+        if (File.Exists(path))
+            Process.Start(new ProcessStartInfo("explorer.exe", $"/select,\"{path}\"")
+            { UseShellExecute = true });
+        else if (Directory.Exists(_settings.OriginalsFolder))
+            Process.Start(new ProcessStartInfo(_settings.OriginalsFolder)
+            { UseShellExecute = true });
     }
 
     public void SaveClipEdits()
@@ -527,26 +694,34 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
 
     public void ReloadClips()
     {
+        string? selectedId = SelectedClip?.Id;
         _allClips.Clear();
-        foreach (var c in _storage.GetAllClips())
-        {
-            _allClips.Add(c);
-        }
+        foreach (var clip in _storage.GetAllClips())
+            _allClips.Add(clip);
         ApplyFilter();
+        if (selectedId != null)
+        {
+            var previous = _allClips.FirstOrDefault(c => c.Id == selectedId);
+            if (previous != null && SelectedClip?.Id != selectedId)
+                SelectedClip = previous;
+        }
+        UpdateLibrarySummary();
     }
 
     public void ApplyFilter()
     {
         FilteredClips.Clear();
-        var q = _searchQuery.Trim().ToLowerInvariant();
-        foreach (var c in _allClips)
+        var query = _searchQuery.Trim();
+        foreach (var clip in _allClips)
         {
-            if (string.IsNullOrEmpty(q) ||
-                c.Title.ToLowerInvariant().Contains(q) ||
-                c.TargetName.ToLowerInvariant().Contains(q))
-            {
-                FilteredClips.Add(c);
-            }
+            if (_clipSourceFilter == "Flick" && clip.IsImported) continue;
+            if (_clipSourceFilter == "Imported" && !clip.IsImported) continue;
+            if (query.Length != 0 &&
+                !clip.Title.Contains(query, StringComparison.OrdinalIgnoreCase) &&
+                !clip.TargetName.Contains(query, StringComparison.OrdinalIgnoreCase) &&
+                !clip.LibrarySource.Contains(query, StringComparison.OrdinalIgnoreCase))
+                continue;
+            FilteredClips.Add(clip);
         }
     }
 
@@ -555,6 +730,12 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
         if (SelectedClip == null)
         {
             InvalidateExportReady();
+            return;
+        }
+        if (!SelectedClip.IsAvailable)
+        {
+            InvalidateExportReady();
+            ExportStatusMessage = "Original Video Offline · Reconnect Its Folder";
             return;
         }
 
@@ -674,13 +855,31 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
     public void DeleteSelectedClip()
     {
         if (SelectedClip == null) return;
-        var r = MessageBox.Show($"Are you sure you want to delete '{SelectedClip.Title}'? The file will be sent to the Recycle Bin.", "Confirm Delete", MessageBoxButton.YesNo, MessageBoxImage.Question);
-        if (r == MessageBoxResult.Yes)
+        bool imported = SelectedClip.IsImported;
+        string question = imported
+            ? $"Remove '{SelectedClip.Title}' from Flick? The original video and any export will NOT be deleted. It will stay excluded from rescans until you unlink and reconnect its folder."
+            : $"Delete '{SelectedClip.Title}'? The original video will be sent to the Recycle Bin.";
+        var answer = MessageBox.Show(question,
+            imported ? "Remove From Library" : "Delete Original Video",
+            MessageBoxButton.YesNo, MessageBoxImage.Question);
+        if (answer != MessageBoxResult.Yes) return;
+        string id = SelectedClip.Id;
+        try
         {
-            string id = SelectedClip.Id;
-            _storage.DeleteClip(id);
+            if (!_storage.DeleteClip(id))
+            {
+                StatusDetails = "Couldn't remove this clip. The original was preserved.";
+                return;
+            }
+            SelectedClip = null;
             ReloadClips();
             SelectedClip = FilteredClips.FirstOrDefault();
+            StatusDetails = imported ? "Imported clip removed from library. Source file kept." :
+                "Original moved to the Recycle Bin.";
+        }
+        catch (Exception ex)
+        {
+            StatusDetails = "Couldn't change the library: " + ex.Message;
         }
     }
 
@@ -727,6 +926,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
 
     public void Dispose()
     {
+        _importCancellation?.Cancel();
         _pollTimer.Stop();
         _captureHost.Dispose();
         GC.SuppressFinalize(this);
