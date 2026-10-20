@@ -19,6 +19,5 @@ dist/LocalClip-*/
 
 # Pinned runtime binaries (can be extracted/restored via tools setup)
 tools/obs/runtime/
-tools/obs/include/
 tools/ffmpeg/*.exe
 tools/obs/*.cpp
