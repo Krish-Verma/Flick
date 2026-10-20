@@ -9,13 +9,13 @@
 
 ## UX changes
 
-- Existing editor reorganized as one scrollable content column (selected clip title, large dark 16:9 playback surface, compact transport, trim, collapsed audio) plus **sticky validated Discord export dock**. The clip library and compact capture controls remain functional.
+- Existing editor reorganized as one scrollable content column (selected clip title, large dark 16:9 playback surface, compact transport, trim, collapsed audio) plus **sticky validated Discord export dock**. The player adjusts to the available width at approximately 16:9, bounded between 220 and 460 DIPs rather than a fixed short strip. The clip library and compact capture controls remain functional.
 - Preview mode is a small contextual **Original / Export Preview** dropdown, with a separate external player escape hatch. Only a currently valid, verified MP4 is offered as Export Preview; any changed trim/audio target invalidates Ready and returns to Original.
 - Native Windows WPF `MediaElement` plays the original where supported, without adding a new media framework/process.
 - When native MKV playback fails, the user sees an actionable fallback: Open External Player or **Create Local Preview**. Only a real click starts an owned FFmpeg process; no background transcode is started for browsing clips.
 - Local Preview output is a separate cached MP4 under `%LOCALAPPDATA%/LocalClip/PreviewCache`, never the original or export directory. H.264 small originals may remux; otherwise explicitly bounded 540p H.264/AAC low-resource transcode. If remuxed MP4 fails too, an explicit **Try Compatible Preview** reencodes once.
 - Preview is limited to the **first 180 seconds** of a longer imported recording and a **120 MB file cap**, with 90-second deadline, cancellation, Job Object ownership, ffprobe verification and cache pruning on demand. Truncated local preview is labeled and must not be confused with the full immutable original. Live gameplay capture or export blocks preview encoding, and capture startup cancels an existing request.
-- Video decoding stops when Flick hides to tray or when capture starts to prioritize game performance; revisiting Clips restores the original source. No permanent preview worker, polling or shader is added.
+- Video decoding stops when Flick hides to tray or when capture starts to prioritize game performance; revisiting Clips restores the original source. Switching source/mode or hiding the app cancels a pending conversion before it can steal player focus. No permanent preview worker, polling or shader is added.
 
 ## Trim behavior
 
@@ -28,15 +28,15 @@
 ## Audio behavior
 
 - `Export Audio` is collapsed by default. Expansion shows only *actual* source tracks (no invented Game or Discord isolation) with Mute, 0–200% gain, current percentage and Reset Mix.
-- `AudioTrackInfo` supports `INotifyPropertyChanged` for mute/gain, so sliders and labels update together. The UI invalidates stale export status **immediately**, but persists edits after a bounded 450ms inactivity debounce, flushing when changing selected clips or quitting.
+- `AudioTrackInfo` supports `INotifyPropertyChanged` for mute/gain, so sliders and labels update together. Model event subscriptions detect genuine changes; merely expanding Audio must not invalidate Ready. The UI invalidates stale export status **immediately** on edit, but persists after a bounded 450ms inactivity debounce, flushing when changing selected clips or quitting.
 - Exported MP4 is the accurate way to listen to the new mix. **Original playback is not silently modified.** Clip selection does not overwrite other clips' audio state.
-- No additional audio processing while preview is paused. Source metadata is managed locally by the existing storage layer. The original combined-track duplication guard is retained.
+- No additional audio processing while preview is paused. Source metadata is managed locally by the existing storage layer. The original combined-track duplication guard is retained. Reset Mix enables only track 0 on unknown imported multi-track clips and excludes Flick's known combined track when native dedicated tracks exist.
 
 ## Design system and constraints
 
 - Uses Slice 1 graphite/frosted WPF tokens, Segoe typography, consistent spacing, compact controls, and Title Case. No new animation engine, webview, AI process or vendor account.
 - Keeps original capture source, Start/Stop and Save Last N Seconds hotkeys, tray feedback, local gallery/import/storage, and Discord drag/copy behavior.
-- Screen-width responsiveness relies on scrollable editor and 245 DIP preview pane; GUI must be reviewed for overflow at 1000x650 DIPs and scaling 100–200%. The export dock remains available at the bottom.
+- Screen-width responsiveness relies on a scrollable editor and a 16:9 width-derived player height with 220–460 DIP limits; GUI must be reviewed for overflow at 1000x650 DIPs and scaling 100–200%. The export dock remains available at the bottom.
 - `MediaProber` now contains the optional conversion worker; no native libobs recording changes.
 
 ## Testing
