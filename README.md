@@ -1,3 +1,5 @@
+> **Qualification status:** The original v1.0.0 release predates [backend stabilization PR #1](https://github.com/Krish-Verma/Flick/pull/1). It must not be treated as a validated public release. GitHub Windows CI runs the portable WPF/core build and hardware-independent tests; NVIDIA/OBS captures, Discord desktop integration, fresh-install and long soak acceptance still require the owner GPU machine. See [AntiGravity validation handoff](docs/ANTIGRAVITY-VALIDATION-HANDOFF.md).
+
 # Flick (LocalClip)
 
 **Flick** (also developed under the core codebase name **LocalClip**) is a lightweight, offline-first Windows 11 gameplay clipping application replicating the core workflow of SteelSeries Moments:
@@ -62,20 +64,16 @@ ClipMax/
 
 ### 1. Run All Automated Tests
 ```powershell
-$env:PATH = "C:\Users\krish\AppData\Local\Microsoft\dotnet;$env:PATH"
 dotnet test LocalClip.slnx
 ```
-*Expected: 41 Passed, 0 Failed, 0 Skipped (Duration ~1m).*
+*CI explicitly skips the six Windows GPU/hardware tests. Use `scripts/run_tests.ps1 -Hardware` on the owner PC to run them; never count skipped hardware tests as passing.*
 
 ### 2. Run the Application
 ```powershell
 $env:PATH = "C:\Users\krish\AppData\Local\Microsoft\dotnet;$env:PATH"
 dotnet run --project src\LocalClip.App\LocalClip.App.csproj
 ```
-Or launch the pre-compiled binary:
-```powershell
-.\dist\app\LocalClip.App.exe
-```
+The `dist/app` build output is generated locally, not committed. Build the release first or extract the existing release ZIP (which remains unqualified).
 
 ### 3. Build the Release Package & Installer
 ```powershell
@@ -102,8 +100,8 @@ This builds `LocalClip.CaptureHost.exe` (MinGW C++ with static runtime), publish
 ---
 
 ## Documentation Links
-- [User Guide](file:///d:/Documents/ClipMax/docs/USER-GUIDE.md)
-- [Architecture & Design](file:///d:/Documents/ClipMax/docs/ARCHITECTURE.md)
-- [Implementation State & Dependency Lock](file:///d:/Documents/ClipMax/docs/IMPLEMENTATION-STATE.md)
-- [Test Results & Acceptance Matrix](file:///d:/Documents/ClipMax/docs/TEST-RESULTS.md)
-- [Agent Handoff Guide](file:///d:/Documents/ClipMax/docs/AGENT-HANDOFF-GUIDE.md)
+- [User Guide](docs/USER-GUIDE.md)
+- [Architecture & Design](docs/ARCHITECTURE.md)
+- [Implementation State & Dependency Lock](docs/IMPLEMENTATION-STATE.md)
+- [Test Results & Acceptance Matrix](docs/TEST-RESULTS.md)
+- [Agent Handoff Guide](docs/AGENT-HANDOFF-GUIDE.md)

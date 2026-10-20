@@ -33,6 +33,14 @@ jobs:
         run: dotnet build LocalClip.slnx --configuration Release --no-restore --warnaserror
       - name: Run hardware-independent tests
         run: dotnet test LocalClip.slnx --configuration Release --no-build --logger "trx;LogFileName=Flick-Tests.trx" --results-directory TestResults
+      - name: Smoke-check self-contained Windows publish
+        run: dotnet publish src/LocalClip.App/LocalClip.App.csproj -c Release -r win-x64 --self-contained true -o publish-smoke --nologo
+      - name: Validate published app exists
+        shell: pwsh
+        run: |
+          if (-not (Test-Path publish-smoke/LocalClip.App.exe)) {
+            throw "Self-contained WPF publish did not create LocalClip.App.exe"
+          }
       - name: Publish test report
         if: always()
         uses: actions/upload-artifact@v4

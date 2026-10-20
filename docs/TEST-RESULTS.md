@@ -1,3 +1,5 @@
+> **Historical AntiGravity report, not an independently reproduced acceptance certification.** Results below describe the original October 14 build only. The stabilization branch changes behavior and packaging. GitHub Actions [initial CI run](https://github.com/Krish-Verma/Flick/actions/runs/39360862545) compiled WPF/Core successfully with **35 passed, 6 hardware skipped** (no GPU or OBS runtime verification). Subsequent commits must receive their own CI pass. Full acceptance, native build, Discord, 30s capture and soaks remain pending per [the validation handoff](ANTIGRAVITY-VALIDATION-HANDOFF.md).
+
 # LocalClip Test Results and Validation Evidence
 
 **Date:** October 14, 2026  

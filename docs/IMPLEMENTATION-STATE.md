@@ -1,3 +1,5 @@
+> **State note:** M0–M4 COMPLETE below records the previous agent's assertions for the original v1.0.0 build, not current acceptance status. The [backend stabilization PR](https://github.com/Krish-Verma/Flick/pull/1) is unmerged and requires native Windows/GPU tests before release qualification. See [validation handoff](ANTIGRAVITY-VALIDATION-HANDOFF.md).
+
 # LocalClip Implementation State
 
 **Repository Working Name:** LocalClip  
