@@ -60,7 +60,7 @@ public partial class MainWindow : Window
         if (_vm.Settings.StartMinimizedToTray ||
             Environment.GetCommandLineArgs().Any(a =>
                 a.Equals("--minimized", StringComparison.OrdinalIgnoreCase)))
-            Dispatcher.BeginInvoke(new Action(Hide));
+            _ = Dispatcher.BeginInvoke(new Action(Hide));
 
         // Wire CaptureStatus badge color updates
         _vm.PropertyChanged += (s, ev) =>
