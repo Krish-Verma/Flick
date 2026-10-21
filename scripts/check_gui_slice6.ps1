@@ -17,6 +17,8 @@ $toast = ReadSource "src/LocalClip.App/Services/FlickNotificationService.cs"
 $settings = ReadSource "src/LocalClip.App/Views/SettingsWindow.xaml"
 $folders = ReadSource "src/LocalClip.App/Views/ConnectedFoldersWindow.xaml"
 $tests = ReadSource "tests/LocalClip.Core.Tests/WorkspaceLayoutRulesTests.cs"
+$settingsModel = ReadSource "src/LocalClip.Core/Models/Settings.cs"
+$settingsDialogCode = ReadSource "src/LocalClip.App/Views/SettingsWindow.xaml.cs"
 
 # Every XAML involved must at minimum parse as well-formed XML.
 foreach ($relative in @(
@@ -62,6 +64,8 @@ Require $settings 'PanelStorage' "Storage settings vanished"
 Require $settings 'PanelGeneral' "General settings vanished"
 Require $settings 'PanelSharing' "Sharing settings vanished"
 Require $folders 'Connected Clip Folders' "Linked-folder management missing"
+Require $settingsModel 'RequiresExplicitSettingsSave' "Recovered settings must block incidental disk writes"
+Require $settingsDialogCode 'MarkExplicitSettingsSaveCompleted' "Only explicit Settings Save may accept recovery"
 
 # Contrast ratios measured directly from final named color tokens.
 [xml]$theme = ReadSource "src/LocalClip.App/Resources/Theme/Flick.Colors.xaml"
