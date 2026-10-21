@@ -48,6 +48,7 @@ public partial class MainWindow : Window
     private WorkspaceLayoutMode _layoutMode = WorkspaceLayoutMode.Split;
     private bool _layoutInitialized;
     private bool _compactShowingEditor;
+    private bool _initialLayoutApplied;
 
     public MainWindow()
     {
@@ -417,11 +418,13 @@ public partial class MainWindow : Window
     private void RefreshWorkspaceForSize()
     {
         if (!_layoutInitialized || ActualWidth <= 0) return;
+        bool firstDecision = !_initialLayoutApplied;
+        _initialLayoutApplied = true;
         var next = WorkspaceLayoutRules.Classify(ActualWidth);
         if (next == _layoutMode) return; // Avoid per-pixel layout churn while resizing.
         _layoutMode = next;
         if (next == WorkspaceLayoutMode.Compact)
-            _compactShowingEditor = _vm.SelectedClip != null;
+            _compactShowingEditor = !firstDecision && _vm.SelectedClip != null;
         ApplyWorkspaceLayout();
         UpdateStatusBadgeColor();
     }

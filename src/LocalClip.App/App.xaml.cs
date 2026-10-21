@@ -12,12 +12,14 @@ namespace LocalClip.App;
 public partial class App : System.Windows.Application
 {
     private static Mutex? _singleInstanceMutex;
+    private static bool _ownsSingleInstanceMutex;
     private FlickVisualPreferences? _visualPreferences;
 
     protected override void OnStartup(StartupEventArgs e)
     {
         const string mutexName = "LocalClip_SingleInstance_UserLock";
         _singleInstanceMutex = new Mutex(true, mutexName, out bool createdNew);
+        _ownsSingleInstanceMutex = createdNew;
 
         if (!createdNew)
         {
@@ -38,8 +40,9 @@ public partial class App : System.Windows.Application
     {
         _visualPreferences?.Dispose();
         _visualPreferences = null;
-        _singleInstanceMutex?.ReleaseMutex();
+        if (_ownsSingleInstanceMutex) _singleInstanceMutex?.ReleaseMutex();
         _singleInstanceMutex?.Dispose();
+        _ownsSingleInstanceMutex = false;
         _singleInstanceMutex = null;
         base.OnExit(e);
     }
