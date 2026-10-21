@@ -44,6 +44,11 @@ Require $main 'Flick\.Text\.Base' "Legacy implicit text styles must use shared d
 Require $main 'Flick\.Input\.Text' "Input template must use shared design system"
 Require $main 'Flick\.Button\.Secondary' "Legacy buttons must use shared controls"
 Require $main 'Flick\.VideoAspectHeight' "Responsive video aspect ratio lost"
+Require $main 'StatusBadge.*' "Capture status must stay visible"
+if ($main -match 'Background="#(?:30283B|11121D|06060B)"' -or
+    $code -match 'StatusBadge\.Background\s*=\s*new SolidColorBrush') {
+    throw "Static opaque surfaces bypass the Windows high-contrast token override."
+}
 Require $main 'BtnSaveReplay' "Capture Save action hidden by layout"
 Require $main 'DragHandle_PreviewMouseMove' "Validated native Discord drag removed"
 Require $code 'WorkspaceLayoutRules\.Classify' "Width layout rule must be used"
