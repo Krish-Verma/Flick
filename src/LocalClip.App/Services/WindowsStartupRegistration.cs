@@ -27,7 +27,14 @@ public static class WindowsStartupRegistration
             return;
         }
 
-        string path = Path.Combine(AppContext.BaseDirectory, "LocalClip.App.exe");
+        // The executable is now branded Flick.exe; preserve compatibility
+        // with users explicitly launching an older LocalClip.App.exe apphost.
+        // Never accidentally register a system dotnet.exe host at login.
+        string? running = Environment.ProcessPath;
+        string path = running != null &&
+            (Path.GetFileName(running).Equals("Flick.exe", StringComparison.OrdinalIgnoreCase) ||
+             Path.GetFileName(running).Equals("LocalClip.App.exe", StringComparison.OrdinalIgnoreCase))
+            ? running : Path.Combine(AppContext.BaseDirectory, "Flick.exe");
         if (!File.Exists(path))
             throw new FileNotFoundException("Install Flick before enabling Windows startup.", path);
         registry.SetValue(ValueName, BuildCommand(path, minimized), RegistryValueKind.String);

@@ -56,17 +56,23 @@ jobs:
       - name: Validate Slice 6 adaptive layout and contrast
         shell: pwsh
         run: ./scripts/check_gui_slice6.ps1
+      - name: Verify release packaging and memory source contracts
+        shell: pwsh
+        run: ./scripts/check_flick_release_source.ps1
       - name: Build solution (Release)
         run: dotnet build LocalClip.slnx --configuration Release --no-restore --warnaserror
       - name: Run hardware-independent tests
         run: dotnet test LocalClip.slnx --configuration Release --no-build --logger "trx;LogFileName=Flick-Tests.trx" --results-directory TestResults
       - name: Smoke-check self-contained Windows publish
         run: dotnet publish src/LocalClip.App/LocalClip.App.csproj -c Release -r win-x64 --self-contained true -o publish-smoke --nologo
-      - name: Validate published app exists
+      - name: Validate branded published app and generated icon
         shell: pwsh
         run: |
-          if (-not (Test-Path publish-smoke/LocalClip.App.exe)) {
-            throw "Self-contained WPF publish did not create LocalClip.App.exe"
+          if (-not (Test-Path publish-smoke/Flick.exe)) {
+            throw "Self-contained WPF publish did not create Flick.exe"
+          }
+          if (-not (Test-Path src/LocalClip.App/Assets/Brand/Flick.ico)) {
+            throw "Embedded Flick icon was not generated"
           }
       - name: Publish test report
         if: always()

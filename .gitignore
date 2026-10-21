@@ -27,3 +27,9 @@ qa-evidence/
 dist/qa-local/
 Flick-Visual-QA-*/
 *.trx
+
+# Generated icon, per-user Windows installer and per-build checksums.
+src/LocalClip.App/Assets/Brand/Flick.ico
+dist/Flick.ico
+dist/Flick-Setup-*.exe
+dist/SHA256SUMS.txt
