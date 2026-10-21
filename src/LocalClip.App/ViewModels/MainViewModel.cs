@@ -377,7 +377,17 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
 
             if (Targets.Count > 0 && SelectedTarget == null)
             {
-                SelectedTarget = Targets[0];
+                // Never silently replace a previously authorized game window
+                // with desktop/monitor capture. Window handles may be recycled,
+                // so require matching title AND executable on a new session.
+                var previouslyAuthorized = Targets.FirstOrDefault(target =>
+                    CaptureTargetSelectionRules.MatchesSavedPreference(
+                        _settings, target.Type, target.MonitorIndex,
+                        target.Title, target.Exe));
+                if (previouslyAuthorized != null)
+                    SelectedTarget = previouslyAuthorized;
+                else
+                    StatusDetails = "Saved capture source isn't available. Choose a source before starting replay.";
             }
         }
         catch (Exception ex)
@@ -436,6 +446,14 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
     public async Task StartCaptureAsync()
     {
         if (CaptureStatus == "Starting" || CaptureStatus == "Stopping") return;
+        if (SelectedTarget is null || !Targets.Contains(SelectedTarget))
+        {
+            // Reject an absent or stale selection before invoking the native
+            // recorder, including when triggered by the global hotkey.
+            CaptureStatus = "Off";
+            StatusDetails = "Select an available window or monitor before starting replay.";
+            return;
+        }
         // Never let folder indexing compete with the live gameplay encoder.
         _importCancellation?.Cancel();
         _thumbnailCancellation?.Cancel();
