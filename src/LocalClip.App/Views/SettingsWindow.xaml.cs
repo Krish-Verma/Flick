@@ -317,6 +317,10 @@ public partial class SettingsWindow : Window
             startupTouched = true;
             staged.Save();
 
+            // Only this user-initiated Save may replace a recovered settings
+            // file. Incidental startup/source changes are deliberately deferred.
+            _settings.MarkExplicitSettingsSaveCompleted();
+
             // Commit only GUI-managed properties after the atomic disk write.
             _settings.CaptureToggleHotkey = staged.CaptureToggleHotkey;
             _settings.SaveReplayHotkey = staged.SaveReplayHotkey;
