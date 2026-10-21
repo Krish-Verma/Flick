@@ -66,6 +66,11 @@ Require $settings 'PanelSharing' "Sharing settings vanished"
 Require $folders 'Connected Clip Folders' "Linked-folder management missing"
 Require $settingsModel 'RequiresExplicitSettingsSave' "Recovered settings must block incidental disk writes"
 Require $settingsDialogCode 'MarkExplicitSettingsSaveCompleted' "Only explicit Settings Save may accept recovery"
+$targetRules = ReadSource "src/LocalClip.Core/Rules/CaptureTargetSelectionRules.cs"
+$mainVm = ReadSource "src/LocalClip.App/ViewModels/MainViewModel.cs"
+Require $targetRules 'WindowExecutable' "Saved window identity must not degrade to desktop capture"
+Require $mainVm 'MatchesSavedPreference' "Startup must restore source by safe identity, not first target"
+Require $mainVm '!Targets.Contains\(SelectedTarget\)' "Starting capture with a stale source must be refused"
 
 # Contrast ratios measured directly from final named color tokens.
 [xml]$theme = ReadSource "src/LocalClip.App/Resources/Theme/Flick.Colors.xaml"
