@@ -120,5 +120,5 @@ foreach ($pair in $required) {
         throw "Insufficient text contrast for $nameA against $nameB : $([Math]::Round($ratio,2)):1"
     }
 }
-Write-Host "Flick GUI Slice 6 source/layout/contrast gates PASS — 5 text/background pairs >= 4.5:1." -ForegroundColor Green
+Write-Host "Flick GUI Slice 6 source/layout/contrast gates PASS - 5 text/background pairs >= 4.5:1." -ForegroundColor Green
 Write-Host "Windows screenshots, actual focus order, FPS, GPU and game overlay are NOT tested here."

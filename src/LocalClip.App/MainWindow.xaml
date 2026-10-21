@@ -20,11 +20,11 @@
 
     <Grid>
         <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="{StaticResource Flick.Size.NavRail}"/>
+            <ColumnDefinition Width="{StaticResource Flick.GridLength.NavRail}"/>
             <ColumnDefinition Width="*"/>
         </Grid.ColumnDefinitions>
         <Grid.RowDefinitions>
-            <RowDefinition Height="{StaticResource Flick.Size.CaptureBar}"/>
+            <RowDefinition Height="{StaticResource Flick.GridLength.CaptureBar}"/>
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>

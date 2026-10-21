@@ -29,6 +29,8 @@
     <sys:Double x:Key="Flick.Size.IconButton">36</sys:Double>
     <sys:Double x:Key="Flick.Size.NavRail">60</sys:Double>
     <sys:Double x:Key="Flick.Size.CaptureBar">64</sys:Double>
+    <GridLength x:Key="Flick.GridLength.NavRail">60</GridLength>
+    <GridLength x:Key="Flick.GridLength.CaptureBar">64</GridLength>
     <sys:Double x:Key="Flick.Size.ClipRow">68</sys:Double>
     <sys:Double x:Key="Flick.Size.ToastLogo">38</sys:Double>
 

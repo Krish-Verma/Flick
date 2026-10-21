@@ -52,4 +52,4 @@ AssertContains $settings 'ManageFolders_Click' "Settings must link to management
 AssertContains $settingsCs '_settings.ExportsFolder = staged.ExportsFolder;' "Export destination not persisted"
 AssertContains $tests 'OfflineSourceAndMetadataSurviveRestart' "Offline retention regression missing"
 AssertContains $tests 'RemovingImportedClipNeverDeletesOriginalOrExport' "Non-destructive unlink regression missing"
-Write-Host "Flick GUI Slice 3 static contracts PASS — external source imports are local, bounded and non-destructive." -ForegroundColor Green
+Write-Host "Flick GUI Slice 3 static contracts PASS - external source imports are local, bounded and non-destructive." -ForegroundColor Green
