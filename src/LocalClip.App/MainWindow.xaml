@@ -16,6 +16,7 @@
         <Style TargetType="{x:Type Button}" BasedOn="{StaticResource Flick.Button.Secondary}"/>
         <BooleanToVisibilityConverter x:Key="BoolToVis"/>
         <services:WidthToVideoHeightConverter x:Key="Flick.VideoAspectHeight"/>
+        <services:ThumbnailImageConverter x:Key="Flick.ThumbnailDecoder"/>
     </Window.Resources>
 
     <Grid>
@@ -149,7 +150,7 @@
                         </Grid>
                         <Grid Margin="0,0,0,10">
                             <TextBox x:Name="TxtClipSearch" Style="{StaticResource Flick.Input.Text}"
-                                     Text="{Binding SearchQuery, UpdateSourceTrigger=PropertyChanged}"
+                                     Text="{Binding SearchQuery, UpdateSourceTrigger=PropertyChanged, Delay=180}"
                                      ToolTip="Search clip titles and local source names"/>
                             <TextBlock Text="Search Clips…" Foreground="{DynamicResource Flick.Brush.TextMuted}"
                                        Margin="11,0,0,0" VerticalAlignment="Center"
@@ -211,7 +212,7 @@
                                                 Background="{DynamicResource Flick.Brush.Raised}"
                                                 CornerRadius="7" ClipToBounds="True"
                                                 VerticalAlignment="Center">
-                                            <Image Source="{Binding ThumbnailPath}"
+                                            <Image Source="{Binding ThumbnailPath, Converter={StaticResource Flick.ThumbnailDecoder}}"
                                                    Stretch="UniformToFill"
                                                    SnapsToDevicePixels="True"/>
                                         </Border>
@@ -367,6 +368,18 @@
                                               MediaOpened="VideoPlayer_MediaOpened"
                                               MediaEnded="VideoPlayer_MediaEnded"
                                               MediaFailed="VideoPlayer_MediaFailed"/>
+                                <!-- Poster stays cheap while browsing; WPF does not open the
+                                     video decoder until Play or explicit preview. -->
+                                <Image x:Name="PlayerPoster"
+                                       Source="{Binding SelectedClip.ThumbnailPath, Converter={StaticResource Flick.ThumbnailDecoder}}"
+                                       Stretch="Uniform" Visibility="Collapsed"
+                                       IsHitTestVisible="False"/>
+                                <TextBlock x:Name="PlayerPosterHint"
+                                           Text="Press Play to Preview"
+                                           Style="{StaticResource Flick.Text.Caption}"
+                                           HorizontalAlignment="Center" VerticalAlignment="Bottom"
+                                           Margin="0,0,0,14" Visibility="Collapsed"
+                                           IsHitTestVisible="False"/>
                                 <StackPanel x:Name="PreviewFallbackPanel" VerticalAlignment="Center"
                                             HorizontalAlignment="Center" Width="310"
                                             Visibility="Collapsed" Margin="20">

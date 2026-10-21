@@ -56,7 +56,7 @@ public class ResourceMonitor
         // App Process Metrics
         try
         {
-            var current = System.Diagnostics.Process.GetCurrentProcess();
+            using var current = System.Diagnostics.Process.GetCurrentProcess();
             current.Refresh();
             sample.AppPrivateBytes = current.PrivateMemorySize64;
             sample.AppWorkingSet = current.WorkingSet64;

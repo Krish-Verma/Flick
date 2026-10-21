@@ -191,13 +191,24 @@ public class MediaProber
         string dir = Path.GetDirectoryName(outputThumbnailPath)!;
         Directory.CreateDirectory(dir);
 
+        // Keep thumbnail source pixels bounded. A decoded 1080p JPEG can hold
+        // ~8 MiB of pixels even when displayed as a 74x48 WPF clip row.
+        // FFmpeg's explicit argument list also handles Unicode/spaces safely.
         var psi = new ProcessStartInfo
         {
             FileName = _ffmpegPath,
-            Arguments = $"-hide_banner -loglevel error -nostats -y -ss {positionSec.ToString("F2", CultureInfo.InvariantCulture)} -i \"{videoPath}\" -vframes 1 -q:v 2 \"{outputThumbnailPath}\"",
             UseShellExecute = false,
             CreateNoWindow = true
         };
+        foreach (string value in new[]
+        {
+            "-hide_banner", "-loglevel", "error", "-nostats", "-y",
+            "-ss", positionSec.ToString("F2", CultureInfo.InvariantCulture),
+            "-i", videoPath,
+            "-vf", "scale=320:180:force_original_aspect_ratio=decrease:flags=fast_bilinear",
+            "-frames:v", "1", "-q:v", "3", outputThumbnailPath
+        })
+            psi.ArgumentList.Add(value);
 
         using var proc = new System.Diagnostics.Process { StartInfo = psi };
         using var job = new JobObject();

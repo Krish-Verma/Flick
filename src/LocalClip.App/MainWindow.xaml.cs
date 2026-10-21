@@ -611,7 +611,13 @@ public partial class MainWindow : Window
         try
         {
             VideoPlayer.Stop();
-            if (clearSource) VideoPlayer.Source = null;
+            if (clearSource)
+            {
+                VideoPlayer.Source = null;
+                PlayerPoster.Visibility = _vm.SelectedClip?.IsAvailable == true
+                    ? Visibility.Visible : Visibility.Collapsed;
+                PlayerPosterHint.Visibility = PlayerPoster.Visibility;
+            }
         }
         catch (Exception) { /* Safe display-only teardown. */ }
         _playerIsPlaying = false;
@@ -644,6 +650,8 @@ public partial class MainWindow : Window
         _playerIsPlaying = false;
         VideoPlayer.Stop();
         VideoPlayer.Source = null;
+        PlayerPoster.Visibility = Visibility.Collapsed;
+        PlayerPosterHint.Visibility = Visibility.Collapsed;
         PlayerSlider.Value = 0;
         BtnPlayPause.Content = "▶ Play";
         _playerView = PlayerView.Original;
@@ -670,8 +678,10 @@ public partial class MainWindow : Window
 
         PreviewFallbackPanel.Visibility = Visibility.Collapsed;
         BtnBuildPreview.Visibility = Visibility.Visible;
-        VideoPlayer.Source = new Uri(clip.OriginalFilePath);
-        // Do not autoplay or start a background decoder while browsing clips.
+        PlayerPoster.Visibility = Visibility.Visible;
+        PlayerPosterHint.Visibility = Visibility.Visible;
+        // Important: assigning MediaElement.Source opens a decoder even without
+        // Play(). Keep it null until playback is explicitly requested.
     }
 
     private void SetPreviewSource(string path, PlayerView mode, bool startPlaying)
@@ -684,6 +694,8 @@ public partial class MainWindow : Window
         _playerTimer.Stop();
         _playerIsPlaying = false;
         VideoPlayer.Stop();
+        PlayerPoster.Visibility = Visibility.Collapsed;
+        PlayerPosterHint.Visibility = Visibility.Collapsed;
         VideoPlayer.Source = new Uri(path);
         PlayerSlider.Value = 0;
         _playerView = mode;
@@ -712,7 +724,10 @@ public partial class MainWindow : Window
             _vm.StatusDetails = "Original Video Offline · Reconnect Its Folder";
             return;
         }
-        SetPreviewSource(clip.OriginalFilePath, PlayerView.Original, startPlaying);
+        if (startPlaying)
+            SetPreviewSource(clip.OriginalFilePath, PlayerView.Original, startPlaying: true);
+        else
+            ResetPlayerForSelection(); // Inactive editor retains the cheap poster.
         _vm.StatusDetails = "Original Preview · Edits Affect Only the Exported Copy";
     }
 
@@ -751,6 +766,7 @@ public partial class MainWindow : Window
         if (PreviewFallbackPanel.Visibility == Visibility.Visible) return;
         if (VideoPlayer.Source == null)
             SetPreviewSource(_vm.SelectedClip.OriginalFilePath, PlayerView.Original, false);
+        if (VideoPlayer.Source == null) return;
         VideoPlayer.Play();
         _playerIsPlaying = true;
         _playerTimer.Start();
