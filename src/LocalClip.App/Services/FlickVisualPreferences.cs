@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Windows;
 using System.Windows.Media;
+using Brush = System.Windows.Media.Brush;
 using Microsoft.Win32;
 
 namespace LocalClip.App.Services;
