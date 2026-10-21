@@ -22,6 +22,7 @@ Require $view 'MediaElement.Source opens a decoder' "Editor must defer media unt
 Require $view 'PlayerPoster.Visibility\s*=\s*Visibility.Visible' "Editor needs its poster"
 Require $monitor 'using var current' "Transient process handles must be disposed"
 Require $package 'Flick.ico' "Portable packaging must include brand icon"
+Require $package 'LICENSE-NOTICE.md' "Redistributable needs its original-source licensing notice"
 Require $csproj 'AssemblyName>Flick<' "Branded apphost must be Flick.exe"
 Require $install 'PrivilegesRequired=lowest' "Installer must be per user"
 Require $install 'DefaultDirName=\{localappdata\}\\Programs\\Flick' "Program and user metadata must be separate"
