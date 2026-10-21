@@ -37,12 +37,17 @@ public static class FlickQAScreen {
     [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     public static extern bool GetWindowRect(IntPtr hwnd, out RECT rect);
+    [DllImport("user32.dll")]
+    public static extern IntPtr GetForegroundWindow();
+    [DllImport("user32.dll")]
+    public static extern uint GetWindowThreadProcessId(IntPtr hwnd, out uint processId);
 }
 '@
 
 Write-Warning "Screenshots may contain clip names, videos or other personal content visible over Flick."
 Write-Host "Nothing is uploaded. Inspect each PNG locally before sharing evidence."
 Write-Host "To capture Settings, first bring its modal window to the foreground."
+Write-Host "The foreground window must belong to the requested Flick PID; other applications are refused."
 $manifest = @()
 $index = 0
 foreach ($state in $States) {
@@ -50,9 +55,12 @@ foreach ($state in $States) {
     Write-Host "Position Flick for state [$state], ensure private content is hidden, and press Enter."
     [void][Console]::ReadLine()
     $proc.Refresh()
-    $handle = $proc.MainWindowHandle
-    if ($handle -eq [IntPtr]::Zero) {
-        Write-Warning "No visible main Flick window handle for $state — marked BLOCKED."
+    $handle = [FlickQAScreen]::GetForegroundWindow()
+    $foregroundPid = [uint32]0
+    if ($handle -eq [IntPtr]::Zero -or
+        [FlickQAScreen]::GetWindowThreadProcessId($handle, [ref]$foregroundPid) -eq 0 -or
+        $foregroundPid -ne [uint32]$AppPid) {
+        Write-Warning "Flick (or its Settings dialog) must be the foreground window. No other app was captured for $state."
         continue
     }
     $rect = New-Object FlickQAScreen+RECT
