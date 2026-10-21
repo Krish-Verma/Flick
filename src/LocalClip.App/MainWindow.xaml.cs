@@ -280,7 +280,8 @@ public partial class MainWindow : Window
         var danger = (System.Windows.Media.Brush)FindResource("Flick.Brush.Danger");
         CaptureStateDot.Fill = ready ? green : buffering || transitional ? amber :
             fault ? danger : neutral;
-        StatusBadge.Background = new SolidColorBrush(Color.FromArgb(225, 47, 38, 60));
+        // Badge surface is a DynamicResource so a Windows high-contrast
+        // theme can override it without stale fixed-color rendering.
 
         BtnToggleCapture.Content = active || transitional ? "Stop Replay" : "Start Replay";
         BtnToggleCapture.Style = (Style)FindResource(
