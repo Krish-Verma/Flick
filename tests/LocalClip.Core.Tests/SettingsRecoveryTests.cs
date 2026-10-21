@@ -21,6 +21,7 @@ public sealed class SettingsRecoveryTests
             Assert.Equal(30, loaded.ReplayDurationSeconds);
             Assert.Equal(20, loaded.DiscordTargetSizeMb);
             Assert.Contains("NOT overwritten", loaded.LoadWarning);
+            Assert.True(loaded.RequiresExplicitSettingsSave);
             Assert.Equal(damaged, File.ReadAllText(path));
         }
         finally { try { File.Delete(path); } catch { } }
@@ -42,6 +43,7 @@ public sealed class SettingsRecoveryTests
             Assert.True(Path.IsPathFullyQualified(loaded.OriginalsFolder));
             Assert.True(Path.IsPathFullyQualified(loaded.ExportsFolder));
             Assert.NotEmpty(loaded.LoadWarning);
+            Assert.True(loaded.RequiresExplicitSettingsSave);
             Assert.Equal(raw, File.ReadAllText(path)); // Recovery is in-memory only.
         }
         finally { try { File.Delete(path); } catch { } }
@@ -60,7 +62,52 @@ public sealed class SettingsRecoveryTests
             Assert.Equal(10, loaded.DiscordTargetSizeMb);
             Assert.True(loaded.EnableMicrophone);
             Assert.Equal("", loaded.LoadWarning);
+            Assert.False(loaded.RequiresExplicitSettingsSave);
             Assert.Equal(raw, File.ReadAllText(path));
+        }
+        finally { try { File.Delete(path); } catch { } }
+    }
+
+    [Fact]
+    public void AutomaticCaptureSourceWriteDoesNotReplaceMalformedSettings()
+    {
+        string path = Path.Combine(Path.GetTempPath(), "flick-settings-" + Guid.NewGuid().ToString("N") + ".json");
+        const string damaged = "{NOT_VALID_JSON";
+        try
+        {
+            File.WriteAllText(path, damaged);
+            var settings = AppSettings.LoadExistingFile(path);
+            settings.MonitorIndex = 3; // Simulate initial target discovery.
+            settings.SaveToFile(path); // Non-interactive save is blocked.
+            Assert.Equal(damaged, File.ReadAllText(path));
+            Assert.True(settings.RequiresExplicitSettingsSave);
+        }
+        finally { try { File.Delete(path); } catch { } }
+    }
+
+    [Fact]
+    public void RepairedValuesAreOnlyPersistedAfterExplicitUserReview()
+    {
+        string path = Path.Combine(Path.GetTempPath(), "flick-settings-" + Guid.NewGuid().ToString("N") + ".json");
+        const string invalid = "{\"SchemaVersion\":2,\"ReplayDurationSeconds\":0,\"DiscordTargetSizeMb\":0}";
+        try
+        {
+            File.WriteAllText(path, invalid);
+            var settings = AppSettings.LoadExistingFile(path);
+            Assert.True(settings.RequiresExplicitSettingsSave);
+            settings.MonitorIndex = 2;
+            settings.SaveToFile(path);
+            Assert.Equal(invalid, File.ReadAllText(path));
+
+            // The real Settings dialog does this only after its staged copy
+            // has successfully completed a user-initiated Save.
+            settings.MarkExplicitSettingsSaveCompleted();
+            settings.SaveToFile(path);
+            var restored = AppSettings.LoadExistingFile(path);
+            Assert.False(restored.RequiresExplicitSettingsSave);
+            Assert.Equal(2, restored.MonitorIndex);
+            Assert.Equal(30, restored.ReplayDurationSeconds);
+            Assert.Equal(20, restored.DiscordTargetSizeMb);
         }
         finally { try { File.Delete(path); } catch { } }
     }
