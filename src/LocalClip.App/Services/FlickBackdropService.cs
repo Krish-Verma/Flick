@@ -23,7 +23,7 @@ public static class FlickBackdropService
     public static bool TryApplyMica(Window window)
     {
         ArgumentNullException.ThrowIfNull(window);
-        if (SystemParameters.HighContrast ||
+        if (!FlickVisualPreferences.CanUseTransparency ||
             !OperatingSystem.IsWindowsVersionAtLeast(10, 0, 22621))
             return false;
 

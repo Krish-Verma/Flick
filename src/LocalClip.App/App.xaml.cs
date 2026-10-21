@@ -2,6 +2,7 @@ using System;
 using System.Linq;
 using System.Threading;
 using System.Windows;
+using LocalClip.App.Services;
 
 namespace LocalClip.App;
 
@@ -11,6 +12,7 @@ namespace LocalClip.App;
 public partial class App : System.Windows.Application
 {
     private static Mutex? _singleInstanceMutex;
+    private FlickVisualPreferences? _visualPreferences;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -19,7 +21,7 @@ public partial class App : System.Windows.Application
 
         if (!createdNew)
         {
-            MessageBox.Show("LocalClip is already running. Check your system tray.", "LocalClip", MessageBoxButton.OK, MessageBoxImage.Information);
+            MessageBox.Show("Flick is already running. Check your system tray.", "Flick", MessageBoxButton.OK, MessageBoxImage.Information);
             Shutdown();
             return;
         }
@@ -28,11 +30,14 @@ public partial class App : System.Windows.Application
         if (e.Args.Any(arg => arg.Equals("--design-preview", StringComparison.OrdinalIgnoreCase)))
             StartupUri = new Uri("Views/DesignSystemPreviewWindow.xaml", UriKind.Relative);
 
+        _visualPreferences = new FlickVisualPreferences(this);
         base.OnStartup(e);
     }
 
     protected override void OnExit(ExitEventArgs e)
     {
+        _visualPreferences?.Dispose();
+        _visualPreferences = null;
         _singleInstanceMutex?.ReleaseMutex();
         _singleInstanceMutex?.Dispose();
         _singleInstanceMutex = null;

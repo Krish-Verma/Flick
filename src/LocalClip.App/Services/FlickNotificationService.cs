@@ -93,10 +93,13 @@ public sealed class FlickNotificationService : IDisposable
 
         _window.PlaceOnForegroundDisplay();
         _window.BeginAnimation(Window.OpacityProperty, null);
-        _window.Opacity = 0;
-        _window.BeginAnimation(Window.OpacityProperty,
-            new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(130))
-            { FillBehavior = FillBehavior.Stop });
+        if (FlickVisualPreferences.ShouldAnimate)
+        {
+            _window.Opacity = 0;
+            _window.BeginAnimation(Window.OpacityProperty,
+                new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(130))
+                { FillBehavior = FillBehavior.Stop });
+        }
         _window.Opacity = 1;
 
         _dismissTimer ??= new DispatcherTimer(DispatcherPriority.Background, _dispatcher)
@@ -114,6 +117,12 @@ public sealed class FlickNotificationService : IDisposable
         if (_window is null) return;
         var window = _window;
         int generation = _generation;
+        if (!FlickVisualPreferences.ShouldAnimate)
+        {
+            _window = null;
+            window.Close();
+            return;
+        }
         var animation = new DoubleAnimation(1, 0, TimeSpan.FromMilliseconds(140))
         {
             FillBehavior = FillBehavior.Stop
