@@ -39,7 +39,7 @@
                        Width="38" Height="38" Margin="0,0,0,21"
                        ToolTip="Flick — Your Clips"/>
                 <Button DockPanel.Dock="Top" x:Name="BtnNavClips"
-                        Style="{StaticResource Flick.Button.Icon}" Click="BtnNavClips_Click"
+                        Style="{StaticResource Flick.Button.Icon}" Click="BtnNavClips_Click" AutomationProperties.Name="Your Clips"
                         Background="#33283F" BorderBrush="{DynamicResource Flick.Brush.BorderStrong}"
                         ToolTip="Your Clips">
                     <Path Data="M 3,5 L 21,5 L 21,19 L 3,19 Z M 8,5 L 8,19 M 16,5 L 16,19 M 3,10 L 8,10 M 16,10 L 21,10"
@@ -48,7 +48,7 @@
                           Width="19" Height="19" Stretch="Uniform"/>
                 </Button>
                 <Button DockPanel.Dock="Bottom" x:Name="BtnNavSettings"
-                        Style="{StaticResource Flick.Button.Icon}" Click="BtnSettings_Click"
+                        Style="{StaticResource Flick.Button.Icon}" Click="BtnSettings_Click" AutomationProperties.Name="Settings"
                         ToolTip="Settings">
                     <Path Data="M 3,7 L 21,7 M 3,17 L 21,17 M 9,3 L 9,11 M 15,13 L 15,21"
                           Stroke="{DynamicResource Flick.Brush.TextSecondary}" StrokeThickness="1.8"
@@ -81,7 +81,7 @@
                 </StackPanel>
                 <Button Grid.Column="1" Content="↻"
                         Style="{StaticResource Flick.Button.Icon}"
-                        Click="BtnRefreshTargets_Click" ToolTip="Refresh Capture Sources"
+                        Click="BtnRefreshTargets_Click" AutomationProperties.Name="Refresh Capture Sources" ToolTip="Refresh Capture Sources"
                         Margin="0,0,12,0" VerticalAlignment="Center"/>
                 <StackPanel Grid.Column="2" VerticalAlignment="Center" HorizontalAlignment="Center"
                             Margin="0,0,14,0" MinWidth="0">
@@ -101,12 +101,12 @@
                                TextTrimming="CharacterEllipsis" TextWrapping="NoWrap"/>
                 </StackPanel>
                 <Button Grid.Column="3" x:Name="BtnToggleCapture"
-                        Click="BtnToggleCapture_Click"
+                        Click="BtnToggleCapture_Click" AutomationProperties.Name="Toggle Replay"
                         Style="{StaticResource Flick.Button.Primary}"
                         Content="Start Replay" Margin="0,0,8,0"
                         VerticalAlignment="Center"/>
                 <Button Grid.Column="4" x:Name="BtnSaveReplay"
-                        Click="BtnSaveReplay_Click"
+                        Click="BtnSaveReplay_Click" AutomationProperties.Name="Save Last Replay"
                         Style="{StaticResource Flick.Button.Secondary}"
                         Content="Save Last 30 Seconds" IsEnabled="False"
                         VerticalAlignment="Center"/>
@@ -649,11 +649,13 @@
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
-                <TextBlock Grid.Column="0" Text="{Binding StatusDetails}" Foreground="#B9B3CC"
+                <TextBlock Grid.Column="0" Text="{Binding StatusDetails}" ToolTip="{Binding StatusDetails}"
+                           Foreground="{DynamicResource Flick.Brush.TextSecondary}"
                            FontSize="12" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"
                            Margin="0,0,16,0"/>
                 <TextBlock Grid.Column="1" x:Name="TxtResourceStats"
-                           Text="{Binding ResourceStatsText}" Foreground="{DynamicResource Flick.Brush.TextMuted}"
+                           Text="{Binding ResourceStatsText}" ToolTip="{Binding ResourceStatsText}"
+                           Foreground="{DynamicResource Flick.Brush.TextMuted}"
                            FontSize="11" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"
                            HorizontalAlignment="Right"/>
             </Grid>
