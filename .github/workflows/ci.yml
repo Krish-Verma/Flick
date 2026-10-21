@@ -53,6 +53,9 @@ jobs:
       - name: Validate Slice 5 sharing and grouped settings contract
         shell: pwsh
         run: ./scripts/check_gui_slice5.ps1
+      - name: Validate Slice 6 adaptive layout and contrast
+        shell: pwsh
+        run: ./scripts/check_gui_slice6.ps1
       - name: Build solution (Release)
         run: dotnet build LocalClip.slnx --configuration Release --no-restore --warnaserror
       - name: Run hardware-independent tests
