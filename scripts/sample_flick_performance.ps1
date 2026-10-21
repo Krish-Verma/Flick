@@ -17,8 +17,8 @@ param(
 )
 $ErrorActionPreference = "Stop"
 $app = Get-Process -Id $AppPid -ErrorAction Stop
-if ($app.ProcessName -ne "LocalClip.App") {
-    throw "The specified AppPid is not LocalClip.App. Refusing to sample another program."
+if ($app.ProcessName -notin @("Flick", "LocalClip.App")) {
+    throw "The specified AppPid is not Flick.exe or legacy LocalClip.App.exe. Refusing to sample another program."
 }
 if ($HostPid -gt 0) {
     $hostProcess = Get-Process -Id $HostPid -ErrorAction Stop

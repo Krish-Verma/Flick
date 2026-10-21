@@ -14,8 +14,8 @@ param(
 )
 $ErrorActionPreference = "Stop"
 $proc = Get-Process -Id $AppPid -ErrorAction Stop
-if ($proc.ProcessName -ne "LocalClip.App") {
-    throw "Only LocalClip.App is accepted, not other Windows apps."
+if ($proc.ProcessName -notin @("Flick", "LocalClip.App")) {
+    throw "Only Flick.exe or legacy LocalClip.App.exe is accepted, not other Windows apps."
 }
 if (!$OutputDirectory) {
     $OutputDirectory = Join-Path $env:TEMP (

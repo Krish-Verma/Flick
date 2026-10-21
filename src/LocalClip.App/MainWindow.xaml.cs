@@ -49,6 +49,9 @@ public partial class MainWindow : Window
     private bool _layoutInitialized;
     private bool _compactShowingEditor;
     private bool _initialLayoutApplied;
+    // Only the currently selected small poster is unloaded while hidden; the
+    // clip library and editing model are preserved for instant tray restoration.
+    private bool _posterCacheDetached;
 
     public MainWindow()
     {
@@ -72,7 +75,12 @@ public partial class MainWindow : Window
         PreviewKeyDown += MainWindow_PreviewKeyDown;
         StateChanged += (_, _) =>
         {
-            if (WindowState == WindowState.Minimized) SuspendPlayback(clearSource: true);
+            if (WindowState == WindowState.Minimized)
+            {
+                SuspendPlayback(clearSource: true);
+                ReleasePosterWhileHidden();
+            }
+            else RestorePosterAfterShow();
         };
         SourceInitialized += (_, _) => _ = FlickBackdropService.TryApplyMica(this);
     }
@@ -97,7 +105,12 @@ public partial class MainWindow : Window
         if (_vm.Settings.StartMinimizedToTray ||
             Environment.GetCommandLineArgs().Any(a =>
                 a.Equals("--minimized", StringComparison.OrdinalIgnoreCase)))
-            _ = Dispatcher.BeginInvoke(new Action(Hide));
+            _ = Dispatcher.BeginInvoke(new Action(() =>
+            {
+                SuspendPlayback(clearSource: true);
+                ReleasePosterWhileHidden();
+                Hide();
+            }));
 
         // Wire CaptureStatus badge color updates
         _vm.PropertyChanged += (s, ev) =>
@@ -316,6 +329,7 @@ public partial class MainWindow : Window
     {
         Show();
         WindowState = WindowState.Normal;
+        RestorePosterAfterShow();
         Activate();
         if (VideoPlayer.Source is null) ResetPlayerForSelection();
     }
@@ -332,6 +346,7 @@ public partial class MainWindow : Window
         {
             e.Cancel = true;
             SuspendPlayback(clearSource: true);
+            ReleasePosterWhileHidden();
             Hide();
             if (!_trayHintShown)
             {
@@ -622,6 +637,25 @@ public partial class MainWindow : Window
         catch (Exception) { /* Safe display-only teardown. */ }
         _playerIsPlaying = false;
         if (BtnPlayPause != null) BtnPlayPause.Content = "▶ Play";
+    }
+
+    private void ReleasePosterWhileHidden()
+    {
+        if (_posterCacheDetached) return;
+        System.Windows.Data.BindingOperations.ClearBinding(
+            PlayerPoster, System.Windows.Controls.Image.SourceProperty);
+        PlayerPoster.Source = null; // Drop decoded poster pixels; keep clip model.
+        _posterCacheDetached = true;
+    }
+
+    private void RestorePosterAfterShow()
+    {
+        if (!_posterCacheDetached) return;
+        var converter = (System.Windows.Data.IValueConverter)FindResource("Flick.ThumbnailDecoder");
+        System.Windows.Data.BindingOperations.SetBinding(
+            PlayerPoster, System.Windows.Controls.Image.SourceProperty,
+            new System.Windows.Data.Binding("SelectedClip.ThumbnailPath") { Converter = converter });
+        _posterCacheDetached = false;
     }
 
     // Player/Editor Slice 4: WPF native preview first. An explicit, bounded

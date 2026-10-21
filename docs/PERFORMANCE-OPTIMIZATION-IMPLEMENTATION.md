@@ -28,13 +28,17 @@ Working set, private bytes, GPU VRAM and native capture-host bytes are different
 
 **Expected user effect:** fewer idle decoder resources and less incidental media I/O; first playback may initialize a little slower. Scrubbing, compatibility proxy generation, export and media error/fallback handling must be verified on Windows. The original video is immutable.
 
-### 3. Debounced library search
+### 3. Release selected-clip poster on tray hide or minimize
+
+The WPF window still stays instantiated in tray mode for reliable global hotkeys and quick restore, but it now explicitly drops the selected poster bitmap when hidden or minimized. Restoring re-establishes the same bounded thumbnail binding without changing clip selection or the recording buffer. This is a modest targeted image cleanup, not an attempt to dispose the entire library/viewmodel while capture may be active.
+
+### 4. Debounced library search
 
 The SearchQuery WPF binding now delays text commits by **180 ms** rather than rebuilding the visible list for each rapid keypress. The existing virtualized list and in-place import ownership safeguards are preserved.
 
 **Expected user effect:** smoother typing in large libraries, no visual reductions; results update after a short delay.
 
-### 4. Correctly dispose transient process samples
+### 5. Correctly dispose transient process samples
 
 **src/LocalClip.Core/Diagnostics/ResourceMonitor.cs** now disposes the Process object acquired for a resource sample. A resource handle should not remain owned after a sample; the capture worker, timestamps and hard safety cap remain unchanged.
 
