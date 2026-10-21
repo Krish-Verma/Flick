@@ -40,7 +40,7 @@
                        ToolTip="Flick — Your Clips"/>
                 <Button DockPanel.Dock="Top" x:Name="BtnNavClips"
                         Style="{StaticResource Flick.Button.Icon}" Click="BtnNavClips_Click" AutomationProperties.Name="Your Clips"
-                        Background="#33283F" BorderBrush="{DynamicResource Flick.Brush.BorderStrong}"
+                        Background="{DynamicResource Flick.Brush.Raised}" BorderBrush="{DynamicResource Flick.Brush.BorderStrong}"
                         ToolTip="Your Clips">
                     <Path Data="M 3,5 L 21,5 L 21,19 L 3,19 Z M 8,5 L 8,19 M 16,5 L 16,19 M 3,10 L 8,10 M 16,10 L 21,10"
                           Stroke="{DynamicResource Flick.Brush.Accent}" StrokeThickness="1.8"
@@ -86,7 +86,7 @@
                 <StackPanel Grid.Column="2" VerticalAlignment="Center" HorizontalAlignment="Center"
                             Margin="0,0,14,0" MinWidth="0">
                     <Border x:Name="StatusBadge" CornerRadius="{StaticResource Flick.Corner.Pill}"
-                            Background="#30283B" Padding="9,4" HorizontalAlignment="Left"
+                            Background="{DynamicResource Flick.Brush.Raised}" Padding="9,4" HorizontalAlignment="Left"
                             Margin="0,0,0,2">
                         <StackPanel Orientation="Horizontal">
                             <Ellipse x:Name="CaptureStateDot" Width="7" Height="7"
@@ -357,7 +357,7 @@
 
                         <Border Grid.Row="1" MinHeight="220" MaxHeight="460"
                                 Height="{Binding ActualWidth, RelativeSource={RelativeSource Self}, Converter={StaticResource Flick.VideoAspectHeight}}"
-                                Background="#06060B" BorderBrush="{DynamicResource Flick.Brush.Border}"
+                                Background="{DynamicResource Flick.Brush.Canvas}" BorderBrush="{DynamicResource Flick.Brush.Border}"
                                 BorderThickness="1" CornerRadius="{StaticResource Flick.Corner.Panel}"
                                 ClipToBounds="True" Margin="0,0,0,6">
                             <Grid>
@@ -643,7 +643,7 @@
         </Grid>
 
         <!-- Bottom Status Bar -->
-        <Border Grid.Row="2" Grid.Column="1" Background="#11121D" BorderBrush="#242436" BorderThickness="0,1,0,0" Padding="12,6">
+        <Border Grid.Row="2" Grid.Column="1" Background="{DynamicResource Flick.Brush.Surface}" BorderBrush="{DynamicResource Flick.Brush.Border}" BorderThickness="0,1,0,0" Padding="12,6">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
