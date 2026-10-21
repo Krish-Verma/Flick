@@ -46,6 +46,11 @@ if ($LASTEXITCODE -ne 0) { throw "ISCC failed with exit code $LASTEXITCODE" }
 $output = Join-Path $root "dist\Flick-Setup-1.0.0-win-x64-preview.exe"
 if (-not (Test-Path -LiteralPath $output)) { throw "Installer output missing: $output" }
 $hash = (Get-FileHash -LiteralPath $output -Algorithm SHA256).Hash
+$checksums = Join-Path $root "dist\SHA256SUMS.txt"
+if (Test-Path -LiteralPath $checksums) {
+    Add-Content -LiteralPath $checksums -Encoding UTF8 -Value (
+        "$hash  Flick-Setup-1.0.0-win-x64-preview.exe")
+}
 Write-Host "Flick Setup built: $output" -ForegroundColor Green
 Write-Host "SHA256: $hash"
 Write-Warning "Unsigned preview: AntiGravity must verify actual install, upgrade, uninstall, data preservation and Windows UI before any release."

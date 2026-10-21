@@ -1,0 +1,93 @@
+name: Flick Private Windows Setup Preview
+
+on:
+  pull_request:
+    paths:
+      - 'src/LocalClip.App/**'
+      - 'installer/**'
+      - 'scripts/build_*.ps1'
+      - '.github/workflows/preview-installer.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: flick-preview-installer-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  setup-preview:
+    name: Compile private unsigned Flick Setup and portable ZIP
+    runs-on: windows-latest
+    timeout-minutes: 60
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+      DOTNET_NOLOGO: 'true'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.402'
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          update: false
+          install: >-
+            mingw-w64-ucrt-x86_64-gcc
+      - name: Provide native MinGW compiler for PowerShell build scripts
+        shell: pwsh
+        run: |
+          $bin = 'C:\msys64\ucrt64\bin'
+          if (-not (Test-Path (Join-Path $bin 'g++.exe'))) {
+            throw "Required pinned MSYS2 compiler not present in $bin"
+          }
+          Add-Content -Path $env:GITHUB_PATH -Value $bin
+      - name: Install reviewed Inno Setup 6.7.1 compiler
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          choco install innosetup --version=6.7.1 --yes --no-progress --limit-output
+          if ($LASTEXITCODE -ne 0) { throw "Inno Setup Chocolatey install failed" }
+          $programFiles = [Environment]::GetFolderPath([Environment+SpecialFolder]::ProgramFilesX86)
+          $iscc = Join-Path $programFiles 'Inno Setup 6\ISCC.exe'
+          if (-not (Test-Path -LiteralPath $iscc)) { throw "ISCC.exe missing after pinned installation" }
+      - name: Download and SHA-256 verify OBS and FFmpeg runtime assets
+        shell: pwsh
+        run: ./scripts/setup_tools.ps1
+      - name: Run offline source/design contracts
+        shell: pwsh
+        run: |
+          ./scripts/check_gui_design.ps1
+          ./scripts/check_gui_slice6.ps1
+          ./scripts/check_flick_release_source.ps1
+      - name: Build portable ZIP and conventional per-user Setup EXE
+        shell: pwsh
+        run: ./scripts/build_installer.ps1
+      - name: Check private preview hashes and included tools
+        shell: pwsh
+        run: |
+          $checksums = 'dist/SHA256SUMS.txt'
+          $setup = 'dist/Flick-Setup-1.0.0-win-x64-preview.exe'
+          $portable = 'dist/Flick-v1.0.0-win-x64.zip'
+          foreach ($path in @($checksums, $setup, $portable)) {
+            if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw "Missing $path" }
+          }
+          $manifest = Get-Content -LiteralPath $checksums -Raw
+          foreach ($name in @('Flick.exe', 'Flick-v1.0.0-win-x64.zip',
+                              'Flick-Setup-1.0.0-win-x64-preview.exe', 'LocalClip.CaptureHost.exe')) {
+            if (-not $manifest.Contains($name)) { throw "Missing hash entry: $name" }
+          }
+          Write-Host "Private preview compiled; no hardware acceptance is asserted."
+      - name: Upload PRIVATE preview files for authorized tester
+        uses: actions/upload-artifact@v4
+        with:
+          name: flick-unsigned-preview-${{ github.sha }}
+          path: |
+            dist/Flick-Setup-1.0.0-win-x64-preview.exe
+            dist/Flick-v1.0.0-win-x64.zip
+            dist/SHA256SUMS.txt
+          if-no-files-found: error
+          retention-days: 7
+
+# Private PR build only; never a public Release and never hardware QA.
