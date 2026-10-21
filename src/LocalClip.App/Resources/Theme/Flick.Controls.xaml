@@ -186,7 +186,9 @@
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="{x:Type ComboBox}">
-                    <Grid>
+                    <!-- Prevent an unusually long game/window title from painting
+                         across neighboring capture or settings controls. -->
+                    <Grid ClipToBounds="True">
                         <ToggleButton x:Name="DropButton" Focusable="False"
                                       Background="{TemplateBinding Background}"
                                       BorderBrush="{TemplateBinding BorderBrush}"
