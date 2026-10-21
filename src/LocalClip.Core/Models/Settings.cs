@@ -61,6 +61,11 @@ public class AppSettings
     // resident until a confirmed saved clip or a user-initiated preview.
     public bool ShowClipSavedOverlay { get; set; } = true;
     public bool PlayClipSavedSound { get; set; } = true;
+    // Nonpersistent diagnostic: unreadable/invalid settings are not deleted or
+    // silently overwritten. Display the warning after app initialization.
+    [JsonIgnore]
+    public string LoadWarning { get; private set; } = "";
+
     // ALWAYS FALSE by specification: "Capture starts DISARMED"
     [JsonIgnore]
     public bool StartArmed => false;
@@ -92,29 +97,79 @@ public class AppSettings
     public static AppSettings Load()
     {
         string path = GetSettingsFilePath();
+        if (File.Exists(path))
+            return LoadExistingFile(path);
+
+        var initial = CreateDefault();
+        initial.Save();
+        return initial;
+    }
+
+    /// <summary>
+    /// Isolated settings recovery. Valid old files are migrated in memory;
+    /// malformed originals are never overwritten. Future explicit Save is
+    /// the only way to replace a damaged JSON file.
+    /// </summary>
+    public static AppSettings LoadExistingFile(string filePath)
+    {
         try
         {
-            if (File.Exists(path))
+            var loaded = JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(filePath))
+                ?? throw new JsonException("Settings JSON contains no configuration.");
+            var defaults = CreateDefault();
+            bool repaired = false;
+            if (loaded.SchemaVersion < 2)
             {
-                string json = File.ReadAllText(path);
-                var loaded = JsonSerializer.Deserialize<AppSettings>(json);
-                if (loaded != null)
-                {
-                    // Legacy settings enabled the microphone without a user-facing toggle.
-                    if (loaded.SchemaVersion < 2)
-                    {
-                        loaded.EnableMicrophone = false;
-                        loaded.SchemaVersion = 2;
-                        loaded.Save();
-                    }
-                    return loaded;
-                }
+                loaded.EnableMicrophone = false;
+                loaded.SchemaVersion = 2;
+                repaired = true;
             }
+            if (loaded.ReplayDurationSeconds is < 15 or > 120)
+            {
+                loaded.ReplayDurationSeconds = defaults.ReplayDurationSeconds;
+                repaired = true;
+            }
+            if (loaded.DiscordTargetSizeMb is < 1 or > 250)
+            {
+                loaded.DiscordTargetSizeMb = defaults.DiscordTargetSizeMb;
+                repaired = true;
+            }
+            if (loaded.VideoWidth < 1 || loaded.VideoHeight < 1 ||
+                loaded.VideoFps < 1 || loaded.VideoBitrateKbps < 1)
+            {
+                loaded.VideoWidth = defaults.VideoWidth;
+                loaded.VideoHeight = defaults.VideoHeight;
+                loaded.VideoFps = defaults.VideoFps;
+                loaded.VideoBitrateKbps = defaults.VideoBitrateKbps;
+                loaded.VideoEncoder = defaults.VideoEncoder;
+                loaded.QualityPreset = defaults.QualityPreset;
+                repaired = true;
+            }
+            if (string.IsNullOrWhiteSpace(loaded.OriginalsFolder) ||
+                !Path.IsPathFullyQualified(loaded.OriginalsFolder))
+            {
+                loaded.OriginalsFolder = defaults.OriginalsFolder;
+                repaired = true;
+            }
+            if (string.IsNullOrWhiteSpace(loaded.ExportsFolder) ||
+                !Path.IsPathFullyQualified(loaded.ExportsFolder))
+            {
+                loaded.ExportsFolder = defaults.ExportsFolder;
+                repaired = true;
+            }
+
+            if (repaired)
+                loaded.LoadWarning = "Some old or invalid preferences were safely reset in memory. Review Settings and Save to keep the changes.";
+            return loaded;
         }
-        catch { }
-        var def = CreateDefault();
-        def.Save();
-        return def;
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException
+            or JsonException or ArgumentException or NotSupportedException)
+        {
+            var fallback = CreateDefault();
+            fallback.LoadWarning =
+                "Saved settings could not be read. Flick is using safe defaults for this session; the original settings.json was NOT overwritten. Back it up before saving new settings.";
+            return fallback;
+        }
     }
 
     public void Save()

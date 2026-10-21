@@ -90,6 +90,8 @@ public partial class MainWindow : Window
 
         // Initialize targets
         await _vm.InitializeAsync();
+        if (!string.IsNullOrWhiteSpace(_vm.Settings.LoadWarning))
+            _vm.StatusDetails = _vm.Settings.LoadWarning;
 
         // Startup from Windows Run is always disarmed; optionally hide the window.
         if (_vm.Settings.StartMinimizedToTray ||

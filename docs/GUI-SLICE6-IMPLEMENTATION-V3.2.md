@@ -68,3 +68,7 @@ Do not add working set, private bytes and VRAM as though they measured the same 
 Slice 6 does **not** implement AI highlights, social/cloud features, a full video editor, new game injection, Electron, new processes, forced fullscreen overlays, or automatic Discord posting. It does not turn Flick public or create a v1.1 release.
 
 Execute **`docs/GUI-SLICE6-ANTIGRAVITY-HANDOFF.md`** and **`docs/GUI-WHOLE-PRODUCT-ACCEPTANCE.md`** on the owner's Windows/NVIDIA PC. Record logs/PNGs/benchmarks under a local excluded evidence folder, not as personal media in this repository. PR #7 remains draft until hardware review, screenshots and owner approval.
+
+## Final reliability follow-up: settings recovery
+
+Malformed or unreadable `settings.json` is no longer silently overwritten during launch. Flick uses safe in-memory defaults, reports a warning in the status line, and leaves the original JSON on disk for backup/recovery. Syntactically valid legacy settings are migration-checked in memory (privacy-safe mic, replay duration 15–120s, export cap 1–250 MB, positive capture profile, fully qualified original/export directories); explicit user Save persists updates. Regression tests use isolated temporary files, never actual user settings.
