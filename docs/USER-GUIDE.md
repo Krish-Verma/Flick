@@ -1,6 +1,6 @@
 # Flick — User Guide (Development Build)
 
-> Flick is currently in development. This guide describes the draft GUI Slice 2 branch based on the stabilization PR, **not** the published v1.0.0 release. Real Windows/GPU and Discord acceptance are still required before general distribution.
+> Flick is currently in development. This guide covers GUI Slices 1–6 on the draft Slice 6 PR #7, **not** the older published v1.0.0 release. Final Windows screenshots, gameplay FPS, audio, drag-and-drop and endurance acceptance are pending before public distribution.
 
 Flick is a small, free, offline-first **Windows 11 x64** gameplay clipper. It manually captures recent action, lets you review and trim the original, adjust audio for the share copy, and prepare a Discord-sized MP4 without a watermark. Initial hardware support targets **NVIDIA NVENC**; other GPUs are not qualified.
 
@@ -54,9 +54,15 @@ By default, successfully saved and indexed clips trigger **Clip Saved** in the u
 
 The notification is temporary and creates no permanent game overlay process. Native topmost WPF windows may not appear above every exclusive-fullscreen game; this behavior, mixed-DPI placement, and FPS impact still need validation on the owner's Windows PC. The banner should not interrupt gameplay focus.
 
+### Window Layout, Scaling and Accessibility
+
+At normal desktop widths (1120+ logical WPF pixels), Flick shows **Your Clips** on the left and the editor on the right. On narrower or highly scaled displays, Flick switches to a **compact one-pane layout**. Selecting a saved clip opens its editor; choose **← Your Clips** or the Clips navigation icon to return. Your source selector, Start/Stop Replay and Save Clip controls remain reachable at the top. In compact mode the button is shortened to **Save Clip**; the tooltip and configured global hotkey still indicate how many preceding seconds will be saved.
+
+Flick uses the same graphite/violet styles across controls, with the full user-supplied sunset-squircle logo. It honors Windows High Contrast, reduced animations and system Transparency Effects where supported; transparent or animated effects fall back to simpler rendering when disabled. Use Tab/Shift+Tab to navigate, arrow keys for playback/trimming, and tooltips for truncated long window names. A visual inspection on the actual Windows PC at 100–200% display scale remains required for release.
+
 ### Tray & Capture Controls
 
-The new compact capture bar is available at the top of the window. When replay is off, **Start Replay** is the primary action and **Save Last N Seconds** is disabled; when buffering or armed, **Save Last N Seconds** becomes the primary action. The same state is reflected in tray actions. The navigation rail contains **Your Clips** (focuses search) and **Settings** (opens existing preferences; an in-window settings redesign is a later slice).
+The new compact capture bar is available at the top of the window. When replay is off, **Start Replay** is the primary action and **Save Last N Seconds** is disabled; when buffering or armed, **Save Last N Seconds** becomes the primary action. The same state is reflected in tray actions. The navigation rail contains **Your Clips** (focuses search or opens the library in compact mode) and **Settings** (opens the six-category preferences).
 
 Changing capture source while recording asks for confirmation because it discards the current unsaved buffer. Declining retains the previous target. Closing Flick hides its window but does **not** stop replay; choose Stop Replay or Quit Flick explicitly.
 

@@ -21,3 +21,9 @@ dist/LocalClip-*/
 tools/obs/runtime/
 tools/ffmpeg/*.exe
 tools/obs/*.cpp
+
+# Local user-generated QA screenshots/logs and trace evidence (never publish)
+qa-evidence/
+dist/qa-local/
+Flick-Visual-QA-*/
+*.trx

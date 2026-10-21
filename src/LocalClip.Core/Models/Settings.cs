@@ -21,7 +21,7 @@ public class AppSettings
     public int VideoHeight { get; set; } = 1080;
     public int VideoFps { get; set; } = 30;
     public int VideoBitrateKbps { get; set; } = 15000;
-    public string VideoEncoder { get; set; } = "obs_nvenc_h264_tex"; // Fallbacks: "jim_nvenc", "obs_x264"
+    public string VideoEncoder { get; set; } = "obs_nvenc_h264_tex"; // NVENC hardware only, jim_nvenc fallback; no silent x264 capture
     public int ReplayDurationSeconds { get; set; } = 30;
     public int BufferMemoryLimitMb { get; set; } = 256;
     public string QualityPreset { get; set; } = "Balanced"; // Light, Balanced, Smooth; user-visible presets
