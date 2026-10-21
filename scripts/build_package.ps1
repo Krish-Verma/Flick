@@ -1,5 +1,6 @@
 # Build and Package Script for LocalClip (Windows x64)
-# Enforces clean reproducible build and packaging for Milestone M4
+# The CI-only -SkipNativeBuild switch requires a previously compiled owned host.
+param([switch]$SkipNativeBuild)
 
 $ErrorActionPreference = "Stop"
 
@@ -15,7 +16,9 @@ if (Test-Path $ZipPath) { Remove-Item -Force $ZipPath }
 New-Item -ItemType Directory -Path $PackageDir -Force | Out-Null
 
 if (-not (Get-Command dotnet -ErrorAction SilentlyContinue)) { throw "dotnet SDK not found on PATH" }
-if (-not (Get-Command g++ -ErrorAction SilentlyContinue)) { throw "MinGW-w64 g++ not found on PATH" }
+if (-not $SkipNativeBuild -and -not (Get-Command g++ -ErrorAction SilentlyContinue)) {
+    throw "MinGW-w64 g++ not found on PATH"
+}
 if (-not (Test-Path (Join-Path $RootDir "tools\\obs\\runtime\\bin\\64bit\\obs.dll"))) { throw "Missing pinned OBS runtime. Run scripts/setup_tools.ps1." }
 if (-not (Test-Path (Join-Path $RootDir "tools\\ffmpeg\\ffmpeg.exe"))) { throw "Missing FFmpeg runtime. Run scripts/setup_tools.ps1." }
 
@@ -26,15 +29,20 @@ $ObsInc = Join-Path $RootDir "tools\obs\include\libobs"
 $HostInc = Join-Path $RootDir "src\LocalClip.CaptureHost"
 $ObsBin = Join-Path $RootDir "tools\obs\runtime\bin\64bit"
 
-g++ -O2 -std=c++17 -static-libgcc -static-libstdc++ `
-    -I "$ObsInc" -I "$HostInc" "$HostSrc" `
-    -L "$ObsBin" "-Wl,-Bstatic" -lwinpthread "-Wl,-Bdynamic" -lobs -ldwmapi `
-    -o "$HostOut"
-
-if ($LASTEXITCODE -ne 0) {
-    throw "Failed to compile LocalClip.CaptureHost.exe"
+if (-not $SkipNativeBuild) {
+    g++ -O2 -std=c++17 -static-libgcc -static-libstdc++ `
+        -I "$ObsInc" -I "$HostInc" "$HostSrc" `
+        -L "$ObsBin" "-Wl,-Bstatic" -lwinpthread "-Wl,-Bdynamic" -lobs -ldwmapi `
+        -o "$HostOut"
+    if ($LASTEXITCODE -ne 0) { throw "Failed to compile LocalClip.CaptureHost.exe" }
+    Write-Host "CaptureHost compiled successfully to: $HostOut" -ForegroundColor Green
 }
-Write-Host "CaptureHost compiled successfully to: $HostOut" -ForegroundColor Green
+else {
+    if (-not (Test-Path -LiteralPath $HostOut -PathType Leaf)) {
+        throw "CI requested -SkipNativeBuild but verified host binary is missing: $HostOut"
+    }
+    Write-Host "Using capture host prebuilt and verified by dedicated MSYS2 compilation step." -ForegroundColor Yellow
+}
 
 Write-Host "=== Step 3: Publishing WPF Application (Release win-x64) ===" -ForegroundColor Cyan
 $AppCsproj = Join-Path $RootDir "src\LocalClip.App\LocalClip.App.csproj"

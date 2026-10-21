@@ -6,6 +6,7 @@ Does not sign or publish releases or alter your repository visibility.
 #>
 param(
     [switch]$SkipPortable,
+    [switch]$SkipNativeBuild,
     [string]$IsccPath = ""
 )
 $ErrorActionPreference = "Stop"
@@ -15,7 +16,7 @@ $icon = Join-Path $root "dist\Flick.ico"
 $setup = Join-Path $root "installer\Flick.iss"
 
 if (-not $SkipPortable) {
-    & (Join-Path $PSScriptRoot "build_package.ps1")
+    & (Join-Path $PSScriptRoot "build_package.ps1") -SkipNativeBuild:$SkipNativeBuild
     if ($LASTEXITCODE -and $LASTEXITCODE -ne 0) { throw "Portable build failed" }
 }
 foreach ($required in @(

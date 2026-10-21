@@ -35,14 +35,6 @@ jobs:
           update: false
           install: >-
             mingw-w64-ucrt-x86_64-gcc
-      - name: Provide native MinGW compiler for PowerShell build scripts
-        shell: pwsh
-        run: |
-          $bin = 'C:\msys64\ucrt64\bin'
-          if (-not (Test-Path (Join-Path $bin 'g++.exe'))) {
-            throw "Required pinned MSYS2 compiler not present in $bin"
-          }
-          Add-Content -Path $env:GITHUB_PATH -Value $bin
       - name: Install reviewed Inno Setup 6.7.1 compiler
         shell: pwsh
         run: |
@@ -55,6 +47,17 @@ jobs:
       - name: Download and SHA-256 verify OBS and FFmpeg runtime assets
         shell: pwsh
         run: ./scripts/setup_tools.ps1
+      - name: Build native capture host in qualified MSYS2 environment
+        shell: msys2 {0}
+        run: |
+          test -f tools/obs/runtime/bin/64bit/obs.dll
+          g++ -O2 -std=c++17 -static-libgcc -static-libstdc++ \
+            -Itools/obs/include/libobs -Isrc/LocalClip.CaptureHost \
+            src/LocalClip.CaptureHost/main.cpp \
+            -Ltools/obs/runtime/bin/64bit -Wl,-Bstatic -lwinpthread \
+            -Wl,-Bdynamic -lobs -ldwmapi \
+            -o tools/obs/runtime/bin/64bit/LocalClip.CaptureHost.exe
+          test -f tools/obs/runtime/bin/64bit/LocalClip.CaptureHost.exe
       - name: Run offline source/design contracts
         shell: pwsh
         run: |
@@ -63,7 +66,7 @@ jobs:
           ./scripts/check_flick_release_source.ps1
       - name: Build portable ZIP and conventional per-user Setup EXE
         shell: pwsh
-        run: ./scripts/build_installer.ps1
+        run: ./scripts/build_installer.ps1 -SkipNativeBuild
       - name: Check private preview hashes and included tools
         shell: pwsh
         run: |
