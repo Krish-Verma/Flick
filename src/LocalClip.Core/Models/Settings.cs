@@ -66,6 +66,18 @@ public class AppSettings
     [JsonIgnore]
     public string LoadWarning { get; private set; } = "";
 
+    // When an existing file is malformed or its values were repaired in memory,
+    // automatic capture-source/size changes must NOT silently rewrite it.
+    // Only the explicit Settings Save flow can commit a reviewed replacement.
+    [JsonIgnore]
+    public bool RequiresExplicitSettingsSave { get; private set; }
+
+    public void MarkExplicitSettingsSaveCompleted()
+    {
+        RequiresExplicitSettingsSave = false;
+        LoadWarning = "";
+    }
+
     // ALWAYS FALSE by specification: "Capture starts DISARMED"
     [JsonIgnore]
     public bool StartArmed => false;
@@ -159,23 +171,36 @@ public class AppSettings
             }
 
             if (repaired)
+            {
+                loaded.RequiresExplicitSettingsSave = true;
                 loaded.LoadWarning = "Some old or invalid preferences were safely reset in memory. Review Settings and Save to keep the changes.";
+            }
             return loaded;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException
             or JsonException or ArgumentException or NotSupportedException)
         {
             var fallback = CreateDefault();
+            fallback.RequiresExplicitSettingsSave = true;
             fallback.LoadWarning =
                 "Saved settings could not be read. Flick is using safe defaults for this session; the original settings.json was NOT overwritten. Back it up before saving new settings.";
             return fallback;
         }
     }
 
-    public void Save()
+    public void Save() => SaveToFile(GetSettingsFilePath());
+
+    /// <summary>
+    /// Writes only an already-valid settings snapshot. Incidental actions such
+    /// as selecting an initial capture source cannot replace a recovered file.
+    /// An explicit Settings Save persists a freshly staged, validated snapshot.
+    /// The path overload enables isolated regression tests without touching
+    /// the current user's real profile.
+    /// </summary>
+    public void SaveToFile(string path)
     {
-        string path = GetSettingsFilePath();
-        string dir = Path.GetDirectoryName(path)!;
+        if (RequiresExplicitSettingsSave) return;
+        string dir = Path.GetDirectoryName(Path.GetFullPath(path))!;
         Directory.CreateDirectory(dir);
         string tempPath = path + ".tmp";
         string json = JsonSerializer.Serialize(this, new JsonSerializerOptions { WriteIndented = true });
