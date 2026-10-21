@@ -63,6 +63,16 @@ Do not add working set, private bytes and VRAM as though they measured the same 
 5. **Resources:** app/host private/working sets, CPU, GPU/VRAM, FPS/frametimes, no hidden background decoders, repeated overlays and long-running stability.
 6. **Documentation/release:** raw commands/evidence, each acceptance case PASS/FAIL/BLOCKED, pinned dependencies/third-party notices, current user guide, no published release or merged PR without authorization.
 
+## Last source QA hardening (current Slice 6 draft)
+
+An additional review of the real Slice 6 code path identified and corrected three regressions that a static screenshot checklist would not catch:
+
+1. **Recovery-file preservation on actual startup:** target discovery triggers an incidental settings save. Previously this could overwrite a malformed or in-memory-repaired `settings.json` immediately after the loader promised preservation. `AppSettings.RequiresExplicitSettingsSave` now defers incidental writes to the original file; only a successful, explicit Settings Save commits the staged, validated snapshot. Isolated tests verify both a malformed file and valid JSON with bad values survive such automatic writes unchanged. The on-screen warning remains until the user reviews and saves.
+2. **Capture target consent across restarts:** a missing previously-selected game window must not silently become monitor capture. `CaptureTargetSelectionRules` requires the saved monitor index or an exact window title plus executable identity; an obsolete window handle by itself is never trusted. Both manual Start and the global hotkey reject a missing/stale selection before calling the native capture host. Pure unit tests cover monitor/window matching and missing/ambiguous window identity.
+3. **System high contrast:** the capture badge, selected navigation surface, video fallback background, and bottom status bar no longer bypass named dynamic brush resources through fixed graphite colors. The static Slice 6 check now rejects the badge regression. Actual Windows high-contrast theme screenshots and legibility remain **BLOCKED pending owner hardware**.
+
+These are source-level changes plus offline test coverage, not a claim of real game or Windows accessibility acceptance. Run the **exact-head** PR CI again after any later changes and keep all GPU/display/Discord/endurance gates BLOCKED until evidence is collected.
+
 ## Non-goals and remaining gates
 
 Slice 6 does **not** implement AI highlights, social/cloud features, a full video editor, new game injection, Electron, new processes, forced fullscreen overlays, or automatic Discord posting. It does not turn Flick public or create a v1.1 release.
