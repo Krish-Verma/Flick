@@ -41,6 +41,8 @@ public static class FlickQAScreen {
     public static extern IntPtr GetForegroundWindow();
     [DllImport("user32.dll")]
     public static extern uint GetWindowThreadProcessId(IntPtr hwnd, out uint processId);
+    [DllImport("user32.dll")]
+    public static extern uint GetDpiForWindow(IntPtr hwnd);
 }
 '@
 
@@ -73,16 +75,21 @@ foreach ($state in $States) {
     if ($width -le 0 -or $height -le 0 -or $width -gt 10000 -or $height -gt 10000) {
         throw "Window rectangle is invalid: $width x $height"
     }
-    $bitmap = New-Object Drawing.Bitmap($width, $height)
+    $dpi = [FlickQAScreen]::GetDpiForWindow($handle)
+    if ($dpi -eq 0) { $dpi = 96 }
+    $bitmap = [Drawing.Bitmap]::new($width, $height)
     $graphics = [Drawing.Graphics]::FromImage($bitmap)
     try {
         $graphics.CopyFromScreen($rect.Left, $rect.Top, 0, 0,
-            (New-Object Drawing.Size($width, $height)))
+            ([Drawing.Size]::new($width, $height)))
         $safe = ($state -replace '[^a-zA-Z0-9-]', '-')
         $output = Join-Path $OutputDirectory ("{0:D2}-{1}.png" -f $index, $safe)
         $bitmap.Save($output, [Drawing.Imaging.ImageFormat]::Png)
         $manifest += [pscustomobject]@{
             State=$state; Output=$output; PixelWidth=$width; PixelHeight=$height
+            WindowDpi=$dpi; ScalePercent=[Math]::Round(100.0 * $dpi / 96.0, 1)
+            ApproximateDipWidth=[Math]::Round($width * 96.0 / $dpi, 1)
+            ApproximateDipHeight=[Math]::Round($height * 96.0 / $dpi, 1)
             CapturedLocal=(Get-Date).ToString("o")
         }
         Write-Host "Saved $output"
