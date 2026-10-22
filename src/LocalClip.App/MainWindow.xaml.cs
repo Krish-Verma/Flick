@@ -527,7 +527,17 @@ public partial class MainWindow : Window
         {
             try { _notificationService.Preview(sound); } catch { }
         };
-        if (dialog.ShowDialog() != true) return;
+        bool? saved = dialog.ShowDialog();
+        if (dialog.UninstallRequested)
+        {
+            if (FlickUninstallLauncher.TryLaunch(out string error))
+                RealQuit();
+            else
+                MessageBox.Show(this, error, "Flick Uninstall",
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+            return;
+        }
+        if (saved != true) return;
 
         RegisterHotkeys();
         _vm.RefreshExportPreferences();

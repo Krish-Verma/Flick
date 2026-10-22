@@ -2,16 +2,16 @@
 
 ## The simple user experience
 
-**Preferred download:** [Flick-Setup.exe](https://github.com/Krish-Verma/Flick/releases/download/v1.0.1-preview.1/Flick-Setup.exe) from [Flick v1.0.1 Preview](https://github.com/Krish-Verma/Flick/releases/tag/v1.0.1-preview.1). A single EXE runs a standard Windows per-user setup wizard and installs Flick.exe with its runtime dependencies. The Start Menu entry, optional desktop icon and Installed Apps uninstall entry work like those for ordinary Windows software.
+**Preferred download:** [Flick-Setup.exe](https://github.com/Krish-Verma/Flick/releases/download/v1.0.2-preview.1/Flick-Setup.exe) from [Flick v1.0.2 — Windows NVIDIA Preview](https://github.com/Krish-Verma/Flick/releases/tag/v1.0.2-preview.1). A single EXE runs a standard Windows per-user setup wizard and installs Flick.exe with its runtime dependencies. The Start Menu entry, optional desktop icon and Installed Apps uninstall entry work like those for ordinary Windows software.
 
-**Portable alternative:** Flick-v1.0.1-win-x64.zip. It needs extraction of all files because the app expects bundled runtime directories. Most users should choose Setup.exe.
+**Portable alternative:** Flick-v1.0.2-win-x64.zip. It needs extraction of all files because the app expects bundled runtime directories. Most users should choose Setup.exe.
 
 Users do not need to find an Actions run, download an Actions artifact wrapper ZIP, open an inspection package, install .NET, build sources, or run a PowerShell installer script.
 
 ## How GitHub Releases are organized
 
 - **v1.0.0:** Original historical ZIP-only build (no normal user installer). It can remain the Latest **stable** GitHub label.
-- **v1.0.1-preview.1:** Newer **private prerelease** for beta testers. The README points directly here, instead of relying on GitHub's stable/latest badge.
+- **v1.0.2-preview.1:** Newer **private prerelease** for beta testers. The README points directly here, instead of relying on GitHub's stable/latest badge.
 - Future public stable releases should be signed, reviewed, and published only after complete physical hardware QA and third-party legal checks.
 
 The repo is currently PRIVATE. Creating a private prerelease does not make code or artifacts publicly accessible.
@@ -51,4 +51,12 @@ An unsigned EXE can be a valid preview, but do not instruct unknown users to byp
 
 The Actions artifact stores paths under its common root, so downloaded files may be nested as release-files/dist/Flick-Setup.exe or release-files/release/PREVIEW-RELEASE-NOTES.md. The publishing step must **locate each uniquely named file, copy it to a flat release-ready directory, recalculate downloaded SHA-256 values and only then create the prerelease**. A missing/duplicate asset blocks publication without retagging.
 
-The first attempt of v1.0.1-preview.1 compiled its installer and verified the source, but its publish job expected flat artifact paths and therefore stopped before creating a release. This source-only packaging correction also changes the reviewed release-version marker's final whitespace to explicitly retrigger the restricted main-branch release workflow without changing the application version or functional behavior. Retain the failed run as historical QA evidence.
+The first attempt of v1.0.2-preview.1 compiled its installer and verified the source, but its publish job expected flat artifact paths and therefore stopped before creating a release. This source-only packaging correction also changes the reviewed release-version marker's final whitespace to explicitly retrigger the restricted main-branch release workflow without changing the application version or functional behavior. Retain the failed run as historical QA evidence.
+
+## Public availability versus release labeling
+
+The owner has requested eventual public distribution, but a GitHub Release created in a PRIVATE repository is still visible only to collaborators. Public accessibility requires an administrator to change repository visibility in GitHub Settings > General > Danger Zone > Change repository visibility, after checking all branches/commits/artifacts for secrets and confirming licenses and third-party redistribution. Changing a private tag from prerelease to stable does NOT make it publicly downloadable.
+
+When the repository is switched to public, previously created non-draft release assets may also become publicly accessible. Keep the v1.0.2 Windows NVIDIA build explicitly labeled PREVIEW while AMD/Intel graphics, ARM, unsigned installer trust, FPS, endurance and licensing checks remain incomplete. Do not assert that it works on all Windows GPU configurations.
+
+A public stable/GA release is a separate user-authorized action only after compatibility and GPL dependency review. Every downloadable binary must correspond exactly to its tagged source and checksum manifest.
