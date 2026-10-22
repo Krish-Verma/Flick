@@ -7,6 +7,7 @@ Does not sign or publish releases or alter your repository visibility.
 param(
     [switch]$SkipPortable,
     [switch]$SkipNativeBuild,
+    [switch]$RequireTrustedSigning,
     [string]$IsccPath = ""
 )
 $ErrorActionPreference = "Stop"
@@ -42,8 +43,29 @@ if ([string]::IsNullOrWhiteSpace($IsccPath)) {
 if ([string]::IsNullOrWhiteSpace($IsccPath) -or -not (Test-Path -LiteralPath $IsccPath -PathType Leaf)) {
     throw "ISCC.exe not found. Install official Inno Setup 6 or supply -IsccPath. Do not silently download executables."
 }
-& $IsccPath $setup
+if ($RequireTrustedSigning) {
+    # This is intentionally unavailable without a real Public Trust signing
+    # identity and a configured SignTool/Dlib client. No fake/self-signed fallback.
+    foreach ($item in @('FLICK_SIGNTOOL_PATH','FLICK_ARTIFACT_SIGNING_DLIB','FLICK_ARTIFACT_SIGNING_METADATA')) {
+        $file = [Environment]::GetEnvironmentVariable($item)
+        if ([string]::IsNullOrWhiteSpace($file) -or -not (Test-Path -LiteralPath $file)) {
+            throw "Official release signing required; missing $item. Refusing unsigned installer."
+        }
+    }
+    $signScript = Join-Path $root 'scripts\sign_flick_file.ps1'
+    $signCommand = 'powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $q' +
+        $signScript + '$q $f'
+    & $IsccPath '/DFLICK_REQUIRE_TRUSTED_SIGNING=1' ("/Sflicksign=$signCommand") $setup
+} else {
+    & $IsccPath $setup
+}
 if ($LASTEXITCODE -ne 0) { throw "ISCC failed with exit code $LASTEXITCODE" }
+if ($RequireTrustedSigning) {
+    $flick = Join-Path $portable 'Flick.exe'
+    & (Join-Path $root 'scripts\verify_flick_trust.ps1') -PackageRoot $portable -InstallerPath (Join-Path $root 'dist\Flick-Setup.exe')
+    if ($LASTEXITCODE -ne 0) { throw "Trusted installer signature verification failed" }
+}
+
 $output = Join-Path $root "dist\Flick-Setup.exe"
 if (-not (Test-Path -LiteralPath $output)) { throw "Installer output missing: $output" }
 $hash = (Get-FileHash -LiteralPath $output -Algorithm SHA256).Hash
