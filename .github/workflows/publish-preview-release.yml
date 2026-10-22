@@ -1,10 +1,9 @@
-name: Publish Private Flick Preview to Releases
+name: LEGACY unsigned preview builder (manual test only)
 
+# Former auto-publisher intentionally disabled while Smart App Control
+# rejects our unsigned installer. Use signed-windows-qa.yml with a Public
+# Trust signing identity instead; do not mark unsigned bits public/stable.
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'release/preview-version.txt'
   workflow_dispatch:
 
 permissions:
@@ -91,75 +90,5 @@ jobs:
           retention-days: 14
 
 
-  publish-private-prerelease:
-    name: Publish direct-click Windows Setup EXE on GitHub Releases
-    needs: setup-preview
-    if: github.repository == 'Krish-Verma/Flick' && github.ref == 'refs/heads/main'
-    runs-on: windows-latest
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          name: flick-preview-release-files
-          path: release-files
-      - name: Guard repository privacy, inputs and existing tags
-        shell: pwsh
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GH_REPO: ${{ github.repository }}
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $isPrivate = gh api "repos/$env:GH_REPO" --jq '.private'
-          if ($LASTEXITCODE -ne 0 -or $isPrivate.Trim() -ne 'true') {
-            throw "Refusing to publish preview release while repository is public"
-          }
-          # upload-artifact preserves common directory roots (dist/ and
-          # release/). Normalize defensively; reject duplicate/missing files.
-          New-Item -ItemType Directory -Force -Path 'release-ready' | Out-Null
-          $candidates = @(Get-ChildItem -LiteralPath 'release-files' -File -Recurse)
-          foreach ($f in @('Flick-Setup.exe','Flick-v1.0.2-win-x64.zip','SHA256SUMS.txt','PREVIEW-RELEASE-NOTES.md')) {
-            $matches = @($candidates | Where-Object { $_.Name -eq $f })
-            if ($matches.Count -ne 1) {
-              throw "Expected exactly one release asset named $f but got $($matches.Count)"
-            }
-            Copy-Item -LiteralPath $matches[0].FullName -Destination (Join-Path 'release-ready' $f) -Force
-          }
-          $manifest = Get-Content -LiteralPath 'release-ready/SHA256SUMS.txt' -Raw
-          foreach ($filename in @('Flick-Setup.exe','Flick-v1.0.2-win-x64.zip')) {
-            $actual = (Get-FileHash -LiteralPath (Join-Path 'release-ready' $filename) -Algorithm SHA256).Hash
-            if (-not $manifest.Contains("$actual  $filename")) {
-              throw "Downloaded artifact SHA-256 does not match manifest: $filename"
-            }
-          }
-          # Listing releases is a successful API call even when this tag is
-          # absent; avoid terminating PowerShell on a 404 from release view.
-          $existing = @(gh release list --repo $env:GH_REPO --limit 100 --json tagName --jq '.[].tagName')
-          if ($LASTEXITCODE -ne 0) { throw "Failed to inspect existing GitHub releases" }
-          if ($existing -contains 'v1.0.2-preview.2') {
-            throw "This prerelease already exists; refusing to modify its assets"
-          }
-      - name: Create PRIVATE prerelease with one-click Setup EXE
-        shell: pwsh
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GH_REPO: ${{ github.repository }}
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $argsList = @(
-            'release', 'create', 'v1.0.2-preview.2',
-            'release-ready/Flick-Setup.exe#Windows installer (double-click)',
-            'release-ready/Flick-v1.0.2-win-x64.zip#Portable ZIP',
-            'release-ready/SHA256SUMS.txt#SHA-256 checksums',
-            '--repo', $env:GH_REPO,
-            '--target', $env:GITHUB_SHA,
-            '--title', 'Flick v1.0.2 — Windows NVIDIA NVENC Preview 2',
-            '--notes-file', 'release-ready/PREVIEW-RELEASE-NOTES.md',
-            '--prerelease', '--latest=false'
-          )
-          & gh @argsList
-          if ($LASTEXITCODE -ne 0) { throw "GitHub prerelease creation failed" }
-          Write-Host "Flick preview release published privately on GitHub Releases."
-
-# The private preview is NOT a public/stable release. It is created only from
-# main after the reviewed version marker changes, never from untrusted PR code.
+# Intentional end of workflow: only upload private unsigned CI evidence.
+# No job in this file may create tags, releases, or publicly downloadable EXEs.

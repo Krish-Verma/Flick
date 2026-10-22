@@ -65,3 +65,19 @@ Require $setupScript 'Flick-Setup\.exe' "User-facing installer must be a single 
 Require $lock '1\.0\.2-preview\.2' "Pinned app version must match tag"
 if ($versions.Trim() -ne "1.0.2-preview.2") { throw "Release version manifest does not match compiled version" }
 Write-Host "Flick packaging and memory source contracts PASS (not a hardware performance test)." -ForegroundColor Green
+
+# No automatic unsigned GitHub Releases may be created after SAC block report.
+$legacyRelease = Read ".github/workflows/publish-preview-release.yml"
+$signedWorkflow = Read ".github/workflows/signed-windows-qa.yml"
+$signingImpl = Read "scripts/build_trusted_flick_preview.ps1"
+$trustAudit = Read "scripts/verify_flick_trust.ps1"
+if ($legacyRelease -match '(?im)^\s*-\s+''?release'',\s*''?create''?') {
+    throw "Legacy unsigned workflow must not publish release binaries"
+}
+Require $legacyRelease 'workflow_dispatch:' "Legacy workflow must be manually invoked only"
+Require $signedWorkflow 'flick-trusted-signing' "Signed candidate must use a protected GitHub environment"
+Require $signedWorkflow 'id-token: write' "Azure Public Trust uses OIDC, not exported private keys"
+Require $signedWorkflow 'prepare_flick_signing\.ps1' "Prepare the CA signing client before building"
+Require $signingImpl 'RequireTrustedSigning' "Inno must sign Setup and Uninstaller"
+Require $trustAudit 'Get-AuthenticodeSignature' "Public release gate must verify trusted signatures"
+Write-Host "Unsigned release publishing remains disabled pending validated Public Trust signing." -ForegroundColor Yellow
