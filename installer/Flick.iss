@@ -19,6 +19,13 @@ UsePreviousAppDir=yes
 UninstallDisplayName=Flick
 UninstallDisplayIcon={app}\{#MyAppExeName}
 SetupIconFile=..\dist\Flick.ico
+; Official signed builds invoke the host-provided flicksign SignTool through
+; the Inno compiler and sign Setup AND Uninstaller. No signing certificate is
+; embedded in this repository. Ordinary private-preview builds stay unsigned.
+#ifdef FLICK_REQUIRE_TRUSTED_SIGNING
+SignTool=flicksign
+SignedUninstaller=yes
+#endif
 LicenseFile=..\LICENSE
 OutputDir=..\dist
 OutputBaseFilename=Flick-Setup

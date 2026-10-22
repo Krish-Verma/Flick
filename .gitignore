@@ -33,3 +33,7 @@ src/LocalClip.App/Assets/Brand/Flick.ico
 dist/Flick.ico
 dist/Flick-Setup-*.exe
 dist/SHA256SUMS.txt
+
+# Only temporary Artifact Signing account metadata (NOT credentials) is kept
+# locally and is never committed alongside distributable binaries.
+dist/signing/

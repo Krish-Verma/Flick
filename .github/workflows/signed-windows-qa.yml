@@ -1,0 +1,143 @@
+name: Build Trusted Flick Candidate for Smart App Control QA
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: Type SIGN_FLICK_FOR_QA to build private signed test artifacts
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  trusted-windows-candidate:
+    if: github.repository == 'Krish-Verma/Flick' && github.ref == 'refs/heads/main' && inputs.confirm == 'SIGN_FLICK_FOR_QA'
+    runs-on: windows-2025
+    timeout-minutes: 110
+    environment: flick-trusted-signing
+    permissions:
+      id-token: write
+      contents: read
+    env:
+      DOTNET_NOLOGO: 'true'
+      DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+      FLICK_HARDWARE_TESTS: '0'
+      FLICK_SIGNING_ENDPOINT: ${{ vars.FLICK_SIGNING_ENDPOINT }}
+      FLICK_SIGNING_ACCOUNT: ${{ vars.FLICK_SIGNING_ACCOUNT }}
+      FLICK_SIGNING_PROFILE: ${{ vars.FLICK_SIGNING_PROFILE }}
+      FLICK_SIGNING_TRUST_MODEL: 'PublicTrust'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fail closed if a verified Artifact Signing identity is missing
+        shell: pwsh
+        env:
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          foreach ($name in @('FLICK_SIGNING_ENDPOINT','FLICK_SIGNING_ACCOUNT','FLICK_SIGNING_PROFILE',
+                              'AZURE_CLIENT_ID','AZURE_TENANT_ID','AZURE_SUBSCRIPTION_ID')) {
+            if ([string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($name))) {
+              throw "Signing identity missing: $name. Do not generate an unsigned public build."
+            }
+          }
+          Write-Host "Signing configuration present; validating Windows build and Azure authentication."
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.402'
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          update: false
+          install: >-
+            mingw-w64-ucrt-x86_64-gcc
+      - name: Install Inno Setup 6.7.1 compiler
+        shell: pwsh
+        run: |
+          choco install innosetup --version=6.7.1 --yes --no-progress --limit-output
+          if ($LASTEXITCODE -ne 0) { throw "Pinned Inno compiler installation failed." }
+      - name: Download SHA-verified OBS/FFmpeg from pinned upstreams
+        shell: pwsh
+        run: ./scripts/setup_tools.ps1
+      - name: Compile libobs native capture host
+        shell: msys2 {0}
+        run: |
+          test -f tools/obs/runtime/bin/64bit/obs.dll
+          g++ -O2 -std=c++17 -static-libgcc -static-libstdc++ \
+            -Itools/obs/include/libobs -Isrc/LocalClip.CaptureHost \
+            src/LocalClip.CaptureHost/main.cpp \
+            -Ltools/obs/runtime/bin/64bit -Wl,-Bstatic -lwinpthread \
+            -Wl,-Bdynamic -lobs -ldwmapi \
+            -o tools/obs/runtime/bin/64bit/LocalClip.CaptureHost.exe
+          test -f tools/obs/runtime/bin/64bit/LocalClip.CaptureHost.exe
+      - name: Validate the source and all offline tests
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          ./scripts/check_flick_release_source.ps1
+          dotnet restore LocalClip.slnx
+          if ($LASTEXITCODE -ne 0) { throw "Restore failed" }
+          dotnet build LocalClip.slnx -c Release --warnaserror --no-restore
+          if ($LASTEXITCODE -ne 0) { throw "Build failed" }
+          ./scripts/run_tests.ps1
+          if ($LASTEXITCODE -ne 0) { throw "Offline regression suite failed" }
+      - name: Authenticate to Public Trust Artifact Signing via Azure workload federation
+        uses: azure/login@v3
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      - name: Install Microsoft's signed Artifact Signing client
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $msi = Join-Path $env:RUNNER_TEMP 'ArtifactSigningClientTools.msi'
+          Invoke-WebRequest -Uri 'https://download.microsoft.com/download/70ad2c3b-761f-4aa9-a9de-e7405aa2b4c1/ArtifactSigningClientTools.msi' -OutFile $msi
+          $signature = Get-AuthenticodeSignature -LiteralPath $msi
+          if ($signature.Status -ne 'Valid' -or $signature.SignerCertificate.Subject -notmatch 'Microsoft') {
+             throw 'Official Microsoft Artifact Signing client MSI has no valid Microsoft signature.'
+          }
+          $proc = Start-Process msiexec.exe -PassThru -Wait -ArgumentList @('/I',('"' + $msi + '"'),'/quiet','/norestart')
+          if ($proc.ExitCode -notin @(0,3010)) { throw "Microsoft signing client installation failed: $($proc.ExitCode)" }
+          if (-not (dotnet --list-runtimes | Select-String -Pattern '^Microsoft.NETCore.App 8\.')) {
+            throw 'Artifact Signing dlib requires .NET 8 Runtime on this runner.'
+          }
+      - name: Configure Public Trust SignTool without exporting signing keys
+        shell: pwsh
+        run: ./scripts/prepare_flick_signing.ps1
+      - name: Sign all unsigned deployment code, the Setup EXE and Inno uninstaller
+        shell: pwsh
+        run: ./scripts/build_trusted_flick_preview.ps1 -SkipNativeBuild
+      - name: Install in isolated test directory and verify signed Windows uninstaller
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $isolated = Join-Path $env:RUNNER_TEMP 'Flick Signed Uninstaller QA'
+          New-Item -ItemType Directory -Path $isolated -Force | Out-Null
+          $setup = Join-Path (Get-Location) 'dist\Flick-Setup.exe'
+          $installer = Start-Process -FilePath $setup -Wait -PassThru -ArgumentList @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART',('/DIR="' + $isolated + '"'))
+          if ($installer.ExitCode -ne 0) { throw "Inno silent install smoke failed: $($installer.ExitCode)" }
+          $uninstallExe = Join-Path $isolated 'unins000.exe'
+          ./scripts/verify_flick_trust.ps1 -PackageRoot (Join-Path (Get-Location) 'dist\Flick-v1.0.2-win-x64') -InstallerPath $setup -InstalledUninstallerPath $uninstallExe
+          $uninstaller = Start-Process -FilePath $uninstallExe -Wait -PassThru -ArgumentList @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART')
+          if ($uninstaller.ExitCode -ne 0) { throw "Inno silent uninstall failed: $($uninstaller.ExitCode)" }
+          if (Test-Path -LiteralPath (Join-Path $isolated 'Flick.exe')) {
+             throw "Signed uninstall did not remove the installed Flick program."
+          }
+      - name: Upload SIGNED CANDIDATE PRIVATELY for Smart App Control QA
+        uses: actions/upload-artifact@v4
+        with:
+          name: flick-signed-smart-app-control-qa-${{ github.sha }}
+          path: |
+            dist/Flick-Setup.exe
+            dist/Flick-v1.0.2-win-x64.zip
+            dist/SHA256SUMS.txt
+          if-no-files-found: error
+          retention-days: 7
+
+# This workflow NEVER publishes a GitHub Release or makes the repo public.
+# The signed candidate requires Windows 11 Smart App Control on-device testing.
+# Certificate purchase and Azure Public Trust enrollment are manual.

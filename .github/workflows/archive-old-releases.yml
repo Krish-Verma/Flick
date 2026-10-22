@@ -1,0 +1,64 @@
+name: Archive Superseded Flick Releases
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'release/archive-previous-downloads.trigger'
+
+permissions:
+  contents: read
+
+jobs:
+  archive-old-releases:
+    if: github.repository == 'Krish-Verma/Flick' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Verify the newest private preview before touching older entries
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          [[ "$(gh api "repos/$GH_REPO" --jq '.private')" == "true" ]] ||
+            { echo "Repository visibility changed: stop"; exit 1; }
+          gh api "repos/$GH_REPO/releases/tags/v1.0.2-preview.2" |
+            jq -e '
+              .draft == false and
+              .prerelease == true and
+              .target_commitish == "346eca07170f4b4d561044a3898bf789bdf4fc3b" and
+              ([.assets[] | select(.name=="Flick-Setup.exe" and .digest=="sha256:9582623cc417dcd48e99fb99b4b56fbff6b781675d4a19c699cf3e8e08148c0b")] | length)==1 and
+              ([.assets[] | select(.name=="Flick-v1.0.2-win-x64.zip")] | length)==1
+            '
+          echo "Protected newest preview release and digest verified."
+      - name: Remove only 3 specifically superseded GitHub Release records
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          for tag in v1.0.0 v1.0.1-preview.1 v1.0.2-preview.1; do
+            if gh release view "$tag" --repo "$GH_REPO" --json tagName >/dev/null 2>&1; then
+              echo "Removing outdated Release entry $tag. Retaining Git tag and commit."
+              gh release delete "$tag" --repo "$GH_REPO" --yes
+            else
+              echo "Already absent (idempotent): $tag"
+            fi
+          done
+      - name: Verify that only the protected current release remains
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          gh release list --repo "$GH_REPO" --limit 30 --json tagName,isDraft,isPrerelease |
+            jq -e 'length==1 and .[0].tagName=="v1.0.2-preview.2" and .[0].isPrerelease==true'
+          echo "Release list is unambiguous; historical Git source tags preserved."
+
+# This is a one-time, owner-requested cleanup. No Git tags are removed.
+# It does NOT make the repo public or claim unsigned builds are safe.
