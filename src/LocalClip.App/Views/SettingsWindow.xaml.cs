@@ -25,6 +25,8 @@ public partial class SettingsWindow : Window
     private bool _loading;
     private string _activeCategory = "Recording";
 
+    public bool UninstallRequested { get; private set; }
+
     public event Action<bool, bool>? PreviewNotificationRequested;
     public event EventHandler? ManageFoldersRequested;
 
@@ -354,6 +356,26 @@ public partial class SettingsWindow : Window
             }
             MessageBox.Show("Settings Couldn't Be Saved: " + ex.Message, "Flick Settings");
         }
+    }
+
+    private void UninstallFlick_Click(object sender, RoutedEventArgs e)
+    {
+        if (!FlickUninstallLauncher.IsInstalled)
+        {
+            MessageBox.Show(this,
+                "This is a portable copy or Flick was not installed normally. Quit Flick through the tray and delete the extracted application folder. Your videos and settings live separately.",
+                "Portable Flick", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+        if (MessageBox.Show(this,
+                "Uninstall Flick now? Any active replay buffer will be stopped. The uninstaller will ask separately whether to remove Flick settings and caches. Original recordings and exported videos are kept.",
+                "Uninstall Flick", MessageBoxButton.YesNo,
+                MessageBoxImage.Warning, MessageBoxResult.No) != MessageBoxResult.Yes)
+            return;
+
+        UninstallRequested = true;
+        DialogResult = false;
+        Close();
     }
 
     private void Cancel_Click(object sender, RoutedEventArgs e)

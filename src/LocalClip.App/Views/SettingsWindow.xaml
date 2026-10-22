@@ -237,6 +237,19 @@
                     <TextBlock Text="The full-logo notification lasts about two seconds. Both options are independently toggleable and enabled by default. No permanent overlay runs in the background."
                                Style="{StaticResource Flick.Text.Muted}"
                                TextWrapping="Wrap" Margin="0,19,0,0"/>
+                    <Separator Background="{DynamicResource Flick.Brush.Border}" Margin="0,23,0,21"/>
+                    <TextBlock Text="App Management" Style="{StaticResource Flick.Text.Section}"
+                               Margin="0,0,0,11"/>
+                    <TextBlock Text="Use Windows Uninstall to remove the program. You can separately choose whether to remove Flick settings and cache. Original videos and exports are always kept."
+                               Style="{StaticResource Flick.Text.Muted}"
+                               TextWrapping="Wrap" Margin="0,0,0,12"/>
+                    <Button x:Name="BtnUninstallFlick" Content="Uninstall Flick…"
+                            Click="UninstallFlick_Click"
+                            Style="{StaticResource Flick.Button.Secondary}"
+                            HorizontalAlignment="Left" MinWidth="150"/>
+                    <TextBlock Text="Portable ZIP? Quit Flick and delete its extracted application folder instead."
+                               Style="{StaticResource Flick.Text.Muted}"
+                               TextWrapping="Wrap" Margin="0,11,0,0"/>
                 </StackPanel>
 
                 <!-- Sharing -->
