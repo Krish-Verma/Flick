@@ -63,9 +63,9 @@ begin
   if not UninstallSilent then
     RemoveFlickProfile :=
       MsgBox('Also remove Flick settings, the clip-library index, thumbnails and temporary cache?' +
-        #13#10 + #13#10 +
+        Chr(13) + Chr(10) + Chr(13) + Chr(10) +
         'This cannot be undone. Original recordings, exports, and imported clips will NOT be deleted.' +
-        #13#10 + #13#10 +
+        Chr(13) + Chr(10) + Chr(13) + Chr(10) +
         'Choose No to keep your preferences and library for a later reinstall.',
         mbConfirmation, MB_YESNO or MB_DEFBUTTON2) = IDYES;
 end;
