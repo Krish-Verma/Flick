@@ -84,7 +84,7 @@ jobs:
           name: flick-preview-release-files
           path: |
             dist/Flick-Setup.exe
-            dist/Flick-v1.0.1-win-x64.zip
+            dist/Flick-v1.0.2-win-x64.zip
             dist/SHA256SUMS.txt
             release/PREVIEW-RELEASE-NOTES.md
           if-no-files-found: error
@@ -118,7 +118,7 @@ jobs:
           # release/). Normalize defensively; reject duplicate/missing files.
           New-Item -ItemType Directory -Force -Path 'release-ready' | Out-Null
           $candidates = @(Get-ChildItem -LiteralPath 'release-files' -File -Recurse)
-          foreach ($f in @('Flick-Setup.exe','Flick-v1.0.1-win-x64.zip','SHA256SUMS.txt','PREVIEW-RELEASE-NOTES.md')) {
+          foreach ($f in @('Flick-Setup.exe','Flick-v1.0.2-win-x64.zip','SHA256SUMS.txt','PREVIEW-RELEASE-NOTES.md')) {
             $matches = @($candidates | Where-Object { $_.Name -eq $f })
             if ($matches.Count -ne 1) {
               throw "Expected exactly one release asset named $f but got $($matches.Count)"
@@ -126,7 +126,7 @@ jobs:
             Copy-Item -LiteralPath $matches[0].FullName -Destination (Join-Path 'release-ready' $f) -Force
           }
           $manifest = Get-Content -LiteralPath 'release-ready/SHA256SUMS.txt' -Raw
-          foreach ($filename in @('Flick-Setup.exe','Flick-v1.0.1-win-x64.zip')) {
+          foreach ($filename in @('Flick-Setup.exe','Flick-v1.0.2-win-x64.zip')) {
             $actual = (Get-FileHash -LiteralPath (Join-Path 'release-ready' $filename) -Algorithm SHA256).Hash
             if (-not $manifest.Contains("$actual  $filename")) {
               throw "Downloaded artifact SHA-256 does not match manifest: $filename"
@@ -136,7 +136,7 @@ jobs:
           # absent; avoid terminating PowerShell on a 404 from release view.
           $existing = @(gh release list --repo $env:GH_REPO --limit 100 --json tagName --jq '.[].tagName')
           if ($LASTEXITCODE -ne 0) { throw "Failed to inspect existing GitHub releases" }
-          if ($existing -contains 'v1.0.1-preview.1') {
+          if ($existing -contains 'v1.0.2-preview.1') {
             throw "This prerelease already exists; refusing to modify its assets"
           }
       - name: Create PRIVATE prerelease with one-click Setup EXE
@@ -147,13 +147,13 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           $argsList = @(
-            'release', 'create', 'v1.0.1-preview.1',
+            'release', 'create', 'v1.0.2-preview.1',
             'release-ready/Flick-Setup.exe#Windows installer (double-click)',
-            'release-ready/Flick-v1.0.1-win-x64.zip#Portable ZIP',
+            'release-ready/Flick-v1.0.2-win-x64.zip#Portable ZIP',
             'release-ready/SHA256SUMS.txt#SHA-256 checksums',
             '--repo', $env:GH_REPO,
             '--target', $env:GITHUB_SHA,
-            '--title', 'Flick v1.0.1 — Newest Windows Preview',
+            '--title', 'Flick v1.0.2 — Windows NVIDIA NVENC Preview',
             '--notes-file', 'release-ready/PREVIEW-RELEASE-NOTES.md',
             '--prerelease', '--latest=false'
           )
