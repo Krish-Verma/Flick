@@ -50,7 +50,7 @@ Use disposable, standard non-admin Windows 11 x64 account with synthetic files u
 - Run the NVIDIA RTX 5060 capture/export pipeline (including 30-second replay and Discord-sized MP4) on qualified Windows x64. Record 127 full test outcomes. Do not infer AMD/Intel GPU support from WPF app launch.
 - The source/installer must clearly state Windows 11 x64 with NVIDIA NVENC support; AMD-only, Intel-only, ARM, 32-bit Windows and macOS/Linux unsupported, Windows 10 unqualified. Do not advertise universal GPU compatibility.
 - Real 100/125/150/200% display scaling, high contrast, UI layout and normal Uninstall button visibility in General category; actual 2-hour/8-hour soak and FPS/1% lows if authorized, else BLOCKED.
-- Verify GitHub tag/Setup binary/ZIP/checksums all correspond to exact release commit and correct v1.0.2-preview.1 metadata; no source leak, personal clips, private screenshots or tokens.
+- Verify GitHub tag/Setup binary/ZIP/checksums all correspond to exact release commit and correct v1.0.2-preview.2 metadata; no source leak, personal clips, private screenshots or tokens.
 
 ## Final output
 

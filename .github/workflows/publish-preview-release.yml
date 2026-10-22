@@ -136,7 +136,7 @@ jobs:
           # absent; avoid terminating PowerShell on a 404 from release view.
           $existing = @(gh release list --repo $env:GH_REPO --limit 100 --json tagName --jq '.[].tagName')
           if ($LASTEXITCODE -ne 0) { throw "Failed to inspect existing GitHub releases" }
-          if ($existing -contains 'v1.0.2-preview.1') {
+          if ($existing -contains 'v1.0.2-preview.2') {
             throw "This prerelease already exists; refusing to modify its assets"
           }
       - name: Create PRIVATE prerelease with one-click Setup EXE
@@ -147,13 +147,13 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           $argsList = @(
-            'release', 'create', 'v1.0.2-preview.1',
+            'release', 'create', 'v1.0.2-preview.2',
             'release-ready/Flick-Setup.exe#Windows installer (double-click)',
             'release-ready/Flick-v1.0.2-win-x64.zip#Portable ZIP',
             'release-ready/SHA256SUMS.txt#SHA-256 checksums',
             '--repo', $env:GH_REPO,
             '--target', $env:GITHUB_SHA,
-            '--title', 'Flick v1.0.2 — Windows NVIDIA NVENC Preview',
+            '--title', 'Flick v1.0.2 — Windows NVIDIA NVENC Preview 2',
             '--notes-file', 'release-ready/PREVIEW-RELEASE-NOTES.md',
             '--prerelease', '--latest=false'
           )

@@ -4,7 +4,7 @@ $root = (Get-Item $PSScriptRoot).Parent.FullName
 $dist = Join-Path $root "dist"
 $manifest = Join-Path $dist "SHA256SUMS.txt"
 $version = (Get-Content -LiteralPath (Join-Path $root "release\preview-version.txt") -Raw).Trim()
-if ($version -ne "1.0.2-preview.1") { throw "Unexpected Flick release version: $version" }
+if ($version -ne "1.0.2-preview.2") { throw "Unexpected Flick release version: $version" }
 if (-not (Test-Path -LiteralPath $manifest -PathType Leaf)) { throw "Missing SHA256SUMS.txt" }
 $checksums = Get-Content -LiteralPath $manifest -Raw
 $files = @(

@@ -7,7 +7,7 @@
 AppId={{F3C41F96-EF62-4CB1-A292-91EF3F6C18E8}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
-AppVerName=Flick 1.0.2 — Windows NVIDIA NVENC Preview
+AppVerName=Flick 1.0.2 — Windows NVIDIA NVENC Preview 2
 AppPublisher=Flick Contributors
 AppPublisherURL=https://github.com/Krish-Verma/Flick
 AppSupportURL=https://github.com/Krish-Verma/Flick/issues
@@ -81,10 +81,14 @@ begin
 
   // Remove only a startup entry belonging to this installed executable.
   RunKey := 'Software\Microsoft\Windows\CurrentVersion\Run';
-  if RegQueryStringValue(HKCU, RunKey, 'Flick', StartupValue) then
+  if RegQueryStringValue(HKCU32, RunKey, 'Flick', StartupValue) then
     if Pos(Lowercase(ExpandConstant('{app}\Flick.exe')),
       Lowercase(StartupValue)) > 0 then
-      RegDeleteValue(HKCU, RunKey, 'Flick');
+      RegDeleteValue(HKCU32, RunKey, 'Flick');
+  if RegQueryStringValue(HKCU64, RunKey, 'Flick', StartupValue) then
+    if Pos(Lowercase(ExpandConstant('{app}\Flick.exe')),
+      Lowercase(StartupValue)) > 0 then
+      RegDeleteValue(HKCU64, RunKey, 'Flick');
 
   if not RemoveFlickProfile then
     Exit;

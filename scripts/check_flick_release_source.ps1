@@ -37,8 +37,13 @@ $settingsCode = Read "src/LocalClip.App/Views/SettingsWindow.xaml.cs"
 $launcher = Read "src/LocalClip.App/Services/FlickUninstallLauncher.cs"
 Require $settingsUi 'Uninstall Flick' "General Settings needs app uninstall action"
 Require $settingsCode 'UninstallRequested' "Uninstall must require explicit user confirmation"
-Require $launcher 'Registry.CurrentUser.OpenSubKey' "Launch only installed per-user uninstaller"
+Require $launcher 'RegistryKey.OpenBaseKey' "Uninstall lookup must check explicit Windows Registry views"
+Require $launcher 'RegistryHive.CurrentUser' "Uninstaller lookup must remain per-user"
 Require $launcher 'unins000.exe' "Do not attempt self-delete outside Windows uninstaller"
+Require $launcher 'RegistryView.Registry32' "Uninstall button must handle per-user 32-bit Inno registry view"
+Require $launcher 'RegistryView.Registry64' "Uninstall button must handle per-user 64-bit registry view"
+Require $install 'HKCU32' "Remove owned startup Run entry in the Inno 32-bit view"
+Require $install 'HKCU64' "Remove owned startup Run entry in the Inno 64-bit view"
 
 Require $install 'DefaultDirName=\{localappdata\}\\Programs\\Flick' "Program and user metadata must be separate"
 Require $start 'Environment.ProcessPath' "Startup must use the running executable path"
@@ -53,10 +58,10 @@ if ($install -match '(?im)^\s*UninstallDelete|deleteall') {
 $lock = Read "dependencies.lock.json"
 $setupScript = Read "scripts/build_installer.ps1"
 $versions = Read "release/preview-version.txt"
-Require $csproj '<Version>1\.0\.2-preview\.1</Version>' "App assembly version must match preview tag"
+Require $csproj '<Version>1\.0\.2-preview\.2</Version>' "App assembly version must match preview tag"
 Require $install 'MyAppVersion "1\.0\.2"' "Inno Setup AppVersion must match"
 Require $package 'Flick-v1\.0\.2-win-x64' "Portable version must match installer"
 Require $setupScript 'Flick-Setup\.exe' "User-facing installer must be a single EXE"
-Require $lock '1\.0\.2-preview\.1' "Pinned app version must match tag"
-if ($versions.Trim() -ne "1.0.2-preview.1") { throw "Release version manifest does not match compiled version" }
+Require $lock '1\.0\.2-preview\.2' "Pinned app version must match tag"
+if ($versions.Trim() -ne "1.0.2-preview.2") { throw "Release version manifest does not match compiled version" }
 Write-Host "Flick packaging and memory source contracts PASS (not a hardware performance test)." -ForegroundColor Green

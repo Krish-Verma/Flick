@@ -1,6 +1,6 @@
 # Flick — lightweight, private gameplay clipping for Windows
 
-**Windows download:** [**Flick-Setup.exe — latest private preview**](https://github.com/Krish-Verma/Flick/releases/download/v1.0.2-preview.1/Flick-Setup.exe) · [Preview release notes](https://github.com/Krish-Verma/Flick/releases/tag/v1.0.2-preview.1)
+**Windows download:** [**Flick-Setup.exe — latest private preview**](https://github.com/Krish-Verma/Flick/releases/download/v1.0.2-preview.2/Flick-Setup.exe) · [Preview release notes](https://github.com/Krish-Verma/Flick/releases/tag/v1.0.2-preview.2)
 
 Flick is a Windows-native game clipper for capturing the last 15–120 seconds, trimming a clip without altering its original file, and exporting an MP4 suitable for sharing. The product is designed to be free, offline-first and open source, without accounts, telemetry, forced uploads or a heavyweight permanent gaming overlay.
 
@@ -28,9 +28,9 @@ Windows 11 x86-64 with a supported NVIDIA NVENC GPU is the qualified target. AMD
 
 ## Download Flick for Windows
 
-**Newest private preview: [Flick v1.0.2 Preview 1](https://github.com/Krish-Verma/Flick/releases/tag/v1.0.2-preview.1)**
+**Newest private preview: [Flick v1.0.2 Preview 2](https://github.com/Krish-Verma/Flick/releases/tag/v1.0.2-preview.2)**
 
-**[Download Flick-Setup.exe — normal Windows installer](https://github.com/Krish-Verma/Flick/releases/download/v1.0.2-preview.1/Flick-Setup.exe)**
+**[Download Flick-Setup.exe — normal Windows installer](https://github.com/Krish-Verma/Flick/releases/download/v1.0.2-preview.2/Flick-Setup.exe)**
 
 One EXE runs the Windows setup wizard. It installs Flick in the Start Menu, registers it in Windows Installed Apps, and offers an optional desktop shortcut. You don't need to install .NET, OBS, or FFmpeg separately. For a no-install option, download Flick-v1.0.2-win-x64.zip from the same release and extract the entire folder before launching Flick.exe.
 
