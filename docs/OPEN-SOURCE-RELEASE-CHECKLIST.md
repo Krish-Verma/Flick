@@ -44,3 +44,13 @@
 - Check the downloaded Setup EXE remains a separate Downloads file while the actual installed app is located under the selected program directory. Uninstall should not silently erase Downloads, Windows Defender logs, history or arbitrary user files.
 - Verify native x64 Windows NVIDIA NVENC hardware. Explicitly mark AMD-only/Intel-only/ARM/Windows 10 compatibility UNSUPPORTED or UNQUALIFIED rather than PASS.
 - Third-party licenses/source, code signing and public visibility review remain distinct from installer mechanics. An unsigned PREVIEW on a private repository is not a public stable release.
+
+
+## Smart App Control — public signing gate (2026-10-22)
+
+- Existing v1.0.2-preview.2 unsigned installer is blocked by Windows Smart App Control and must not be labeled trusted or public stable. No per-app bypass.
+- Obtain a Public Trust code signing identity through a verified CA (recommended Azure Artifact Signing) or approved SignPath Foundation OSS program.
+- Sign and timestamp all shipped code and Setup EXE and generated Inno Uninstaller. Verify every Windows EXE/DLL Authenticode Status Valid and matching first-party signing identity.
+- Test Smart App Control ON/enforced on real Windows 11 NVIDIA PC, log CodeIntegrity events and all feature paths. Ensure no remaining unsigned helper.
+- Require third-party OBS/FFmpeg license/corresponding-source audit, historical repo secrets/media audit, publisher certificate verification and explicit owner public-stable approval.
+- One-time release list cleanup preserves Git tags while deleting superseded GitHub Release entries. Removing release links does not grant Smart App Control trust.

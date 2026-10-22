@@ -60,3 +60,12 @@ The owner has requested eventual public distribution, but a GitHub Release creat
 When the repository is switched to public, previously created non-draft release assets may also become publicly accessible. Keep the v1.0.2 Windows NVIDIA build explicitly labeled PREVIEW while AMD/Intel graphics, ARM, unsigned installer trust, FPS, endurance and licensing checks remain incomplete. Do not assert that it works on all Windows GPU configurations.
 
 A public stable/GA release is a separate user-authorized action only after compatibility and GPL dependency review. Every downloadable binary must correspond exactly to its tagged source and checksum manifest.
+
+
+## Signed public release prerequisite and old-release cleanup
+
+Windows Smart App Control blocked the UNSIGNED v1.0.2-preview.2 installer. Until a Public Trust signer is provisioned and a signed build passes SAC ON testing, do not publish further unsigned releases or mark preview as stable/public. The legacy unsigned auto-publishing workflow is disabled; signed-windows-qa.yml is a manual private signed candidate only.
+
+The owner requested removing confusing older download choices. A one-time private GitHub Actions workflow archive-old-releases.yml removes GitHub Release entries for v1.0.0, v1.0.1-preview.1 and v1.0.2-preview.1 ONLY after checking the exact current v1.0.2-preview.2 asset digest and source SHA. Git source tags and commits remain, and docs/ARCHIVED-RELEASES.md captures artifact hashes. This does not make the repo public or solve SAC.
+
+The connected GitHub tools cannot change repository visibility. An authorized administrator must use Settings > General > Danger Zone > Change repository visibility after scanning ALL Git history/releases and licensing. Make only a CA-signed, QA-approved new release Latest Stable after public-visibility review.
