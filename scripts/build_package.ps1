@@ -1,11 +1,12 @@
 # Build and Package Script for LocalClip (Windows x64)
-# Enforces clean reproducible build and packaging for Milestone M4
+# The CI-only -SkipNativeBuild switch requires a previously compiled owned host.
+param([switch]$SkipNativeBuild)
 
 $ErrorActionPreference = "Stop"
 
 $RootDir = (Get-Item $PSScriptRoot).Parent.FullName
 $DistDir = Join-Path $RootDir "dist"
-$PackageName = "LocalClip-v1.0.0-win-x64"
+$PackageName = "Flick-v1.0.1-win-x64"
 $PackageDir = Join-Path $DistDir $PackageName
 $ZipPath = Join-Path $DistDir "$PackageName.zip"
 
@@ -14,7 +15,12 @@ if (Test-Path $PackageDir) { Remove-Item -Recurse -Force $PackageDir }
 if (Test-Path $ZipPath) { Remove-Item -Force $ZipPath }
 New-Item -ItemType Directory -Path $PackageDir -Force | Out-Null
 
-$env:PATH = "C:\Users\krish\AppData\Local\Microsoft\dotnet;C:\Users\krish\AppData\Local\Microsoft\WinGet\Packages\BrechtSanders.WinLibs.POSIX.UCRT_Microsoft.Winget.Source_8wekyb3d8bbwe\mingw64\bin;$env:PATH"
+if (-not (Get-Command dotnet -ErrorAction SilentlyContinue)) { throw "dotnet SDK not found on PATH" }
+if (-not $SkipNativeBuild -and -not (Get-Command g++ -ErrorAction SilentlyContinue)) {
+    throw "MinGW-w64 g++ not found on PATH"
+}
+if (-not (Test-Path (Join-Path $RootDir "tools\\obs\\runtime\\bin\\64bit\\obs.dll"))) { throw "Missing pinned OBS runtime. Run scripts/setup_tools.ps1." }
+if (-not (Test-Path (Join-Path $RootDir "tools\\ffmpeg\\ffmpeg.exe"))) { throw "Missing FFmpeg runtime. Run scripts/setup_tools.ps1." }
 
 Write-Host "=== Step 2: Compiling Native CaptureHost (C++ MinGW) ===" -ForegroundColor Cyan
 $HostSrc = Join-Path $RootDir "src\LocalClip.CaptureHost\main.cpp"
@@ -23,19 +29,24 @@ $ObsInc = Join-Path $RootDir "tools\obs\include\libobs"
 $HostInc = Join-Path $RootDir "src\LocalClip.CaptureHost"
 $ObsBin = Join-Path $RootDir "tools\obs\runtime\bin\64bit"
 
-g++ -O2 -std=c++17 -static-libgcc -static-libstdc++ `
-    -I "$ObsInc" -I "$HostInc" "$HostSrc" `
-    -L "$ObsBin" "-Wl,-Bstatic" -lwinpthread "-Wl,-Bdynamic" -lobs -ldwmapi `
-    -o "$HostOut"
-
-if ($LASTEXITCODE -ne 0) {
-    throw "Failed to compile LocalClip.CaptureHost.exe"
+if (-not $SkipNativeBuild) {
+    g++ -O2 -std=c++17 -static-libgcc -static-libstdc++ `
+        -I "$ObsInc" -I "$HostInc" "$HostSrc" `
+        -L "$ObsBin" "-Wl,-Bstatic" -lwinpthread "-Wl,-Bdynamic" -lobs -ldwmapi `
+        -o "$HostOut"
+    if ($LASTEXITCODE -ne 0) { throw "Failed to compile LocalClip.CaptureHost.exe" }
+    Write-Host "CaptureHost compiled successfully to: $HostOut" -ForegroundColor Green
 }
-Write-Host "CaptureHost compiled successfully to: $HostOut" -ForegroundColor Green
+else {
+    if (-not (Test-Path -LiteralPath $HostOut -PathType Leaf)) {
+        throw "CI requested -SkipNativeBuild but verified host binary is missing: $HostOut"
+    }
+    Write-Host "Using capture host prebuilt and verified by dedicated MSYS2 compilation step." -ForegroundColor Yellow
+}
 
 Write-Host "=== Step 3: Publishing WPF Application (Release win-x64) ===" -ForegroundColor Cyan
 $AppCsproj = Join-Path $RootDir "src\LocalClip.App\LocalClip.App.csproj"
-dotnet publish "$AppCsproj" -c Release -r win-x64 -o (Join-Path $DistDir "app") --nologo
+dotnet publish "$AppCsproj" -c Release -r win-x64 --self-contained true -o (Join-Path $DistDir "app") --nologo
 
 if ($LASTEXITCODE -ne 0) {
     throw "Dotnet publish failed"
@@ -59,75 +70,26 @@ Copy-Item (Join-Path $RootDir "tools\obs\runtime") (Join-Path $ToolsDest "obs\")
 
 # Copy Licenses & Legal Notices
 Copy-Item (Join-Path $RootDir "LICENSE") $PackageDir -Force
+Copy-Item (Join-Path $RootDir "LICENSE-NOTICE.md") $PackageDir -Force
 Copy-Item (Join-Path $RootDir "THIRD-PARTY-NOTICES.md") $PackageDir -Force
+Copy-Item (Join-Path $RootDir "docs") (Join-Path $PackageDir "docs") -Recurse -Force
 
-# Generate Installer / Uninstaller PowerShell Scripts
-$InstallScript = @"
-# LocalClip Per-User Installer Script
-`$ErrorActionPreference = "Stop"
-`$TargetDir = Join-Path `$env:LOCALAPPDATA "LocalClip"
-Write-Host "Installing LocalClip to: `$TargetDir" -ForegroundColor Cyan
-
-if (!(Test-Path `$TargetDir)) {
-    New-Item -ItemType Directory -Path `$TargetDir -Force | Out-Null
+# The former installer copied binaries into %LOCALAPPDATA%\LocalClip and
+# its uninstaller deleted that whole directory (including user metadata).
+# Do not embed those unsafe scripts. Use the conventional Inno Setup wizard
+# via scripts/build_installer.ps1; this portable ZIP also runs without setup.
+$BrandIco = Join-Path $RootDir "src\LocalClip.App\Assets\Brand\Flick.ico"
+if (-not (Test-Path -LiteralPath $BrandIco -PathType Leaf)) {
+    throw "Flick branded icon missing after WPF publish"
 }
-
-`$SrcDir = `$PSScriptRoot
-Copy-Item -Path (Join-Path `$SrcDir "*") -Destination `$TargetDir -Recurse -Force
-
-# Create Desktop Shortcut
-`$WshShell = New-Object -ComObject WScript.Shell
-`$Desktop = [System.Environment]::GetFolderPath([System.Environment+SpecialFolder]::Desktop)
-`$Shortcut = `$WshShell.CreateShortcut((Join-Path `$Desktop "LocalClip.lnk"))
-`$Shortcut.TargetPath = Join-Path `$TargetDir "LocalClip.App.exe"
-`$Shortcut.WorkingDirectory = `$TargetDir
-`$Shortcut.Description = "LocalClip - Fast, Private Gameplay Clipping"
-`$Shortcut.Save()
-
-# Create Start Menu Shortcut
-`$StartMenu = [System.Environment]::GetFolderPath([System.Environment+SpecialFolder]::StartMenu)
-`$Programs = Join-Path `$StartMenu "Programs"
-`$AppShortcut = `$WshShell.CreateShortcut((Join-Path `$Programs "LocalClip.lnk"))
-`$AppShortcut.TargetPath = Join-Path `$TargetDir "LocalClip.App.exe"
-`$AppShortcut.WorkingDirectory = `$TargetDir
-`$AppShortcut.Description = "LocalClip - Fast, Private Gameplay Clipping"
-`$AppShortcut.Save()
-
-Write-Host "LocalClip installed successfully!" -ForegroundColor Green
-Write-Host "Shortcuts created on Desktop and Start Menu." -ForegroundColor Green
-"@
-$InstallScript | Set-Content (Join-Path $PackageDir "install.ps1") -Encoding utf8
-
-$UninstallScript = @"
-# LocalClip Uninstaller Script
-`$ErrorActionPreference = "SilentlyContinue"
-Write-Host "Uninstalling LocalClip..." -ForegroundColor Cyan
-
-# Stop running instances
-Get-Process -Name "LocalClip.App", "LocalClip.CaptureHost" -ErrorAction SilentlyContinue | Stop-Process -Force
-
-# Remove Desktop Shortcut
-`$Desktop = [System.Environment]::GetFolderPath([System.Environment+SpecialFolder]::Desktop)
-Remove-Item (Join-Path `$Desktop "LocalClip.lnk") -Force
-
-# Remove Start Menu Shortcut
-`$StartMenu = [System.Environment]::GetFolderPath([System.Environment+SpecialFolder]::StartMenu)
-`$Programs = Join-Path `$StartMenu "Programs"
-Remove-Item (Join-Path `$Programs "LocalClip.lnk") -Force
-
-# Remove Installation Directory
-`$TargetDir = Join-Path `$env:LOCALAPPDATA "LocalClip"
-if (Test-Path `$TargetDir) {
-    Remove-Item -Recurse -Force `$TargetDir
+Copy-Item -LiteralPath $BrandIco -Destination (Join-Path $DistDir "Flick.ico") -Force
+if (-not (Test-Path -LiteralPath (Join-Path $PackageDir "Flick.exe"))) {
+    throw "Expected Flick.exe not found in published portable package"
 }
-
-Write-Host "LocalClip uninstalled successfully." -ForegroundColor Green
-"@
-$UninstallScript | Set-Content (Join-Path $PackageDir "uninstall.ps1") -Encoding utf8
 
 # Generate User Readme
 $Readme = @"
-# LocalClip v1.0.0 (Windows x64)
+# Flick v1.0.1 Preview (Windows x64)
 
 Fast, private, offline-first gameplay clipper replicating the SteelSeries Moments workflow.
 
@@ -144,8 +106,9 @@ Fast, private, offline-first gameplay clipper replicating the SteelSeries Moment
   - **Single Instance & Leak-Free:** Subprocesses bounded by Windows Job Object (`KILL_ON_JOB_CLOSE`).
 
 ## Quick Start
-1. Run ``LocalClip.App.exe`` directly (portable mode).
-2. Or run ``powershell -ExecutionPolicy Bypass -File .\install.ps1`` for per-user installation with Desktop/Start shortcuts.
+1. Run ``Flick.exe`` directly (portable mode).
+2. To install with Start Menu, Installed Apps and optional desktop shortcut, use the Flick Setup EXE built by scripts/build_installer.ps1.
+3. Your settings and library index remain in LocalAppData/LocalClip for backwards compatibility; do not run an older LocalClip uninstall.ps1.
 
 ## Documentation
 - See ``docs/USER-GUIDE.md`` for complete usage and shortcut customization.
@@ -159,13 +122,13 @@ Write-Host "Portable ZIP created at: $ZipPath" -ForegroundColor Green
 
 Write-Host "=== Step 6: Calculating SHA-256 Checksums ===" -ForegroundColor Cyan
 $ZipHash = (Get-FileHash -Path $ZipPath -Algorithm SHA256).Hash
-$ExeHash = (Get-FileHash -Path (Join-Path $PackageDir "LocalClip.App.exe") -Algorithm SHA256).Hash
+$ExeHash = (Get-FileHash -Path (Join-Path $PackageDir "Flick.exe") -Algorithm SHA256).Hash
 $HostHash = (Get-FileHash -Path (Join-Path $PackageDir "tools\obs\runtime\bin\64bit\LocalClip.CaptureHost.exe") -Algorithm SHA256).Hash
 
 $ChecksumContent = @"
-# LocalClip v1.0.0 SHA-256 Checksums
-$ZipHash  LocalClip-v1.0.0-win-x64.zip
-$ExeHash  LocalClip.App.exe
+# Flick v1.0.1 Preview SHA-256 Checksums
+$ZipHash  Flick-v1.0.1-win-x64.zip
+$ExeHash  Flick.exe
 $HostHash  LocalClip.CaptureHost.exe
 "@
 $ChecksumContent | Set-Content (Join-Path $DistDir "SHA256SUMS.txt") -Encoding utf8

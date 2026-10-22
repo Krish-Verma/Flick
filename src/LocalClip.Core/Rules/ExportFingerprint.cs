@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Security.Cryptography;
 using System.Text;
@@ -9,7 +10,7 @@ namespace LocalClip.Core.Rules;
 
 public static class ExportFingerprint
 {
-    public const int PROFILE_VERSION = 1;
+    public const int PROFILE_VERSION = 2;
 
     public static string Compute(
         string sourceFilePath,
@@ -33,13 +34,13 @@ public static class ExportFingerprint
 
         var sb = new StringBuilder();
         sb.Append($"PATH:{sourceFilePath}|TICKS:{lastWriteTicks}|LEN:{sourceLength}|");
-        sb.Append($"START:{startSec:F3}|END:{endSec:F3}|TARGET_MB:{targetSizeMb}|V:{PROFILE_VERSION}|");
+        sb.Append($"START:{startSec.ToString("R", CultureInfo.InvariantCulture)}|END:{endSec.ToString("R", CultureInfo.InvariantCulture)}|TARGET_MB:{targetSizeMb}|V:{PROFILE_VERSION}|");
 
         if (tracks != null)
         {
             foreach (var t in tracks)
             {
-                sb.Append($"T:{t.StreamIndex}:{t.IsMuted}:{t.Gain:F2}|");
+                sb.Append($"T:{t.StreamIndex}:{t.IsMuted}:{t.Gain.ToString("R", CultureInfo.InvariantCulture)}|");
             }
         }
 

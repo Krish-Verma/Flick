@@ -12,7 +12,7 @@ namespace LocalClip.Core.Tests;
 
 public class IntegrationTests
 {
-    [Fact]
+    [HardwareFact]
     public async Task TestCaptureHostLifecycleAndIpc()
     {
         using var client = new CaptureHostClient();
@@ -37,10 +37,13 @@ public class IntegrationTests
         Assert.False(client.IsRunning);
     }
 
-    [Fact]
+    [HardwareFact]
     public async Task TestRealCaptureAndExportPipeline()
     {
-        string testOutputDir = @"D:\Documents\ClipMax\TestOutput";
+        string testOutputDir = Path.Combine(
+            Environment.GetEnvironmentVariable("FLICK_TEST_OUTPUT_DIR")
+                ?? Path.Combine(Path.GetTempPath(), "Flick-HardwareTests"),
+            "Capture");
         Directory.CreateDirectory(testOutputDir);
 
         var settings = AppSettings.CreateDefault();
@@ -48,7 +51,8 @@ public class IntegrationTests
         settings.ExportsFolder = Path.Combine(testOutputDir, "Exports");
         settings.TempFolder = Path.Combine(testOutputDir, "Temp");
         settings.DiscordTargetSizeMb = 20;
-        settings.ReplayDurationSeconds = 5; // Short duration for fast test
+        settings.ReplayDurationSeconds = 30; // Validate full rolling replay duration
+        settings.EnableMicrophone = true; // Explicit opt-in for this hardware-only test
 
         using var client = new CaptureHostClient();
         client.Start();
@@ -66,13 +70,13 @@ public class IntegrationTests
         bool started = await client.StartCaptureAsync(settings);
         Assert.True(started);
 
-        // Buffer frames for 3 seconds
-        await Task.Delay(3000);
+        // Allow the entire 30-second replay buffer to fill.
+        await Task.Delay(TimeSpan.FromSeconds(31));
 
         // Query status while buffering
         var status = await client.GetStatusAsync();
         Assert.Contains(status.State, new[] { "Buffering", "Armed" });
-        Assert.True(status.BufferedSec > 0.5);
+        Assert.True(status.BufferedSec >= 29.0, $"Full 30s buffer not reached: {status.BufferedSec:F1}s");
 
         // 2. Trigger Save Replay
         string saveId = "test-clip-" + Guid.NewGuid().ToString("N");
@@ -80,7 +84,7 @@ public class IntegrationTests
         Assert.True(saveTriggered);
 
         // Wait for save callback
-        var completedTask = await Task.WhenAny(saveTcs.Task, Task.Delay(8000));
+        var completedTask = await Task.WhenAny(saveTcs.Task, Task.Delay(15000));
         Assert.Equal(saveTcs.Task, completedTask);
         Assert.False(string.IsNullOrEmpty(savedClipPath));
         Assert.True(File.Exists(savedClipPath));
@@ -93,10 +97,11 @@ public class IntegrationTests
         var prober = new MediaProber();
         var origProbe = await prober.ProbeFileAsync(savedClipPath);
         Assert.True(origProbe.IsValid);
-        Assert.True(origProbe.DurationSeconds > 0.5);
+        Assert.InRange(origProbe.DurationSeconds, 28.0, 32.5);
         Assert.Equal(1920, origProbe.Width);
         Assert.Equal(1080, origProbe.Height);
-        Assert.NotEmpty(origProbe.AudioTracks);
+        Assert.True(origProbe.AudioTracks.Count >= 3,
+            $"Expected combined, system and mic tracks but received {origProbe.AudioTracks.Count}");
 
         // 5. Register with Storage
         var storage = new ClipStorage(settings, prober);
@@ -120,4 +125,65 @@ public class IntegrationTests
         Assert.Equal("h264", exportProbe.VideoCodec);
         Assert.Single(exportProbe.AudioTracks); // Exactly 1 mixed stereo track for Discord share
     }
+    // A save immediately after another must NEVER relabel an old MKV.
+    // This hardware test also catches OBS paths that are not finalized yet.
+    [HardwareFact]
+    public async Task TestBackToBackReplaySavesAreDistinctAndImmutable()
+    {
+        var settings = AppSettings.CreateDefault();
+        settings.ReplayDurationSeconds = 5;
+        settings.EnableMicrophone = false;
+        settings.OriginalsFolder = Path.Combine(
+            Environment.GetEnvironmentVariable("FLICK_TEST_OUTPUT_DIR")
+                ?? Path.Combine(Path.GetTempPath(), "Flick-HardwareTests"), "RapidSaves");
+        Directory.CreateDirectory(settings.OriginalsFolder);
+        using var client = new CaptureHostClient();
+        client.Start();
+        Assert.True(await client.StartCaptureAsync(settings));
+        await Task.Delay(TimeSpan.FromSeconds(6));
+
+        async Task<string> SaveOnceAsync(string id)
+        {
+            var complete = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+            void Handler(string observedId, string path)
+            {
+                if (observedId == id) complete.TrySetResult(path);
+            }
+            client.ReplaySaved += Handler;
+            try
+            {
+                Assert.True(await client.SaveReplayAsync(id), "OBS rejected replay save request: " + id);
+                var winningTask = await Task.WhenAny(complete.Task, Task.Delay(15000));
+                Assert.Equal(complete.Task, winningTask);
+                var path = await complete.Task;
+                Assert.True(File.Exists(path), "Completed save path does not exist");
+                Assert.True(new FileInfo(path).Length > 1024);
+                return path;
+            }
+            finally
+            {
+                client.ReplaySaved -= Handler;
+            }
+        }
+
+        try
+        {
+            string first = await SaveOnceAsync("first_" + Guid.NewGuid().ToString("N"));
+            byte[] digest;
+            using (var firstStream = File.OpenRead(first))
+                digest = System.Security.Cryptography.SHA256.HashData(firstStream);
+            string second = await SaveOnceAsync("second_" + Guid.NewGuid().ToString("N"));
+            Assert.NotEqual(first, second);
+            Assert.True(File.Exists(first));
+            Assert.True(File.Exists(second));
+            using var afterSecond = File.OpenRead(first);
+            Assert.Equal(digest, System.Security.Cryptography.SHA256.HashData(afterSecond));
+        }
+        finally
+        {
+            await client.ShutdownAsync();
+        }
+    }
+
+
 }

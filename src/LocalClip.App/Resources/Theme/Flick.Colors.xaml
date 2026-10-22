@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <!-- Flick GUI v3.2: mostly graphite; the sunset spectrum belongs to the brand. -->
+    <Color x:Key="Flick.Color.Canvas">#FF0B0B14</Color>
+    <Color x:Key="Flick.Color.Surface">#FF151622</Color>
+    <Color x:Key="Flick.Color.Raised">#FF242436</Color>
+    <Color x:Key="Flick.Color.Hover">#FF343044</Color>
+    <Color x:Key="Flick.Color.Frosted">#D91B1928</Color>
+    <Color x:Key="Flick.Color.Toast">#ED1C1726</Color>
+    <Color x:Key="Flick.Color.TextPrimary">#FFF2EFF9</Color>
+    <Color x:Key="Flick.Color.TextSecondary">#FFB9B3CC</Color>
+    <Color x:Key="Flick.Color.TextMuted">#FF9C97AD</Color>
+    <Color x:Key="Flick.Color.Accent">#FFC69BFF</Color>
+    <Color x:Key="Flick.Color.AccentHover">#FFD9BCFF</Color>
+    <Color x:Key="Flick.Color.OnAccent">#FF251333</Color>
+    <Color x:Key="Flick.Color.Border">#FF454052</Color>
+    <Color x:Key="Flick.Color.BorderStrong">#FF795E89</Color>
+    <Color x:Key="Flick.Color.Focus">#FFE1C8FF</Color>
+    <Color x:Key="Flick.Color.Success">#FF8FD4B0</Color>
+    <Color x:Key="Flick.Color.Warning">#FFE2B66F</Color>
+    <Color x:Key="Flick.Color.Danger">#FFF18B9F</Color>
+    <Color x:Key="Flick.Color.Sunset">#FFEA8B65</Color>
+    <Color x:Key="Flick.Color.Coral">#FFE25986</Color>
+    <Color x:Key="Flick.Color.Magenta">#FFDC3CB4</Color>
+    <Color x:Key="Flick.Color.Violet">#FF9A27E2</Color>
+    <Color x:Key="Flick.Color.Indigo">#FF4B1FDE</Color>
+
+    <SolidColorBrush x:Key="Flick.Brush.Canvas" Color="{StaticResource Flick.Color.Canvas}"/>
+    <SolidColorBrush x:Key="Flick.Brush.Surface" Color="{StaticResource Flick.Color.Surface}"/>
+    <SolidColorBrush x:Key="Flick.Brush.Raised" Color="{StaticResource Flick.Color.Raised}"/>
+    <SolidColorBrush x:Key="Flick.Brush.Hover" Color="{StaticResource Flick.Color.Hover}"/>
+    <SolidColorBrush x:Key="Flick.Brush.Frosted" Color="{StaticResource Flick.Color.Frosted}"/>
+    <SolidColorBrush x:Key="Flick.Brush.Toast" Color="{StaticResource Flick.Color.Toast}"/>
+    <SolidColorBrush x:Key="Flick.Brush.TextPrimary" Color="{StaticResource Flick.Color.TextPrimary}"/>
+    <SolidColorBrush x:Key="Flick.Brush.TextSecondary" Color="{StaticResource Flick.Color.TextSecondary}"/>
+    <SolidColorBrush x:Key="Flick.Brush.TextMuted" Color="{StaticResource Flick.Color.TextMuted}"/>
+    <SolidColorBrush x:Key="Flick.Brush.Accent" Color="{StaticResource Flick.Color.Accent}"/>
+    <SolidColorBrush x:Key="Flick.Brush.AccentHover" Color="{StaticResource Flick.Color.AccentHover}"/>
+    <SolidColorBrush x:Key="Flick.Brush.OnAccent" Color="{StaticResource Flick.Color.OnAccent}"/>
+    <SolidColorBrush x:Key="Flick.Brush.Border" Color="{StaticResource Flick.Color.Border}"/>
+    <SolidColorBrush x:Key="Flick.Brush.BorderStrong" Color="{StaticResource Flick.Color.BorderStrong}"/>
+    <SolidColorBrush x:Key="Flick.Brush.Focus" Color="{StaticResource Flick.Color.Focus}"/>
+    <SolidColorBrush x:Key="Flick.Brush.Success" Color="{StaticResource Flick.Color.Success}"/>
+    <SolidColorBrush x:Key="Flick.Brush.Warning" Color="{StaticResource Flick.Color.Warning}"/>
+    <SolidColorBrush x:Key="Flick.Brush.Danger" Color="{StaticResource Flick.Color.Danger}"/>
+
+    <LinearGradientBrush x:Key="Flick.Brush.BrandGradient" StartPoint="0,0" EndPoint="1,1">
+        <GradientStop Color="{StaticResource Flick.Color.Sunset}" Offset="0"/>
+        <GradientStop Color="{StaticResource Flick.Color.Coral}" Offset=".25"/>
+        <GradientStop Color="{StaticResource Flick.Color.Magenta}" Offset=".5"/>
+        <GradientStop Color="{StaticResource Flick.Color.Violet}" Offset=".75"/>
+        <GradientStop Color="{StaticResource Flick.Color.Indigo}" Offset="1"/>
+    </LinearGradientBrush>
+</ResourceDictionary>

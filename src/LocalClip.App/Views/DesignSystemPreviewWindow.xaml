@@ -1,0 +1,177 @@
+<Window x:Class="LocalClip.App.Views.DesignSystemPreviewWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:components="clr-namespace:LocalClip.App.Views.Components"
+        Title="Flick — Design Foundation Preview"
+        Width="1000" Height="760"
+        MinWidth="760" MinHeight="550"
+        WindowStartupLocation="CenterScreen"
+        Background="{DynamicResource Flick.Brush.Canvas}"
+        Foreground="{DynamicResource Flick.Brush.TextPrimary}"
+        FontFamily="{StaticResource Flick.Font.UI}"
+        UseLayoutRounding="True" SnapsToDevicePixels="True">
+    <!-- This window demonstrates the same keyed WPF resources used by all future views. -->
+    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+        <StackPanel Margin="24">
+            <Grid Margin="{StaticResource Flick.Gap.Group}">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <Image Grid.Column="0" Style="{StaticResource Flick.Image.BrandMark}"
+                       Width="56" Height="56" Margin="0,0,16,0"/>
+                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                    <TextBlock Text="Flick Design Foundation"
+                               Style="{StaticResource Flick.Text.PageTitle}"/>
+                    <TextBlock Text="Slice 1 · WPF Components · v3.2"
+                               Style="{StaticResource Flick.Text.Caption}" Margin="0,3,0,0"/>
+                </StackPanel>
+                <TextBlock Grid.Column="2" Text="DESIGN REVIEW"
+                           Style="{StaticResource Flick.Text.Muted}"
+                           VerticalAlignment="Center" Margin="10,0,0,0"/>
+            </Grid>
+
+            <Border Style="{StaticResource Flick.Surface.Frosted}" Margin="{StaticResource Flick.Gap.Section}">
+                <TextBlock Text="Preview Only  ·  No Capture Started  ·  No Gameplay or Recording Settings Modified"
+                           Style="{StaticResource Flick.Text.Caption}"/>
+            </Border>
+
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="16"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                <StackPanel Grid.Column="0">
+                    <Border Style="{StaticResource Flick.Surface.Panel}" Margin="{StaticResource Flick.Gap.Section}">
+                        <StackPanel>
+                            <TextBlock Text="Typography" Style="{StaticResource Flick.Text.Section}"
+                                       Margin="{StaticResource Flick.Gap.Section}"/>
+                            <TextBlock Text="Your Clips" Style="{StaticResource Flick.Text.PageTitle}"
+                                       Margin="{StaticResource Flick.Gap.Row}"/>
+                            <TextBlock Text="Last Round Clutch" Style="{StaticResource Flick.Text.ClipTitle}"
+                                       Margin="{StaticResource Flick.Gap.Row}"/>
+                            <TextBlock Text="Export for Discord" Style="{StaticResource Flick.Text.Section}"
+                                       Margin="{StaticResource Flick.Gap.Row}"/>
+                            <TextBlock Text="A clean, easy-to-follow clipping workspace."
+                                       Style="{StaticResource Flick.Text.Body}"
+                                       Margin="{StaticResource Flick.Gap.Row}"/>
+                            <TextBlock Text="Today · 0:29 · Original MKV"
+                                       Style="{StaticResource Flick.Text.Caption}"/>
+                        </StackPanel>
+                    </Border>
+
+                    <Border Style="{StaticResource Flick.Surface.Panel}" Margin="{StaticResource Flick.Gap.Section}">
+                        <StackPanel>
+                            <TextBlock Text="Buttons and States"
+                                       Style="{StaticResource Flick.Text.Section}" Margin="{StaticResource Flick.Gap.Section}"/>
+                            <WrapPanel Margin="{StaticResource Flick.Gap.Row}">
+                                <Button Content="Save Last 30 Seconds"
+                                        Style="{StaticResource Flick.Button.Primary}" Margin="0,0,8,8"/>
+                                <Button Content="Cancel"
+                                        Style="{StaticResource Flick.Button.Secondary}" Margin="0,0,8,8"/>
+                                <Button Content="More Options"
+                                        Style="{StaticResource Flick.Button.Ghost}" Margin="0,0,8,8"/>
+                                <Button Content="Delete"
+                                        Style="{StaticResource Flick.Button.Danger}" Margin="0,0,8,8"/>
+                                <Button Content="Saving…"
+                                        Style="{StaticResource Flick.Button.Busy}" Margin="0,0,8,8"/>
+                                <Button Content="Disabled"
+                                        Style="{StaticResource Flick.Button.Secondary}" IsEnabled="False"
+                                        Margin="0,0,8,8"/>
+                            </WrapPanel>
+                            <TextBlock Text="Use Tab, Shift+Tab, and Space to inspect focus and keyboard behavior."
+                                       Style="{StaticResource Flick.Text.Caption}"/>
+                        </StackPanel>
+                    </Border>
+
+                    <Border Style="{StaticResource Flick.Surface.Panel}">
+                        <StackPanel>
+                            <TextBlock Text="Fields and Toggles"
+                                       Style="{StaticResource Flick.Text.Section}" Margin="{StaticResource Flick.Gap.Section}"/>
+                            <TextBlock Text="Search Clips" Style="{StaticResource Flick.Text.Control}" Margin="0,0,0,6"/>
+                            <TextBox Style="{StaticResource Flick.Input.Text}"
+                                     Text="Last Round Clutch" Margin="{StaticResource Flick.Gap.Section}"/>
+                            <TextBlock Text="Recording Quality" Style="{StaticResource Flick.Text.Control}" Margin="0,0,0,6"/>
+                            <ComboBox Style="{StaticResource Flick.Input.Combo}" SelectedIndex="1"
+                                      Margin="{StaticResource Flick.Gap.Section}">
+                                <ComboBoxItem Content="Light · 720p30"/>
+                                <ComboBoxItem Content="Balanced · 1080p30"/>
+                                <ComboBoxItem Content="Smooth · 1080p60"/>
+                            </ComboBox>
+                            <CheckBox Content="Show Clip Saved Overlay" IsChecked="True"
+                                      Style="{StaticResource Flick.Toggle}" Margin="{StaticResource Flick.Gap.Section}"/>
+                            <CheckBox Content="Play Confirmation Sound" IsChecked="True"
+                                      Style="{StaticResource Flick.Toggle}" Margin="{StaticResource Flick.Gap.Row}"/>
+                            <TextBlock Text="Replay Duration" Style="{StaticResource Flick.Text.Control}" Margin="0,8,0,4"/>
+                            <Slider Style="{StaticResource Flick.Input.Slider}" Minimum="15" Maximum="120"
+                                    Value="30" IsSnapToTickEnabled="True" TickFrequency="15" Margin="{StaticResource Flick.Gap.Row}"/>
+                            <ProgressBar Style="{StaticResource Flick.Progress}" Value="45" Maximum="100"/>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+
+                <StackPanel Grid.Column="2">
+                    <Border Style="{StaticResource Flick.Surface.Panel}" Margin="{StaticResource Flick.Gap.Section}">
+                        <StackPanel>
+                            <TextBlock Text="Brand Palette" Style="{StaticResource Flick.Text.Section}"
+                                       Margin="{StaticResource Flick.Gap.Section}"/>
+                            <Grid Height="38" Margin="{StaticResource Flick.Gap.Row}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition/><ColumnDefinition/><ColumnDefinition/>
+                                    <ColumnDefinition/><ColumnDefinition/>
+                                </Grid.ColumnDefinitions>
+                                <Border Grid.Column="0" Background="#EA8B65" CornerRadius="6,0,0,6"/>
+                                <Border Grid.Column="1" Background="#E25986"/>
+                                <Border Grid.Column="2" Background="#DC3CB4"/>
+                                <Border Grid.Column="3" Background="#9A27E2"/>
+                                <Border Grid.Column="4" Background="#4B1FDE" CornerRadius="0,6,6,0"/>
+                            </Grid>
+                            <TextBlock Text="Sunset → Coral → Magenta → Violet → Indigo"
+                                       Style="{StaticResource Flick.Text.Caption}"
+                                       Margin="{StaticResource Flick.Gap.Section}"/>
+                            <Border Background="{DynamicResource Flick.Brush.Canvas}"
+                                    CornerRadius="8" Padding="11" Margin="{StaticResource Flick.Gap.Row}">
+                                <TextBlock Text="Canvas #0B0B14" Style="{StaticResource Flick.Text.Caption}"/>
+                            </Border>
+                            <Border Background="{DynamicResource Flick.Brush.Raised}"
+                                    CornerRadius="8" Padding="11">
+                                <TextBlock Text="Elevated #242436" Style="{StaticResource Flick.Text.Caption}"/>
+                            </Border>
+                        </StackPanel>
+                    </Border>
+
+                    <Border Style="{StaticResource Flick.Surface.Panel}" Margin="{StaticResource Flick.Gap.Section}">
+                        <StackPanel>
+                            <TextBlock Text="Clip Notification" Style="{StaticResource Flick.Text.Section}"
+                                       Margin="{StaticResource Flick.Gap.Section}"/>
+                            <TextBlock Text="The entire squircle is the real logo — no inner badge or circle."
+                                       Style="{StaticResource Flick.Text.Caption}" Margin="{StaticResource Flick.Gap.Section}"/>
+                            <components:FlickClipToast HorizontalAlignment="Left"
+                                                       Heading="Clip Saved"
+                                                       Detail="Last Round Clutch · 0:29"/>
+                            <TextBlock Text="Static visual chrome only. Slice 2 will implement notification display and sound."
+                                       Style="{StaticResource Flick.Text.Caption}" Margin="0,12,0,0"
+                                       TextWrapping="Wrap"/>
+                        </StackPanel>
+                    </Border>
+
+                    <Border Style="{StaticResource Flick.Surface.Frosted}" Margin="{StaticResource Flick.Gap.Section}">
+                        <StackPanel>
+                            <TextBlock Text="Restrained Translucency"
+                                       Style="{StaticResource Flick.Text.Section}"
+                                       Margin="{StaticResource Flick.Gap.Row}"/>
+                            <TextBlock Text="A lightly tinted translucent material uses the Windows compositor where supported; no custom shader, capture loop, or extra worker process."
+                                       Style="{StaticResource Flick.Text.Body}"/>
+                            <TextBlock Text="High-contrast and unsupported versions use a solid-color fallback."
+                                       Style="{StaticResource Flick.Text.Caption}" Margin="0,8,0,0"/>
+                        </StackPanel>
+                    </Border>
+                    <TextBlock Text="Selected UI: Frosted Graphite · Title Case · Consistent 4/8/12/16/24/32 Spacing"
+                               Style="{StaticResource Flick.Text.Muted}" TextWrapping="Wrap"/>
+                </StackPanel>
+            </Grid>
+        </StackPanel>
+    </ScrollViewer>
+</Window>

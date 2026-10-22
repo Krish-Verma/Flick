@@ -6,6 +6,13 @@
 
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
+    <AssemblyName>Flick</AssemblyName>
+    <RootNamespace>LocalClip.App</RootNamespace>
+    <Product>Flick</Product>
+    <Title>Flick Gameplay Clipper</Title>
+    <Authors>Flick Contributors</Authors>
+    <Version>1.0.1-preview.1</Version>
+    <ApplicationIcon>Assets\Brand\Flick.ico</ApplicationIcon>
     <TargetFramework>net10.0-windows</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
@@ -17,4 +24,19 @@
     <Using Remove="System.Windows.Forms" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Embed the full squircle artwork into the portable WPF assembly.
+         A runtime absolute path or external logo download is not allowed. -->
+    <None Remove="Assets\Brand\FlickLogo.png" />
+    <Resource Include="Assets\Brand\FlickLogo.png" />
+  </ItemGroup>
+
+  <!-- Generate the native app icon from the original logo as part of every clean build.
+       No separate asset download or substitute icon required. -->
+  <Target Name="GenerateFlickIcon"
+          BeforeTargets="CoreCompile"
+          Inputs="Assets\Brand\FlickLogo.png;..\..\scripts\build_flick_icon.ps1"
+          Outputs="Assets\Brand\Flick.ico">
+    <Exec Command="powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File &quot;$(MSBuildProjectDirectory)\..\..\scripts\build_flick_icon.ps1&quot; -InputPng &quot;$(MSBuildProjectDirectory)\Assets\Brand\FlickLogo.png&quot; -OutputIco &quot;$(MSBuildProjectDirectory)\Assets\Brand\Flick.ico&quot;" />
+  </Target>
 </Project>

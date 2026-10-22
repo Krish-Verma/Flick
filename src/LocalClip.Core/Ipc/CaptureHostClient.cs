@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Text.Json;
@@ -23,23 +24,28 @@ public class CaptureHostClient : IDisposable
     public event Action<string, JsonElement?>? EventReceived;
     public event Action<string>? StateChanged;
     public event Action<string, string>? ReplaySaved; // saveId, filePath
+    public event Action<string, string, IReadOnlyList<string>>? ReplaySavedWithTracks;
     public event Action<string>? FaultOccurred;
 
+    private volatile bool _expectedShutdown;
     public bool IsRunning => _process != null && !_process.HasExited;
+    public int? HostProcessId => IsRunning ? _process?.Id : null;
 
     public CaptureHostClient(string? hostExePath = null)
     {
-        if (string.IsNullOrEmpty(hostExePath))
+        if (string.IsNullOrWhiteSpace(hostExePath))
         {
-            // Default location relative to app or tools
             string baseDir = AppContext.BaseDirectory;
-            string probe1 = Path.Combine(baseDir, "LocalClip.CaptureHost.exe");
-            string probe2 = Path.Combine(baseDir, "tools", "obs", "runtime", "bin", "64bit", "LocalClip.CaptureHost.exe");
-            string probe3 = @"D:\Documents\ClipMax\tools\obs\runtime\bin\64bit\LocalClip.CaptureHost.exe";
-
-            if (File.Exists(probe1)) _hostExePath = probe1;
-            else if (File.Exists(probe2)) _hostExePath = probe2;
-            else _hostExePath = probe3;
+            string? overridePath = Environment.GetEnvironmentVariable("FLICK_CAPTURE_HOST_PATH");
+            string[] candidates = new[]
+            {
+                overridePath ?? "",
+                Path.Combine(baseDir, "tools", "obs", "runtime", "bin", "64bit", "LocalClip.CaptureHost.exe"),
+                Path.Combine(baseDir, "LocalClip.CaptureHost.exe"),
+                Path.GetFullPath(Path.Combine(baseDir, "..", "..", "..", "..", "..",
+                    "tools", "obs", "runtime", "bin", "64bit", "LocalClip.CaptureHost.exe"))
+            };
+            _hostExePath = Array.Find(candidates, File.Exists) ?? candidates[1];
         }
         else
         {
@@ -51,6 +57,8 @@ public class CaptureHostClient : IDisposable
     public void Start()
     {
         if (IsRunning) return;
+        if (_process != null) Dispose();
+        _expectedShutdown = false;
 
         if (!File.Exists(_hostExePath))
         {
@@ -71,9 +79,21 @@ public class CaptureHostClient : IDisposable
             CreateNoWindow = true
         };
 
-        _process = System.Diagnostics.Process.Start(psi) ?? throw new InvalidOperationException("Failed to launch CaptureHost");
-        _jobObject.AssignProcess(_process);
-        _writer = _process.StandardInput;
+        try
+        {
+            _process = System.Diagnostics.Process.Start(psi) ?? throw new InvalidOperationException("Failed to launch CaptureHost");
+            if (!_jobObject.AssignProcess(_process))
+            {
+                try { if (!_process.HasExited) _process.Kill(entireProcessTree: true); } catch { }
+                throw new InvalidOperationException("Failed to confine CaptureHost to Flick's Windows Job Object");
+            }
+            _writer = _process.StandardInput;
+        }
+        catch
+        {
+            Dispose();
+            throw;
+        }
 
         // Background stdout reader thread
         var stdoutThread = new Thread(ReadStdoutLoop) { IsBackground = true, Name = "CaptureHostStdoutReader" };
@@ -136,6 +156,15 @@ public class CaptureHostClient : IDisposable
                         {
                             string saveId = evData.Value.TryGetProperty("save_id", out var sid) ? sid.GetString() ?? "" : "";
                             string path = evData.Value.TryGetProperty("path", out var pth) ? pth.GetString() ?? "" : "";
+                            var names = new List<string>();
+                            if (evData.Value.TryGetProperty("tracks", out var tracksProp) &&
+                                tracksProp.ValueKind == JsonValueKind.Array)
+                            {
+                                foreach (var item in tracksProp.EnumerateArray())
+                                    if (item.ValueKind == JsonValueKind.String)
+                                        names.Add(item.GetString() ?? "");
+                            }
+                            ReplaySavedWithTracks?.Invoke(saveId, path, names);
                             ReplaySaved?.Invoke(saveId, path);
                         }
                         else if (evName == "fault" && evData.HasValue)
@@ -152,6 +181,16 @@ public class CaptureHostClient : IDisposable
             }
         }
         catch { }
+        finally
+        {
+            if (!_expectedShutdown)
+            {
+                var error = new IOException("Capture host exited unexpectedly; pending requests aborted.");
+                foreach (var entry in _pendingRequests)
+                    if (_pendingRequests.TryRemove(entry.Key, out var request)) request.TrySetException(error);
+                try { FaultOccurred?.Invoke(error.Message); } catch { }
+            }
+        }
     }
 
     private void ReadStderrLoop()
@@ -163,7 +202,7 @@ public class CaptureHostClient : IDisposable
             while (!_cts?.IsCancellationRequested == true && !reader.EndOfStream)
             {
                 string? line = reader.ReadLine();
-                // Logs are drained silently to avoid console flooding, but could be logged if needed
+                if (!string.IsNullOrWhiteSpace(line)) { Console.WriteLine("[CaptureHost] " + line); }
             }
         }
         catch { }
@@ -321,7 +360,7 @@ public class CaptureHostClient : IDisposable
         if (!IsRunning) return true;
         try
         {
-            var resp = await SendCommandAsync("stop_capture", null, 5000);
+            var resp = await SendCommandAsync("stop_capture", null, 10000);
             return resp.Ok;
         }
         catch
@@ -332,10 +371,11 @@ public class CaptureHostClient : IDisposable
 
     public async Task ShutdownAsync()
     {
-        if (!IsRunning) return;
+        if (!IsRunning) { Dispose(); return; }
+        _expectedShutdown = true;
         try
         {
-            await SendCommandAsync("shutdown", null, 3000);
+            await SendCommandAsync("shutdown", null, 8000);
         }
         catch { }
 
@@ -353,7 +393,11 @@ public class CaptureHostClient : IDisposable
 
     public void Dispose()
     {
+        _expectedShutdown = true;
         _cts?.Cancel();
+        foreach (var entry in _pendingRequests)
+            if (_pendingRequests.TryRemove(entry.Key, out var request))
+                request.TrySetException(new ObjectDisposedException(nameof(CaptureHostClient)));
         try
         {
             if (_process != null && !_process.HasExited)

@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Style x:Key="Flick.Text.Base" TargetType="{x:Type TextBlock}">
+        <Setter Property="FontFamily" Value="{StaticResource Flick.Font.UI}"/>
+        <Setter Property="FontSize" Value="{StaticResource Flick.Font.Body}"/>
+        <Setter Property="Foreground" Value="{DynamicResource Flick.Brush.TextPrimary}"/>
+        <Setter Property="TextWrapping" Value="Wrap"/>
+        <Setter Property="LineStackingStrategy" Value="BlockLineHeight"/>
+        <Setter Property="LineHeight" Value="20"/>
+    </Style>
+    <Style x:Key="Flick.Text.PageTitle" TargetType="{x:Type TextBlock}" BasedOn="{StaticResource Flick.Text.Base}">
+        <Setter Property="FontSize" Value="{StaticResource Flick.Font.PageTitle}"/>
+        <Setter Property="LineHeight" Value="28"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+        <Setter Property="TextWrapping" Value="NoWrap"/>
+    </Style>
+    <Style x:Key="Flick.Text.ClipTitle" TargetType="{x:Type TextBlock}" BasedOn="{StaticResource Flick.Text.Base}">
+        <Setter Property="FontSize" Value="{StaticResource Flick.Font.ClipTitle}"/>
+        <Setter Property="LineHeight" Value="24"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+        <Setter Property="TextWrapping" Value="NoWrap"/>
+    </Style>
+    <Style x:Key="Flick.Text.Section" TargetType="{x:Type TextBlock}" BasedOn="{StaticResource Flick.Text.Base}">
+        <Setter Property="FontSize" Value="{StaticResource Flick.Font.Section}"/>
+        <Setter Property="LineHeight" Value="24"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+    </Style>
+    <Style x:Key="Flick.Text.Body" TargetType="{x:Type TextBlock}" BasedOn="{StaticResource Flick.Text.Base}"/>
+    <Style x:Key="Flick.Text.Control" TargetType="{x:Type TextBlock}" BasedOn="{StaticResource Flick.Text.Base}">
+        <Setter Property="FontSize" Value="{StaticResource Flick.Font.Control}"/>
+        <Setter Property="LineHeight" Value="18"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+    </Style>
+    <Style x:Key="Flick.Text.Caption" TargetType="{x:Type TextBlock}" BasedOn="{StaticResource Flick.Text.Base}">
+        <Setter Property="FontSize" Value="{StaticResource Flick.Font.Caption}"/>
+        <Setter Property="LineHeight" Value="16"/>
+        <Setter Property="Foreground" Value="{DynamicResource Flick.Brush.TextSecondary}"/>
+    </Style>
+    <Style x:Key="Flick.Text.Muted" TargetType="{x:Type TextBlock}" BasedOn="{StaticResource Flick.Text.Caption}">
+        <Setter Property="Foreground" Value="{DynamicResource Flick.Brush.TextMuted}"/>
+    </Style>
+    <!-- Logo occupies the whole squircle; never stack a second circular badge around it. -->
+    <Style x:Key="Flick.Image.BrandMark" TargetType="{x:Type Image}">
+        <Setter Property="Source" Value="pack://application:,,,/Assets/Brand/FlickLogo.png"/>
+        <Setter Property="Width" Value="{StaticResource Flick.Size.ToastLogo}"/>
+        <Setter Property="Height" Value="{StaticResource Flick.Size.ToastLogo}"/>
+        <Setter Property="Stretch" Value="UniformToFill"/>
+        <Setter Property="SnapsToDevicePixels" Value="True"/>
+        <Setter Property="RenderOptions.BitmapScalingMode" Value="HighQuality"/>
+    </Style>
+    <Style x:Key="Flick.Icon.Line" TargetType="{x:Type Path}">
+        <Setter Property="Stroke" Value="{DynamicResource Flick.Brush.TextSecondary}"/>
+        <Setter Property="StrokeThickness" Value="1.75"/>
+        <Setter Property="StrokeLineJoin" Value="Round"/>
+        <Setter Property="StrokeStartLineCap" Value="Round"/>
+        <Setter Property="StrokeEndLineCap" Value="Round"/>
+        <Setter Property="Fill" Value="{x:Null}"/>
+        <Setter Property="Width" Value="18"/>
+        <Setter Property="Height" Value="18"/>
+        <Setter Property="Stretch" Value="Uniform"/>
+    </Style>
+</ResourceDictionary>

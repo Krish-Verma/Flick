@@ -16,6 +16,11 @@ if (!(Test-Path (Join-Path $FfmpegDir "ffmpeg.exe"))) {
     $ffmpegUrl = "https://github.com/GyanD/codexffmpeg/releases/download/9.0.1/ffmpeg-9.0.1-essentials_build.zip"
     
     Invoke-WebRequest -Uri $ffmpegUrl -OutFile $ffmpegZip -UseBasicParsing
+    $expected = "FEC81AE03971D9DD4BE3EBE02E263BD2EC1D789483F931BDBA5F5715E65DA2E9"
+    if ((Get-FileHash -Path $ffmpegZip -Algorithm SHA256).Hash -ne $expected) {
+        Remove-Item -Force $ffmpegZip
+        throw "FFmpeg archive SHA-256 mismatch: refusing to install unverified binaries"
+    }
     $tempExtract = Join-Path $env:TEMP "ffmpeg_extract"
     if (Test-Path $tempExtract) { Remove-Item -Recurse -Force $tempExtract }
     Expand-Archive -Path $ffmpegZip -DestinationPath $tempExtract
@@ -40,9 +45,17 @@ if (!(Test-Path $ObsRuntimeBin)) {
     $obsUrl = "https://github.com/obsproject/obs-studio/releases/download/32.2.2/OBS-Studio-32.2.2-Windows-x64.zip"
     
     Invoke-WebRequest -Uri $obsUrl -OutFile $obsZip -UseBasicParsing
+    $expected = "4D6E40E3AB155F56B30DE517380566A206D74B63CDF5AD49AA596924768F97E1"
+    if ((Get-FileHash -Path $obsZip -Algorithm SHA256).Hash -ne $expected) {
+        Remove-Item -Force $obsZip
+        throw "OBS runtime archive SHA-256 mismatch: refusing to install unverified binaries"
+    }
     $targetRuntime = Join-Path $ObsDir "runtime"
     New-Item -ItemType Directory -Path $targetRuntime -Force | Out-Null
     Expand-Archive -Path $obsZip -DestinationPath $targetRuntime -Force
+    if (!(Test-Path (Join-Path $targetRuntime "bin\\64bit\\obs.dll"))) {
+        throw "OBS runtime extraction is missing bin/64bit/obs.dll; inspect ZIP layout before building"
+    }
     
     Remove-Item -Force $obsZip
     Write-Host "OBS Studio 32.2.2 runtime installed to: $targetRuntime" -ForegroundColor Green

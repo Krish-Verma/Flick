@@ -1,131 +1,330 @@
 <Window x:Class="LocalClip.App.Views.SettingsWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="LocalClip Settings" Height="520" Width="600"
+        Title="Flick Settings" Height="680" Width="850"
+        MinHeight="460" MinWidth="620"
         WindowStartupLocation="CenterOwner"
-        Background="#18181B" Foreground="#FAFAFA">
-    <Window.Resources>
-        <Style TargetType="TextBlock">
-            <Setter Property="Foreground" Value="#E4E4E7"/>
-            <Setter Property="FontSize" Value="13"/>
-        </Style>
-        <Style TargetType="TextBox">
-            <Setter Property="Background" Value="#27272A"/>
-            <Setter Property="Foreground" Value="#FAFAFA"/>
-            <Setter Property="BorderBrush" Value="#3F3F46"/>
-            <Setter Property="Padding" Value="6,4"/>
-            <Setter Property="FontSize" Value="13"/>
-        </Style>
-        <Style TargetType="Button">
-            <Setter Property="Background" Value="#3F3F46"/>
-            <Setter Property="Foreground" Value="#FAFAFA"/>
-            <Setter Property="BorderThickness" Value="0"/>
-            <Setter Property="Padding" Value="12,6"/>
-            <Setter Property="Cursor" Value="Hand"/>
-            <Setter Property="FontSize" Value="13"/>
-        </Style>
-    </Window.Resources>
-
-    <Grid Margin="20">
+        Background="{DynamicResource Flick.Brush.Canvas}"
+        Foreground="{DynamicResource Flick.Brush.TextPrimary}"
+        FontFamily="{StaticResource Flick.Font.UI}"
+        UseLayoutRounding="True" SnapsToDevicePixels="True">
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="162"/>
+            <ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
         <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
-            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="66"/>
         </Grid.RowDefinitions>
 
-        <TextBlock Text="LocalClip Settings" FontSize="20" FontWeight="Bold" Margin="0,0,0,15"/>
+        <!-- One small, stable category rail; no nested wizard or extra windows. -->
+        <Border Grid.Column="0" Grid.RowSpan="2"
+                Background="{DynamicResource Flick.Brush.Surface}"
+                BorderBrush="{DynamicResource Flick.Brush.Border}"
+                BorderThickness="0,0,1,0" Padding="14,18">
+            <DockPanel>
+                <StackPanel DockPanel.Dock="Top">
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,22">
+                        <Image Width="36" Height="36"
+                               Style="{StaticResource Flick.Image.BrandMark}"
+                               Margin="0,0,10,0"/>
+                        <StackPanel VerticalAlignment="Center">
+                            <TextBlock Text="Flick" Style="{StaticResource Flick.Text.Section}"/>
+                            <TextBlock Text="Settings" Style="{StaticResource Flick.Text.Caption}"/>
+                        </StackPanel>
+                    </StackPanel>
+                    <Button x:Name="NavRecording" Content="Recording" Tag="Recording"
+                            Click="SettingsCategory_Click"
+                            Style="{StaticResource Flick.Button.Ghost}"
+                            HorizontalContentAlignment="Left" Margin="0,0,0,4"/>
+                    <Button x:Name="NavAudio" Content="Audio" Tag="Audio"
+                            Click="SettingsCategory_Click"
+                            Style="{StaticResource Flick.Button.Ghost}"
+                            HorizontalContentAlignment="Left" Margin="0,0,0,4"/>
+                    <Button x:Name="NavShortcuts" Content="Shortcuts" Tag="Shortcuts"
+                            Click="SettingsCategory_Click"
+                            Style="{StaticResource Flick.Button.Ghost}"
+                            HorizontalContentAlignment="Left" Margin="0,0,0,4"/>
+                    <Button x:Name="NavStorage" Content="Storage" Tag="Storage"
+                            Click="SettingsCategory_Click"
+                            Style="{StaticResource Flick.Button.Ghost}"
+                            HorizontalContentAlignment="Left" Margin="0,0,0,4"/>
+                    <Button x:Name="NavGeneral" Content="General" Tag="General"
+                            Click="SettingsCategory_Click"
+                            Style="{StaticResource Flick.Button.Ghost}"
+                            HorizontalContentAlignment="Left" Margin="0,0,0,4"/>
+                    <Button x:Name="NavSharing" Content="Sharing" Tag="Sharing"
+                            Click="SettingsCategory_Click"
+                            Style="{StaticResource Flick.Button.Ghost}"
+                            HorizontalContentAlignment="Left" Margin="0,0,0,4"/>
+                </StackPanel>
+                <TextBlock DockPanel.Dock="Bottom"
+                           Text="Flick · Development Build"
+                           Style="{StaticResource Flick.Text.Muted}"
+                           TextWrapping="Wrap"/>
+            </DockPanel>
+        </Border>
 
-        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
-            <StackPanel Margin="0,0,10,0">
-                <!-- Hotkeys -->
-                <TextBlock Text="Shortcuts" FontWeight="SemiBold" FontSize="15" Foreground="#60A5FA" Margin="0,0,0,8"/>
-                <Grid Margin="0,0,0,12">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="180"/>
-                        <ColumnDefinition Width="*"/>
-                    </Grid.ColumnDefinitions>
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="Auto"/>
-                    </Grid.RowDefinitions>
+        <ScrollViewer Grid.Column="1" Grid.Row="0"
+                      x:Name="SettingsScroll"
+                      VerticalScrollBarVisibility="Auto"
+                      HorizontalScrollBarVisibility="Disabled"
+                      Focusable="False">
+            <Grid Margin="26,24,30,18">
+                <!-- Recording -->
+                <StackPanel x:Name="PanelRecording" Visibility="Visible">
+                    <TextBlock Text="Recording" Style="{StaticResource Flick.Text.PageTitle}"/>
+                    <TextBlock Text="Replay duration and quality, with sensible limits."
+                               Style="{StaticResource Flick.Text.Caption}" Margin="0,5,0,24"/>
+                    <TextBlock Text="Replay Duration" Style="{StaticResource Flick.Text.Control}"
+                               Margin="0,0,0,7"/>
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,20">
+                        <TextBox x:Name="TxtDuration" Width="74"
+                                 Style="{StaticResource Flick.Input.Text}"
+                                 TextChanged="CaptureProfile_Changed"
+                                 AutomationProperties.Name="Replay Duration in Seconds"/>
+                        <TextBlock Text="seconds · 15–120" Style="{StaticResource Flick.Text.Caption}"
+                                   VerticalAlignment="Center" Margin="10,0,0,0"/>
+                    </StackPanel>
+                    <TextBlock Text="Recording Quality" Style="{StaticResource Flick.Text.Control}"
+                               Margin="0,0,0,7"/>
+                    <ComboBox x:Name="CmbQuality" Width="280" HorizontalAlignment="Left"
+                              Style="{StaticResource Flick.Input.Combo}"
+                              SelectionChanged="CaptureProfile_Changed"
+                              AutomationProperties.Name="Recording Quality">
+                        <ComboBoxItem Content="Light · 720p / 30 FPS" Tag="Light"/>
+                        <ComboBoxItem Content="Balanced · 1080p / 30 FPS" Tag="Balanced"/>
+                        <ComboBoxItem Content="Smooth · 1080p / 60 FPS" Tag="Smooth"/>
+                    </ComboBox>
+                    <Border Style="{StaticResource Flick.Surface.Frosted}" Margin="0,20,0,0">
+                        <TextBlock x:Name="TxtBufferWarning"
+                                   Style="{StaticResource Flick.Text.Caption}"
+                                   TextWrapping="Wrap"/>
+                    </Border>
+                    <TextBlock Text="Capture starts Off, even when Windows launches Flick. Recording changes take effect on the next manual replay start."
+                               Style="{StaticResource Flick.Text.Muted}"
+                               TextWrapping="Wrap" Margin="0,18,0,0"/>
+                </StackPanel>
 
-                    <TextBlock Text="Toggle Capture (Arm/Disarm):" VerticalAlignment="Center" Margin="0,4"/>
-                    <TextBox x:Name="TxtToggleHotkey" Grid.Column="1" Margin="0,4" ToolTip="e.g. Ctrl+Shift+F9"/>
+                <!-- Audio -->
+                <StackPanel x:Name="PanelAudio" Visibility="Collapsed">
+                    <TextBlock Text="Audio" Style="{StaticResource Flick.Text.PageTitle}"/>
+                    <TextBlock Text="Capture only what you choose."
+                               Style="{StaticResource Flick.Text.Caption}" Margin="0,5,0,24"/>
+                    <Border Style="{StaticResource Flick.Surface.Panel}" Margin="0,0,0,15">
+                        <StackPanel>
+                            <TextBlock Text="System Audio" Style="{StaticResource Flick.Text.Section}"/>
+                            <TextBlock Text="Current Windows default output · System loopback fallback"
+                                       Style="{StaticResource Flick.Text.Caption}"
+                                       TextWrapping="Wrap" Margin="0,6,0,0"/>
+                        </StackPanel>
+                    </Border>
+                    <CheckBox x:Name="ChkMicrophone"
+                              Style="{StaticResource Flick.Toggle}"
+                              Content="Record Microphone"
+                              Checked="Microphone_Changed" Unchecked="Microphone_Changed"/>
+                    <TextBlock Text="Off by default · Windows default input device"
+                               Style="{StaticResource Flick.Text.Caption}" Margin="0,7,0,15"/>
+                    <TextBlock Text="Game and Discord audio are not independently isolated in fallback mode. Disabling an active microphone requires stopping replay to release the device."
+                               Style="{StaticResource Flick.Text.Muted}"
+                               TextWrapping="Wrap"/>
+                </StackPanel>
 
-                    <TextBlock Grid.Row="1" Text="Save Replay Shortcut:" VerticalAlignment="Center" Margin="0,4"/>
-                    <TextBox x:Name="TxtSaveHotkey" Grid.Row="1" Grid.Column="1" Margin="0,4" ToolTip="e.g. Ctrl+Shift+F8"/>
-                </Grid>
-
-                <Separator Background="#27272A" Margin="0,10,0,15"/>
+                <!-- Shortcuts -->
+                <StackPanel x:Name="PanelShortcuts" Visibility="Collapsed">
+                    <TextBlock Text="Shortcuts" Style="{StaticResource Flick.Text.PageTitle}"/>
+                    <TextBlock Text="Save moments without leaving your game."
+                               Style="{StaticResource Flick.Text.Caption}" Margin="0,5,0,24"/>
+                    <TextBlock Text="Toggle Replay" Style="{StaticResource Flick.Text.Control}"
+                               Margin="0,0,0,7"/>
+                    <TextBox x:Name="TxtToggleHotkey" Width="260"
+                             HorizontalAlignment="Left"
+                             Style="{StaticResource Flick.Input.Text}"
+                             PreviewKeyDown="Shortcut_PreviewKeyDown"
+                             ToolTip="Click here and press your shortcut keys"
+                             AutomationProperties.Name="Toggle Replay Hotkey"
+                             Margin="0,0,0,19"/>
+                    <TextBlock Text="Save Last Replay" Style="{StaticResource Flick.Text.Control}"
+                               Margin="0,0,0,7"/>
+                    <TextBox x:Name="TxtSaveHotkey" Width="260"
+                             HorizontalAlignment="Left"
+                             Style="{StaticResource Flick.Input.Text}"
+                             PreviewKeyDown="Shortcut_PreviewKeyDown"
+                             ToolTip="Click here and press your shortcut keys"
+                             AutomationProperties.Name="Save Replay Hotkey"/>
+                    <TextBlock Text="Click a shortcut field and press a combination. Flick checks for duplicate and Windows-reserved shortcuts before replacing active hotkeys."
+                               Style="{StaticResource Flick.Text.Muted}"
+                               TextWrapping="Wrap" Margin="0,20,0,0"/>
+                </StackPanel>
 
                 <!-- Storage -->
-                <TextBlock Text="Media Storage" FontWeight="SemiBold" FontSize="15" Foreground="#60A5FA" Margin="0,0,0,8"/>
-                <Grid Margin="0,0,0,12">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="180"/>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="Auto"/>
-                    </Grid.ColumnDefinitions>
-                    <TextBlock Text="Originals Folder:" VerticalAlignment="Center"/>
-                    <TextBox x:Name="TxtOriginalsFolder" Grid.Column="1" Margin="0,0,8,0"/>
-                    <Button Grid.Column="2" Content="Browse..." Click="BrowseOriginals_Click"/>
-                </Grid>
+                <StackPanel x:Name="PanelStorage" Visibility="Collapsed">
+                    <TextBlock Text="Storage" Style="{StaticResource Flick.Text.PageTitle}"/>
+                    <TextBlock Text="Keep clips locally, wherever you choose."
+                               Style="{StaticResource Flick.Text.Caption}" Margin="0,5,0,24"/>
+                    <TextBlock Text="Saved Clips Folder" Style="{StaticResource Flick.Text.Control}"
+                               Margin="0,0,0,7"/>
+                    <Grid Margin="0,0,0,20">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                        <TextBox x:Name="TxtOriginalsFolder" Grid.Column="0"
+                                 Style="{StaticResource Flick.Input.Text}"
+                                 ToolTip="Where future replay originals will be saved" Margin="0,0,9,0"/>
+                        <Button Grid.Column="1" Content="Browse…"
+                                Click="BrowseOriginals_Click"
+                                Style="{StaticResource Flick.Button.Secondary}"/>
+                    </Grid>
+                    <TextBlock Text="Export Folder" Style="{StaticResource Flick.Text.Control}"
+                               Margin="0,0,0,7"/>
+                    <Grid Margin="0,0,0,20">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                        <TextBox x:Name="TxtExportsFolder" Grid.Column="0"
+                                 Style="{StaticResource Flick.Input.Text}"
+                                 ToolTip="Where future share-ready MP4s will be saved" Margin="0,0,9,0"/>
+                        <Button Grid.Column="1" Content="Browse…"
+                                Click="BrowseExports_Click"
+                                Style="{StaticResource Flick.Button.Secondary}"/>
+                    </Grid>
+                    <Grid>
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0" Margin="0,0,12,0">
+                            <TextBlock Text="Connected Clip Folders"
+                                       Style="{StaticResource Flick.Text.Section}"/>
+                            <TextBlock Text="Link existing recordings without copying, moving, or uploading them."
+                                       Style="{StaticResource Flick.Text.Caption}" TextWrapping="Wrap"
+                                       Margin="0,5,0,0"/>
+                        </StackPanel>
+                        <Button Grid.Column="1" Content="Manage Folders"
+                                Click="ManageFolders_Click"
+                                Style="{StaticResource Flick.Button.Secondary}"
+                                VerticalAlignment="Center"/>
+                    </Grid>
+                    <TextBlock Text="Changing a location only affects future clips. Flick won't silently move your originals."
+                               Style="{StaticResource Flick.Text.Muted}"
+                               TextWrapping="Wrap" Margin="0,20,0,0"/>
+                </StackPanel>
 
-                <Separator Background="#27272A" Margin="0,10,0,15"/>
+                <!-- General -->
+                <StackPanel x:Name="PanelGeneral" Visibility="Collapsed">
+                    <TextBlock Text="General" Style="{StaticResource Flick.Text.PageTitle}"/>
+                    <TextBlock Text="A quiet, lightweight presence while gaming."
+                               Style="{StaticResource Flick.Text.Caption}" Margin="0,5,0,24"/>
+                    <TextBlock Text="Startup &amp; Tray" Style="{StaticResource Flick.Text.Section}"
+                               Margin="0,0,0,12"/>
+                    <CheckBox x:Name="ChkStartWithWindows"
+                              Style="{StaticResource Flick.Toggle}"
+                              Content="Launch Flick With Windows"
+                              Margin="0,0,0,14"/>
+                    <CheckBox x:Name="ChkStartMinimized"
+                              Style="{StaticResource Flick.Toggle}"
+                              Content="Start Minimized to Tray"
+                              Margin="0,0,0,22"/>
+                    <Separator Background="{DynamicResource Flick.Brush.Border}" Margin="0,0,0,21"/>
+                    <TextBlock Text="Clip Notifications"
+                               Style="{StaticResource Flick.Text.Section}" Margin="0,0,0,12"/>
+                    <CheckBox x:Name="ChkClipSavedOverlay"
+                              Style="{StaticResource Flick.Toggle}"
+                              Content="Show Clip Saved Overlay"
+                              Margin="0,0,0,14"/>
+                    <CheckBox x:Name="ChkClipSavedSound"
+                              Style="{StaticResource Flick.Toggle}"
+                              Content="Play Confirmation Sound"
+                              Margin="0,0,0,12"/>
+                    <Button Content="Preview Notification"
+                            Style="{StaticResource Flick.Button.Secondary}"
+                            HorizontalAlignment="Left"
+                            Click="PreviewNotification_Click"/>
+                    <TextBlock Text="The full-logo notification lasts about two seconds. Both options are independently toggleable and enabled by default. No permanent overlay runs in the background."
+                               Style="{StaticResource Flick.Text.Muted}"
+                               TextWrapping="Wrap" Margin="0,19,0,0"/>
+                </StackPanel>
 
-                <!-- Replay Buffer Settings -->
-                <TextBlock Text="Capture Profile" FontWeight="SemiBold" FontSize="15" Foreground="#60A5FA" Margin="0,0,0,8"/>
-                <Grid Margin="0,0,0,12">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="180"/>
-                        <ColumnDefinition Width="*"/>
-                    </Grid.ColumnDefinitions>
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="Auto"/>
-                    </Grid.RowDefinitions>
-
-                    <TextBlock Text="Replay Buffer Duration:" VerticalAlignment="Center" Margin="0,4"/>
-                    <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="0,4">
-                        <TextBox x:Name="TxtDuration" Width="60"/>
-                        <TextBlock Text="seconds (15 to 120s, default 30s)" VerticalAlignment="Center" Margin="8,0,0,0" Foreground="#A1A1AA"/>
+                <!-- Sharing -->
+                <StackPanel x:Name="PanelSharing" Visibility="Collapsed">
+                    <TextBlock Text="Sharing" Style="{StaticResource Flick.Text.PageTitle}"/>
+                    <TextBlock Text="Export a real file you can drag into Discord."
+                               Style="{StaticResource Flick.Text.Caption}" Margin="0,5,0,24"/>
+                    <TextBlock Text="Default Export Limit"
+                               Style="{StaticResource Flick.Text.Control}" Margin="0,0,0,7"/>
+                    <StackPanel Orientation="Horizontal">
+                        <ComboBox x:Name="CmbShareCap" Width="180"
+                                  Style="{StaticResource Flick.Input.Combo}"
+                                  SelectionChanged="ShareCap_SelectionChanged">
+                            <ComboBoxItem Content="10 MB" Tag="10"/>
+                            <ComboBoxItem Content="20 MB · Recommended" Tag="20"/>
+                            <ComboBoxItem Content="50 MB" Tag="50"/>
+                            <ComboBoxItem Content="100 MB" Tag="100"/>
+                            <ComboBoxItem Content="Custom" Tag="Custom"/>
+                        </ComboBox>
+                        <StackPanel x:Name="ShareCustomPanel" Orientation="Horizontal"
+                                    Visibility="Collapsed" Margin="12,0,0,0">
+                            <TextBox x:Name="TxtShareCustomMb" Width="68"
+                                     Style="{StaticResource Flick.Input.Text}"
+                                     ToolTip="Custom target, 1–250 decimal MB"/>
+                            <TextBlock Text="MB" Style="{StaticResource Flick.Text.Caption}"
+                                       Margin="7,0,0,0" VerticalAlignment="Center"/>
+                        </StackPanel>
                     </StackPanel>
-
-                    <TextBlock Grid.Row="1" Text="Hardware Encoder:" VerticalAlignment="Center" Margin="0,4"/>
-                    <TextBlock Grid.Row="1" Grid.Column="1" Text="NVIDIA NVENC H.264 (Hardware accelerated, RTX 5060)" VerticalAlignment="Center" Margin="0,4" Foreground="#34D399"/>
-                </Grid>
-
-                <Separator Background="#27272A" Margin="0,10,0,15"/>
-
-                <!-- Discord Webhook -->
-                <TextBlock Text="Discord Webhook (Optional M3)" FontWeight="SemiBold" FontSize="15" Foreground="#60A5FA" Margin="0,0,0,8"/>
-                <TextBlock Text="Secret is securely encrypted using Windows DPAPI (CurrentUser) and never stored in plain text." Foreground="#A1A1AA" FontSize="11" Margin="0,0,0,8"/>
-                <Grid Margin="0,0,0,12">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="180"/>
-                        <ColumnDefinition Width="*"/>
-                    </Grid.ColumnDefinitions>
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="Auto"/>
-                    </Grid.RowDefinitions>
-
-                    <TextBlock Text="Channel Name / Label:" VerticalAlignment="Center" Margin="0,4"/>
-                    <TextBox x:Name="TxtWebhookChannel" Grid.Column="1" Margin="0,4" ToolTip="e.g. #general-clips"/>
-
-                    <TextBlock Grid.Row="1" Text="Webhook URL:" VerticalAlignment="Center" Margin="0,4"/>
-                    <PasswordBox x:Name="TxtWebhookUrl" Grid.Row="1" Grid.Column="1" Margin="0,4" Background="#27272A" Foreground="#FAFAFA" BorderBrush="#3F3F46" Padding="6,4" FontSize="13"/>
-                </Grid>
-            </StackPanel>
+                    <TextBlock Text="20 MB is the default. The exact file-size cap is enforced in decimal bytes; a Discord channel or account may have a lower limit."
+                               Style="{StaticResource Flick.Text.Muted}"
+                               TextWrapping="Wrap" Margin="0,10,0,22"/>
+                    <Separator Background="{DynamicResource Flick.Brush.Border}" Margin="0,0,0,15"/>
+                    <Expander x:Name="WebhookExpander" Header="Advanced · Discord Webhook"
+                              Foreground="{DynamicResource Flick.Brush.TextPrimary}"
+                              Background="Transparent" IsExpanded="False">
+                        <StackPanel Margin="10,12,4,4">
+                            <TextBlock Text="Optional Direct Posting"
+                                       Style="{StaticResource Flick.Text.Section}"
+                                       Margin="0,0,0,10"/>
+                            <CheckBox x:Name="ChkEnableWebhook"
+                                      Style="{StaticResource Flick.Toggle}"
+                                      Content="Enable Manual Webhook Posting" Margin="0,0,0,14"/>
+                            <TextBlock Text="Channel Label"
+                                       Style="{StaticResource Flick.Text.Control}"
+                                       Margin="0,0,0,6"/>
+                            <TextBox x:Name="TxtWebhookChannel"
+                                     Style="{StaticResource Flick.Input.Text}"
+                                     Margin="0,0,0,13"/>
+                            <TextBlock Text="Webhook URL"
+                                       Style="{StaticResource Flick.Text.Control}"
+                                       Margin="0,0,0,6"/>
+                            <PasswordBox x:Name="TxtWebhookUrl"
+                                         Background="{DynamicResource Flick.Brush.Raised}"
+                                         Foreground="{DynamicResource Flick.Brush.TextPrimary}"
+                                         BorderBrush="{DynamicResource Flick.Brush.Border}"
+                                         BorderThickness="1" Padding="12,9"
+                                         FontSize="13" MinHeight="36"/>
+                            <TextBlock Text="Stored using Windows DPAPI. No upload happens without pressing Send to Channel and confirming each time."
+                                       Style="{StaticResource Flick.Text.Muted}"
+                                       TextWrapping="Wrap" Margin="0,12,0,0"/>
+                        </StackPanel>
+                    </Expander>
+                </StackPanel>
+            </Grid>
         </ScrollViewer>
 
-        <!-- Bottom Buttons -->
-        <DockPanel Grid.Row="2" Margin="0,15,0,0">
-            <Button Content="Restore Defaults" Click="RestoreDefaults_Click" HorizontalAlignment="Left" Background="#27272A" Foreground="#EF4444"/>
-            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                <Button Content="Cancel" Click="Cancel_Click" Margin="0,0,10,0" Background="#27272A"/>
-                <Button Content="Save Settings" Click="Save_Click" Background="#2563EB" FontWeight="Bold"/>
-            </StackPanel>
-        </DockPanel>
+        <Border Grid.Column="1" Grid.Row="1"
+                BorderBrush="{DynamicResource Flick.Brush.Border}"
+                BorderThickness="0,1,0,0" Padding="25,10,28,10"
+                Background="{DynamicResource Flick.Brush.Surface}">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <Button Grid.Column="0" Content="Restore Defaults"
+                        Style="{StaticResource Flick.Button.Ghost}"
+                        Foreground="{DynamicResource Flick.Brush.Danger}"
+                        HorizontalAlignment="Left" Click="RestoreDefaults_Click"/>
+                <Button Grid.Column="1" Content="Cancel"
+                        Style="{StaticResource Flick.Button.Secondary}"
+                        Click="Cancel_Click" Margin="0,0,9,0"/>
+                <Button Grid.Column="2" Content="Save Settings"
+                        Style="{StaticResource Flick.Button.Primary}"
+                        Click="Save_Click"/>
+            </Grid>
+        </Border>
     </Grid>
 </Window>

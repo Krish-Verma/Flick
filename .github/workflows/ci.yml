@@ -1,0 +1,131 @@
+name: Flick Windows CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: flick-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  dotnet:
+    name: WPF build and hardware-independent tests
+    runs-on: windows-latest
+    timeout-minutes: 25
+    env:
+      FLICK_HARDWARE_TESTS: '0'
+      DOTNET_NOLOGO: 'true'
+      DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.402'
+      - name: Restore solution
+        run: dotnet restore LocalClip.slnx
+      - name: Validate PowerShell script syntax
+        shell: pwsh
+        run: |
+          Get-ChildItem scripts -Filter '*.ps1' | ForEach-Object {
+            $tokens = $null
+            $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile($_.FullName, [ref]$tokens, [ref]$errors) | Out-Null
+            if ($errors.Count -gt 0) { throw "PowerShell syntax failed: $($_.Name) — $errors" }
+          }
+      - name: Validate reusable GUI tokens and logo chrome
+        shell: pwsh
+        run: ./scripts/check_gui_design.ps1
+      - name: Validate Slice 2 shell and notification contract
+        shell: pwsh
+        run: ./scripts/check_gui_slice2.ps1
+      - name: Validate Slice 3 library and import contracts
+        shell: pwsh
+        run: ./scripts/check_gui_slice3.ps1
+      - name: Validate Slice 4 player/trim/audio contracts
+        shell: pwsh
+        run: ./scripts/check_gui_slice4.ps1
+      - name: Validate Slice 5 sharing and grouped settings contract
+        shell: pwsh
+        run: ./scripts/check_gui_slice5.ps1
+      - name: Validate Slice 6 adaptive layout and contrast
+        shell: pwsh
+        run: ./scripts/check_gui_slice6.ps1
+      - name: Verify release packaging and memory source contracts
+        shell: pwsh
+        run: ./scripts/check_flick_release_source.ps1
+      - name: Build solution (Release)
+        run: dotnet build LocalClip.slnx --configuration Release --no-restore --warnaserror
+      - name: Run hardware-independent tests
+        run: dotnet test LocalClip.slnx --configuration Release --no-build --logger "trx;LogFileName=Flick-Tests.trx" --results-directory TestResults
+      - name: Smoke-check self-contained Windows publish
+        run: dotnet publish src/LocalClip.App/LocalClip.App.csproj -c Release -r win-x64 --self-contained true -o publish-smoke --nologo
+      - name: Validate branded published app and generated icon
+        shell: pwsh
+        run: |
+          if (-not (Test-Path publish-smoke/Flick.exe)) {
+            throw "Self-contained WPF publish did not create Flick.exe"
+          }
+          if (-not (Test-Path src/LocalClip.App/Assets/Brand/Flick.ico)) {
+            throw "Embedded Flick icon was not generated"
+          }
+      - name: Publish test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: flick-unit-test-results
+          path: TestResults/**/*.trx
+          if-no-files-found: warn
+
+  native:
+    name: Compile native libobs host (no GPU required)
+    runs-on: windows-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          update: false
+          install: >-
+            mingw-w64-ucrt-x86_64-gcc
+      - name: Download verified pinned OBS runtime
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $url = "https://github.com/obsproject/obs-studio/releases/download/32.2.2/OBS-Studio-32.2.2-Windows-x64.zip"
+          Invoke-WebRequest -Uri $url -OutFile "$env:RUNNER_TEMP/obs.zip"
+          $actual = (Get-FileHash "$env:RUNNER_TEMP/obs.zip" -Algorithm SHA256).Hash
+          $expected = "4D6E40E3AB155F56B30DE517380566A206D74B63CDF5AD49AA596924768F97E1"
+          if ($actual -ne $expected) { throw "OBS archive hash mismatch" }
+          New-Item -ItemType Directory -Path tools/obs/runtime -Force | Out-Null
+          Expand-Archive -Path "$env:RUNNER_TEMP/obs.zip" -DestinationPath tools/obs/runtime -Force
+          if (-not (Test-Path tools/obs/runtime/bin/64bit/obs.dll)) {
+            throw "Missing obs.dll after OBS runtime extraction"
+          }
+      - name: Compile native host with MinGW-w64
+        shell: msys2 {0}
+        run: |
+          mkdir -p native-ci
+          g++ --version
+          g++ -O2 -std=c++17 -static-libgcc -static-libstdc++ \
+            -Itools/obs/include/libobs -Isrc/LocalClip.CaptureHost \
+            src/LocalClip.CaptureHost/main.cpp \
+            -Ltools/obs/runtime/bin/64bit -Wl,-Bstatic -lwinpthread \
+            -Wl,-Bdynamic -lobs -ldwmapi -o native-ci/LocalClip.CaptureHost.exe
+      - name: Confirm native executable exists
+        shell: pwsh
+        run: |
+          if (-not (Test-Path native-ci/LocalClip.CaptureHost.exe)) {
+            throw "Native host compile did not produce an executable"
+          }
+
+# Native CI compiles the capture host; it does not perform NVIDIA NVENC
+# recording, real audio capture, game FPS checks, portable GUI launch,
+# Discord drag/paste or long-duration soaks. These require owner hardware.
+

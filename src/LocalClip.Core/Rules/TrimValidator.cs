@@ -17,6 +17,15 @@ public static class TrimValidator
 
     public static TrimValidationResult Validate(double startSec, double endSec, double originalDuration)
     {
+        if (!double.IsFinite(startSec) || !double.IsFinite(endSec) ||
+            !double.IsFinite(originalDuration))
+        {
+            return new TrimValidationResult
+            {
+                IsValid = false,
+                ErrorMessage = "Trim times must be finite numbers."
+            };
+        }
         if (originalDuration <= 0.0)
         {
             return new TrimValidationResult

@@ -1,0 +1,103 @@
+<Window x:Class="LocalClip.App.Views.ConnectedFoldersWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Connected Clip Folders"
+        Width="680" Height="520" MinWidth="510" MinHeight="380"
+        WindowStartupLocation="CenterOwner" ResizeMode="CanResize"
+        Background="{DynamicResource Flick.Brush.Canvas}"
+        Foreground="{DynamicResource Flick.Brush.TextPrimary}"
+        FontFamily="{StaticResource Flick.Font.UI}"
+        UseLayoutRounding="True" SnapsToDevicePixels="True"
+        Closing="Window_Closing">
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <StackPanel Grid.Row="0" Margin="0,0,0,14">
+            <TextBlock Text="Connected Clip Folders" Style="{StaticResource Flick.Text.PageTitle}"/>
+            <TextBlock Margin="0,6,0,0" TextWrapping="Wrap"
+                       Style="{StaticResource Flick.Text.Caption}"
+                       Text="Link existing recordings from SteelSeries, OBS, NVIDIA or any local folder. Flick indexes MP4/MKV files in place, without moving or copying originals."/>
+        </StackPanel>
+
+        <Grid Grid.Row="1" Margin="0,0,0,12">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <CheckBox x:Name="ChkIncludeSubfolders"
+                      Style="{StaticResource Flick.Toggle}" IsChecked="True"
+                      Content="Include Subfolders" VerticalAlignment="Center"/>
+            <Button Grid.Column="1" Content="+ Add Folder"
+                    Style="{StaticResource Flick.Button.Primary}"
+                    Click="AddFolder_Click"/>
+        </Grid>
+
+        <Border Grid.Row="2" Style="{StaticResource Flick.Surface.Panel}" Padding="7">
+            <ListBox x:Name="FolderList" ItemsSource="{Binding ConnectedFolders}"
+                     BorderThickness="0" Background="Transparent"
+                     ScrollViewer.CanContentScroll="True"
+                     VirtualizingStackPanel.IsVirtualizing="True"
+                     VirtualizingStackPanel.VirtualizationMode="Recycling">
+                <ListBox.ItemTemplate>
+                    <DataTemplate>
+                        <Grid Margin="6,7" MinHeight="56">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                <TextBlock Style="{StaticResource Flick.Text.Control}"
+                                           Text="{Binding DisplayName}" TextTrimming="CharacterEllipsis"
+                                           TextWrapping="NoWrap"/>
+                                <TextBlock Style="{StaticResource Flick.Text.Caption}"
+                                           Text="{Binding Path}" ToolTip="{Binding Path}"
+                                           TextTrimming="CharacterEllipsis" TextWrapping="NoWrap"
+                                           Margin="0,4,12,0"/>
+                            </StackPanel>
+                            <TextBlock Grid.Column="1" Style="{StaticResource Flick.Text.Caption}"
+                                       VerticalAlignment="Center" Text="{Binding Status}"
+                                       Margin="10,0,0,0"/>
+                        </Grid>
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+            </ListBox>
+        </Border>
+
+        <StackPanel Grid.Row="3" Margin="0,12,0,12">
+            <TextBlock Text="{Binding ImportStatusText}"
+                       Style="{StaticResource Flick.Text.Caption}"
+                       TextTrimming="CharacterEllipsis" TextWrapping="NoWrap"
+                       Margin="0,0,0,6"/>
+            <TextBlock Style="{StaticResource Flick.Text.Muted}" TextWrapping="Wrap"
+                       Text="Scanning is manually initiated, bounded and cancelable. New capture has priority; unavailable folders remain linked."/>
+        </StackPanel>
+
+        <Grid Grid.Row="4">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <Button Grid.Column="0" Content="Rescan Selected"
+                    Style="{StaticResource Flick.Button.Secondary}"
+                    Click="RescanFolder_Click" Margin="0,0,8,0"/>
+            <Button Grid.Column="1" Content="Unlink Folder"
+                    Style="{StaticResource Flick.Button.Danger}"
+                    Click="RemoveFolder_Click"/>
+            <Button Grid.Column="3" Content="Cancel Scan"
+                    Style="{StaticResource Flick.Button.Secondary}"
+                    Click="CancelScan_Click" Margin="0,0,8,0"/>
+            <Button Grid.Column="4" Content="Close" IsCancel="True"
+                    Style="{StaticResource Flick.Button.Primary}"
+                    Click="Close_Click"/>
+        </Grid>
+    </Grid>
+</Window>

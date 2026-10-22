@@ -32,6 +32,8 @@ public class HotkeyManager : IDisposable
 
     private int _toggleId = 0;
     private int _saveId = 0;
+    private string? _toggleHotkey;
+    private string? _saveHotkey;
 
     public void Initialize(IntPtr hwnd)
     {
@@ -41,58 +43,79 @@ public class HotkeyManager : IDisposable
     }
 
     public bool RegisterToggleHotkey(string hotkeyStr, out string errorMessage)
-    {
-        errorMessage = "";
-        if (_toggleId != 0)
-        {
-            UnregisterHotKey(_hwnd, _toggleId);
-            _toggleId = 0;
-        }
-
-        if (!ParseHotkey(hotkeyStr, out uint modifiers, out uint vk))
-        {
-            errorMessage = $"Invalid hotkey format: {hotkeyStr}";
-            return false;
-        }
-
-        _toggleId = ++_currentId;
-        if (!RegisterHotKey(_hwnd, _toggleId, modifiers | MOD_NOREPEAT, vk))
-        {
-            int err = Marshal.GetLastWin32Error();
-            errorMessage = $"Failed to register '{hotkeyStr}' (Error code {err}). It may be in use by another application.";
-            _toggleId = 0;
-            return false;
-        }
-
-        return true;
-    }
+        => Register(ref _toggleId, ref _toggleHotkey, hotkeyStr, out errorMessage);
 
     public bool RegisterSaveHotkey(string hotkeyStr, out string errorMessage)
+        => Register(ref _saveId, ref _saveHotkey, hotkeyStr, out errorMessage);
+
+    private bool Register(ref int currentId, ref string? previous, string requested, out string errorMessage)
     {
         errorMessage = "";
-        if (_saveId != 0)
+        if (!ParseHotkey(requested, out uint modifiers, out uint vk))
         {
-            UnregisterHotKey(_hwnd, _saveId);
-            _saveId = 0;
-        }
-
-        if (!ParseHotkey(hotkeyStr, out uint modifiers, out uint vk))
-        {
-            errorMessage = $"Invalid hotkey format: {hotkeyStr}";
+            errorMessage = $"Invalid hotkey: {requested}";
             return false;
         }
+        if (previous != null && AreEquivalentHotkeys(previous, requested))
+            return true;
 
-        _saveId = ++_currentId;
-        if (!RegisterHotKey(_hwnd, _saveId, modifiers | MOD_NOREPEAT, vk))
+        // Register replacement before removing the prior working shortcut.
+        int candidate = ++_currentId;
+        if (!RegisterHotKey(_hwnd, candidate, modifiers | MOD_NOREPEAT, vk))
         {
-            int err = Marshal.GetLastWin32Error();
-            errorMessage = $"Failed to register '{hotkeyStr}' (Error code {err}). It may be in use by another application.";
-            _saveId = 0;
+            errorMessage = $"Unable to register '{requested}' (Windows error {Marshal.GetLastWin32Error()}); old shortcut remains active.";
             return false;
         }
-
+        if (currentId != 0) UnregisterHotKey(_hwnd, currentId);
+        currentId = candidate;
+        previous = requested;
         return true;
     }
+
+    public string? RegisteredToggleHotkey => _toggleHotkey;
+    public string? RegisteredSaveHotkey => _saveHotkey;
+
+    public bool TryConfigure(string toggle, string save, out string error)
+    {
+        error = "";
+        if (!IsValidHotkey(toggle) || !IsValidHotkey(save) ||
+            AreEquivalentHotkeys(toggle, save))
+        {
+            error = "Use two distinct, valid hotkeys.";
+            return false;
+        }
+        if (_toggleHotkey != null && _saveHotkey != null &&
+            AreEquivalentHotkeys(toggle, _toggleHotkey) &&
+            AreEquivalentHotkeys(save, _saveHotkey))
+            return true;
+
+        string? oldToggle = _toggleHotkey, oldSave = _saveHotkey;
+        ClearRegistrations();
+        bool toggleOk = RegisterToggleHotkey(toggle, out var toggleError);
+        bool saveOk = toggleOk && RegisterSaveHotkey(save, out var saveError);
+        if (toggleOk && saveOk) return true;
+
+        error = toggleOk ? "Save hotkey is unavailable." : toggleError;
+        ClearRegistrations();
+        if (oldToggle != null) RegisterToggleHotkey(oldToggle, out _);
+        if (oldSave != null) RegisterSaveHotkey(oldSave, out _);
+        return false;
+    }
+
+    private void ClearRegistrations()
+    {
+        if (_toggleId != 0) UnregisterHotKey(_hwnd, _toggleId);
+        if (_saveId != 0) UnregisterHotKey(_hwnd, _saveId);
+        _toggleId = _saveId = 0;
+        _toggleHotkey = _saveHotkey = null;
+    }
+
+    public static bool AreEquivalentHotkeys(string left, string right) =>
+        ParseHotkey(left, out var leftMods, out var leftKey) &&
+        ParseHotkey(right, out var rightMods, out var rightKey) &&
+        leftMods == rightMods && leftKey == rightKey;
+
+    public static bool IsValidHotkey(string hotkey) => ParseHotkey(hotkey, out _, out _);
 
     private static bool ParseHotkey(string str, out uint modifiers, out uint vk)
     {
@@ -123,10 +146,10 @@ public class HotkeyManager : IDisposable
             }
             else
             {
-                if (Enum.TryParse<Key>(token, true, out var parsedKey))
-                {
+                if (Enum.TryParse<Key>(token, true, out var parsedKey) &&
+                    Enum.IsDefined(typeof(Key), parsedKey) && key == Key.None)
                     key = parsedKey;
-                }
+                else return false;
             }
         }
 
@@ -156,16 +179,7 @@ public class HotkeyManager : IDisposable
 
     public void Dispose()
     {
-        if (_toggleId != 0 && _hwnd != IntPtr.Zero)
-        {
-            UnregisterHotKey(_hwnd, _toggleId);
-            _toggleId = 0;
-        }
-        if (_saveId != 0 && _hwnd != IntPtr.Zero)
-        {
-            UnregisterHotKey(_hwnd, _saveId);
-            _saveId = 0;
-        }
+        if (_hwnd != IntPtr.Zero) ClearRegistrations();
         _source?.RemoveHook(HwndHook);
         _source = null;
         GC.SuppressFinalize(this);

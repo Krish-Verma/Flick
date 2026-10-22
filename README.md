@@ -1,82 +1,81 @@
-# Flick
+# Flick — lightweight, private gameplay clipping for Windows
 
-**Capture the moment. Skip the bloat.**
+Flick is a Windows-native game clipper for capturing the last 15–120 seconds, trimming a clip without altering its original file, and exporting an MP4 suitable for sharing. The product is designed to be free, offline-first and open source, without accounts, telemetry, forced uploads or a heavyweight permanent gaming overlay.
 
-Flick is a **free, open-source Windows gameplay clipper** in development. The goal is simple: save the moments you care about, make quick edits, and share them without a heavyweight background application.
+**Status: developer preview / not public-release approved.** This repository is currently private while the source and Windows installer pass final acceptance. The application is distributed under GPL-2.0-or-later for original Flick code, subject to third-party component terms. Public repository visibility and releases require explicit owner approval.
 
-We are building Flick for people who want a fast, dependable alternative to bloated gameplay recording tools—with transparency and performance as first-class priorities.
+## Features
 
-> [!WARNING]
-> **In active development — not ready for everyday or public release use.** The current code and `v1.0.0` archives are experimental and predate final hardware acceptance. Please don't treat a successful CI build as proof that recording, audio, exporting, or installation works on every PC.
+- Explicit manual replay on/off, separate global hotkeys for Save Clip and Toggle Replay; recording starts **off** even at Windows login.
+- NVIDIA NVENC video replay via a separate libobs capture worker, with 15–120 second duration and bounded buffer.
+- Native WPF clip library with search, in-place import of other recording folders, offline-folder awareness and non-destructive editing.
+- Two-handle trim, per-track audio mute/gain, local original/export preview; user-controlled export folder.
+- Size-capped H.264/AAC MP4 export for Discord (20 MB default, 10/50/100 MB and custom sizes), FileDrop drag and Copy File. Optional webhook posting is disabled by default and requires explicit consent.
+- Compact Flick-branded two-second Clip Saved notification and optional chime; each independently toggleable.
+- Native Windows application, full Flick squircle logo, dark graphite UI; no Electron or cloud account.
 
-## What Flick is being built to do
+## Windows requirements
 
-- **Save the last moments of gameplay:** manually enable capture, then press a separate hotkey to save the recent replay (30 seconds by default).
-- **Stay lightweight:** bounded rolling capture, GPU-assisted video encoding where supported, and careful CPU, RAM, disk, and process usage.
-- **Keep your clips yours:** local MKV originals, non-destructive trimming, and a searchable gallery.
-- **Give you control over sound:** microphone and system audio tracks, independent volume/mute controls where available, and honest labels when full per-app isolation isn't supported.
-- **Make sharing easy:** export H.264/AAC MP4 clips to a chosen file-size limit and drag or copy the result into Discord.
-- **Respect your privacy:** an offline-first core with no required account, ads, telemetry, paywall, or watermark. Optional webhook posting, if enabled, must always be deliberate.
+Windows 11 64-bit is the primary target; NVIDIA NVENC GPU required for the initial capture pipeline. Some devices/codecs, fullscreen modes and non-NVIDIA systems are not qualified. Bundled OBS and FFmpeg libraries are required at runtime. Self-contained .NET 10 publishing removes the need for end users to install the .NET SDK.
 
-Flick is **manual-first**: no automatic game detection, automatic highlight recording, or hidden capture.
+## Download Flick for Windows
 
-## Where development stands
+**Newest private preview: [Flick v1.0.1 Preview 1](https://github.com/Krish-Verma/Flick/releases/tag/v1.0.1-preview.1)**
 
-| Area | Current status |
-| --- | --- |
-| Windows WPF app, gallery, settings, hotkeys | Implemented; usability and hardware validation ongoing |
-| libobs capture host and NVIDIA NVENC replay | Implemented; real-machine acceptance required |
-| Local trim, audio mixing, Discord-size exports | Implemented; complete media and Discord validation required |
-| GitHub Actions .NET build and non-hardware tests | Running on the stabilization pull request |
-| Portable packaging, native build, long-running stability | In qualification; **not release-approved** |
-| Polished interface | Planned after the core capture-to-share workflow is reliable |
+**[Download Flick-Setup.exe — normal Windows installer](https://github.com/Krish-Verma/Flick/releases/download/v1.0.1-preview.1/Flick-Setup.exe)**
 
-The current backend fixes and validation work are tracked in **[PR #1 — Backend Stability & CI](https://github.com/Krish-Verma/Flick/pull/1)**. That pull request is deliberately a draft. Its [validation handoff](https://github.com/Krish-Verma/Flick/blob/fix/backend-stability-and-ci-20261019/docs/ANTIGRAVITY-VALIDATION-HANDOFF.md) lists the Windows/GPU, media, Discord, installer, and endurance checks that must be completed before release.
+One EXE runs the Windows setup wizard. It installs Flick in the Start Menu, registers it in Windows Installed Apps, and offers an optional desktop shortcut. You don't need to install .NET, OBS, or FFmpeg separately. For a no-install option, download Flick-v1.0.1-win-x64.zip from the same release and extract the entire folder before launching Flick.exe.
 
-## Platform and approach
+This preview is **unsigned** and intended for repository collaborators/testers while the repo is private. Verify SHA-256 against SHA256SUMS.txt and do not run an untrusted executable. The newer preview is separate from the older v1.0.0 stable release; full public-release qualification is still pending. See [Install/Upgrade Guide](docs/INSTALLATION-DISTRIBUTION.md) and [Release Process](docs/RELEASE-PROCESS.md).
 
-Flick currently targets **Windows x64**, with **NVIDIA NVENC** as the initial hardware-acceleration path. Broader GPU support and compatibility are not yet promised.
+## Run or install
 
-The main components are:
+The source builds two **different** local preview deliverables, with the installer additionally available directly from the GitHub preview release:
 
-- `src/LocalClip.App/` — Windows desktop interface (WPF / .NET 10)
-- `src/LocalClip.Core/` — recording coordination, media export, storage, diagnostics, and sharing
-- `src/LocalClip.CaptureHost/` — native C++ capture process using OBS/libobs
-- `tests/` — automated tests, with hardware-dependent checks explicitly separated
-- `ClipperBlueprint/` — original product requirements and design decisions
+1. **Flick-v1.0.1-win-x64.zip** — extract everything into one folder and launch **Flick.exe**. Do not move only the EXE: it requires the packaged OBS/FFmpeg runtime directory.
+2. **Flick-Setup.exe** — a conventional per-user Inno Setup wizard. It installs binaries under **%LOCALAPPDATA%\Programs\Flick**, registers Flick in Windows Installed Apps, creates a Start Menu shortcut and optionally a desktop shortcut. It does not require elevation.
 
-Some internal project names still say **LocalClip** while the product is being renamed to **Flick**.
+Both artifacts are distributed privately as a preview while public release approval is pending. The setup build is currently **unsigned**, and Windows may show a publisher/SmartScreen warning. Do not bypass warnings for untrusted downloads. The actual installer requires a clean-machine AntiGravity smoke test before distribution.
 
-## Build and test (contributors)
+Flick saves settings, indexes and thumbnail cache under the **legacy %LOCALAPPDATA%\LocalClip** path for compatibility with previous builds. Default original videos are in your Videos/LocalClip/Originals folder (or a user-selected folder). The new program directory is **different**: an ordinary uninstall removes program files, not your recordings or legacy profile data. **Do not run older LocalClip uninstall.ps1 scripts:** those previously removed the whole legacy data directory.
 
-The full capture and distribution pipeline requires a supported Windows development environment. The backend qualification instructions, dependency versions, and known limitations are in [the development handoff](https://github.com/Krish-Verma/Flick/blob/fix/backend-stability-and-ci-20261019/docs/ANTIGRAVITY-VALIDATION-HANDOFF.md) and [the dependency lock](dependencies.lock.json).
+See [Installation and Migration](docs/INSTALLATION-DISTRIBUTION.md) for upgrade and safe-uninstall instructions.
 
-For the .NET solution, install the pinned .NET 10 SDK and run:
+## Build from source
 
-```powershell
+On a supported Windows development machine, install the pinned .NET 10 SDK from global.json, MinGW-w64 GCC, and optionally **Inno Setup 6** for the graphical installer. Review and run the pinned download script only from a trusted repository checkout.
+
+~~~powershell
+./scripts/setup_tools.ps1
 dotnet restore LocalClip.slnx
-dotnet build LocalClip.slnx --configuration Release
-powershell -ExecutionPolicy Bypass -File scripts/run_tests.ps1
-```
+dotnet build LocalClip.slnx -c Release --warnaserror
+./scripts/run_tests.ps1
+./scripts/check_flick_release_source.ps1
+./scripts/build_package.ps1
+./scripts/build_installer.ps1 -SkipPortable
+~~~
 
-The ordinary test run **skips hardware-dependent tests**; skipped tests are not passes. For qualified Windows/NVIDIA hardware testing, after setting up the native host and pinned runtimes:
+The last command compiles a local unsigned Setup EXE from the previously built portable package. To build the installer and portable payload in one step, omit -SkipPortable. ISCC.exe from Inno Setup 6 must be installed; scripts never silently download an installer compiler.
 
-```powershell
-powershell -ExecutionPolicy Bypass -File scripts/run_tests.ps1 -Hardware
-```
+The optional real-GPU test command is **./scripts/run_tests.ps1 -Hardware** on an explicitly authorized Windows/NVIDIA rig. Hardware tests and GPU FPS measurements are not replaced by GitHub-hosted CI.
 
-To build a portable package, follow the setup instructions and use `scripts/build_package.ps1`. The produced package still requires a clean-install smoke test before being considered ready for distribution.
+## Code organization
 
-## Contributing
+- **src/LocalClip.App** — WPF UI, clip library, editor, icon and tray.
+- **src/LocalClip.Core** — media, storage, IPC, privacy and rules.
+- **src/LocalClip.CaptureHost** — standalone native C++ libobs worker.
+- **installer/Flick.iss** — declarative per-user Windows Setup wizard.
+- **scripts/build_package.ps1** and **scripts/build_installer.ps1** — reproducible build steps from pinned inputs and SHA-256 reporting.
+- **docs/PERFORMANCE-OPTIMIZATION-IMPLEMENTATION.md** — optimization rationale and real-world benchmarking protocol.
+- **docs/OPEN-SOURCE-RELEASE-CHECKLIST.md** — release blockers and artifact provenance.
+- **docs/FLICK-PREVIEW-ANTIGRAVITY-TEST-HANDOFF.md** — separate hardware/installer acceptance; AntiGravity tests but does not edit source.
 
-Flick is intended to become a public, community-usable open-source project. The repository may remain private during early stabilization. Once opened, bug reports, code review, reproducible test evidence, and focused pull requests will be welcome.
+## Privacy and security
 
-Please keep changes practical and performance-oriented. Don't commit personal recordings, Discord webhook secrets, tokens, or unrelated files. Core functionality and reliable tests come before cosmetic UI work.
+Flick has no required login and no built-in telemetry/cloud synchronization. It only records a source after manual arming. Microphone recording is opt-in; webhook publishing is disabled by default and requires confirmation. Review source-selection and permissions before gameplay. A linked import folder is indexed locally without copying or deleting imported originals.
 
-## License
+## Contributing and licensing
 
-Flick is intended to be distributed under **[GPL-2.0-or-later](LICENSE)**. See [third-party notices](THIRD-PARTY-NOTICES.md) for dependencies and attribution. Distribution and license-compliance checks remain part of the release process.
+See [CONTRIBUTING.md](CONTRIBUTING.md), [SECURITY.md](SECURITY.md), [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md), [LICENSE](LICENSE), [LICENSE-NOTICE.md](LICENSE-NOTICE.md), and [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
 
----
-
-**Flick — the moment is yours to keep.**
+Before publishing binaries publicly, verify complete corresponding source and actual third-party license obligations for shipped OBS/FFmpeg builds. Unapproved preview artifacts are not a public release.

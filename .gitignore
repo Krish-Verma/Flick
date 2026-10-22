@@ -21,3 +21,15 @@ dist/LocalClip-*/
 tools/obs/runtime/
 tools/ffmpeg/*.exe
 tools/obs/*.cpp
+
+# Local user-generated QA screenshots/logs and trace evidence (never publish)
+qa-evidence/
+dist/qa-local/
+Flick-Visual-QA-*/
+*.trx
+
+# Generated icon, per-user Windows installer and per-build checksums.
+src/LocalClip.App/Assets/Brand/Flick.ico
+dist/Flick.ico
+dist/Flick-Setup-*.exe
+dist/SHA256SUMS.txt

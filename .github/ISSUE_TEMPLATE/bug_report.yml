@@ -1,0 +1,33 @@
+name: Bug report
+description: Report a Flick defect with safe reproduction details.
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: "Never paste personal footage, webhook tokens or private paths. Use synthetic fixtures."
+  - type: input
+    id: version
+    attributes:
+      label: Version / commit
+      placeholder: "PR / SHA, Windows build, GPU / driver"
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      placeholder: "Minimal safe numbered steps"
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected vs observed
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Logs / measurements (redacted)
+      placeholder: "Include test outputs, never personal clips or credentials."

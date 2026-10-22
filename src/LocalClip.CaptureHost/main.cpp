@@ -10,6 +10,8 @@
 #include <chrono>
 #include <sstream>
 #include <iomanip>
+#include <filesystem>
+#include <system_error>
 
 #include "obs.h"
 #include "json.hpp"
@@ -112,53 +114,114 @@ struct ActiveCapture {
     std::string pending_save_id;
     std::string pending_save_prefix;
     std::chrono::steady_clock::time_point pending_save_start;
+    std::filesystem::file_time_type pending_save_walltime;
     std::atomic<bool> save_in_progress{false};
 };
 
 static ActiveCapture g_cap;
 static std::atomic<bool> g_obs_initialized{false};
 
+static std::filesystem::path runtime_bin_directory() {
+    wchar_t file_name[32768] = {};
+    DWORD len = GetModuleFileNameW(nullptr, file_name, 32768);
+    if (!len || len >= 32768) return {};
+    return std::filesystem::path(file_name).parent_path();
+}
+
 // Forward declaration
 static void internal_stop_capture(const std::string &reason);
 
-// Replay buffer callbacks
+// Replay buffer callbacks: only the current OBS output and save request can
+// publish a clip. Never pick the newest file from a directory (stale-clip bug).
 static void on_replay_saved(void *data, calldata_t *cd) {
-    const char *path = nullptr;
-    calldata_get_string(cd, "path", &path);
-    std::string saved_path = (path && strlen(path) > 0) ? path : "";
-
+    obs_output_t *output = reinterpret_cast<obs_output_t*>(data);
     std::string save_id;
     std::string out_dir;
+    std::vector<std::string> tracks;
+    std::filesystem::file_time_type requested_at;
     {
         std::lock_guard<std::mutex> lock(g_state_mutex);
+        if (!g_cap.save_in_progress || !g_cap.replay_output ||
+            g_cap.replay_output != output) return;
         save_id = g_cap.pending_save_id;
         out_dir = g_cap.output_dir;
-        g_cap.save_in_progress = false;
+        requested_at = g_cap.pending_save_walltime;
+        tracks = g_cap.track_names;
     }
 
-    if (saved_path.empty() && !out_dir.empty()) {
-        WIN32_FIND_DATAA fd;
-        std::string search = out_dir + "\\*.mkv";
-        HANDLE hFind = FindFirstFileA(search.c_str(), &fd);
-        FILETIME best_ft = {0, 0};
-        std::string best_file;
-        if (hFind != INVALID_HANDLE_VALUE) {
-            do {
-                if (CompareFileTime(&fd.ftLastWriteTime, &best_ft) > 0) {
-                    best_ft = fd.ftLastWriteTime;
-                    best_file = out_dir + "\\" + fd.cFileName;
-                }
-            } while (FindNextFileA(hFind, &fd));
-            FindClose(hFind);
+    auto reject = [&](const char *message) {
+        {
+            std::lock_guard<std::mutex> lock(g_state_mutex);
+            if (g_cap.replay_output == output && g_cap.pending_save_id == save_id)
+                g_cap.save_in_progress = false;
         }
-        saved_path = best_file;
+        send_event("save_failed", {{"reason", message}, {"save_id", save_id}});
+    };
+
+    // The OBS saved signal may omit the path. Query THIS output, not the
+    // filesystem, and reject an absent/stale/unrelated result.
+    std::string saved_path;
+    proc_handler_t *ph = obs_output_get_proc_handler(output);
+    if (ph) {
+        calldata_t reply;
+        calldata_init(&reply);
+        if (proc_handler_call(ph, "get_last_replay", &reply)) {
+            const char *p = nullptr;
+            if (calldata_get_string(&reply, "path", &p) && p && *p)
+                saved_path = p;
+        }
+        calldata_free(&reply);
+    }
+    if (saved_path.empty()) {
+        reject("OBS did not supply the path for this replay; refusing to guess");
+        return;
     }
 
-    json d;
-    d["save_id"] = save_id;
-    d["path"] = saved_path;
-    d["tracks"] = g_cap.track_names;
-    send_event("replay_saved", d);
+    std::error_code ec;
+    auto source = std::filesystem::u8path(saved_path);
+    auto directory = std::filesystem::u8path(out_dir);
+    if (source.extension() != L".mkv" ||
+        !std::filesystem::is_regular_file(source, ec) || ec ||
+        !std::filesystem::equivalent(source.parent_path(), directory, ec) || ec) {
+        reject("Replay file is missing or outside the configured originals folder");
+        return;
+    }
+
+    const auto modified = std::filesystem::last_write_time(source, ec);
+    if (ec || modified + std::chrono::seconds(4) < requested_at ||
+        std::filesystem::file_size(source, ec) == 0 || ec) {
+        reject("Replay path points to an empty or stale file");
+        return;
+    }
+
+    // Each request gets a distinct immutable name even when multiple saves
+    // occur within the same wall-clock second. MoveFileW never replaces.
+    std::string safe_id;
+    for (unsigned char c : save_id) {
+        if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+            (c >= '0' && c <= '9') || c == '-' || c == '_')
+            safe_id.push_back(static_cast<char>(c));
+    }
+    if (safe_id.empty()) {
+        reject("Replay save ID was invalid");
+        return;
+    }
+    auto target = directory / std::filesystem::u8path("Flick_" + safe_id + ".mkv");
+    if (!MoveFileW(source.c_str(), target.c_str())) {
+        reject("Could not finalize the unique replay file without overwriting another clip");
+        return;
+    }
+
+    {
+        std::lock_guard<std::mutex> lock(g_state_mutex);
+        if (g_cap.replay_output == output && g_cap.pending_save_id == save_id)
+            g_cap.save_in_progress = false;
+    }
+    send_event("replay_saved", {
+        {"save_id", save_id},
+        {"path", target.u8string()},
+        {"tracks", tracks}
+    });
 }
 
 // Window enumeration helpers
@@ -272,23 +335,29 @@ static BOOL CALLBACK EnumMonitorsProc(HMONITOR hMon, HDC hdc, LPRECT rc, LPARAM 
 }
 
 // Initialization of OBS engine
-static bool ensure_obs_init() {
-    if (g_obs_initialized) return true;
+static bool ensure_obs_init(int width, int height, int fps) {
+    static int s_cur_width = 0;
+    static int s_cur_height = 0;
+    static int s_cur_fps = 0;
 
-    base_set_log_handler(obs_log_redirect, nullptr);
+    bool already_initialized = g_obs_initialized.load();
+    if (already_initialized && s_cur_width == width && s_cur_height == height && s_cur_fps == fps) {
+        return true;
+    }
 
-    if (!obs_startup("en-US", nullptr, nullptr)) {
-        return false;
+    if (!already_initialized) {
+        base_set_log_handler(obs_log_redirect, nullptr);
+        if (!obs_startup("en-US", nullptr, nullptr)) return false;
     }
 
     struct obs_video_info ovi = {};
     ovi.graphics_module = "libobs-d3d11.dll";
-    ovi.fps_num = 30;
+    ovi.fps_num = static_cast<uint32_t>(fps);
     ovi.fps_den = 1;
-    ovi.base_width = 1920;
-    ovi.base_height = 1080;
-    ovi.output_width = 1920;
-    ovi.output_height = 1080;
+    ovi.base_width = static_cast<uint32_t>(width);
+    ovi.base_height = static_cast<uint32_t>(height);
+    ovi.output_width = static_cast<uint32_t>(width);
+    ovi.output_height = static_cast<uint32_t>(height);
     ovi.output_format = VIDEO_FORMAT_NV12;
     ovi.adapter = 0;
     ovi.gpu_conversion = true;
@@ -296,9 +365,13 @@ static bool ensure_obs_init() {
     ovi.range = VIDEO_RANGE_PARTIAL;
     ovi.scale_type = OBS_SCALE_BILINEAR;
     if (obs_reset_video(&ovi) != OBS_VIDEO_SUCCESS) {
-        obs_shutdown();
+        if (!already_initialized) obs_shutdown();
         return false;
     }
+    s_cur_width = width;
+    s_cur_height = height;
+    s_cur_fps = fps;
+    if (already_initialized) return true;
 
     struct obs_audio_info oai = {};
     oai.samples_per_sec = 48000;
@@ -307,18 +380,30 @@ static bool ensure_obs_init() {
         obs_shutdown();
         return false;
     }
-
-    // Load modules
+    const auto bin_dir = runtime_bin_directory();
+    const auto runtime_dir = bin_dir.parent_path().parent_path();
     const char *mods[] = {
         "obs-ffmpeg", "obs-nvenc", "obs-x264", "obs-outputs", "win-capture", "win-wasapi"
     };
+    bool load_ok = true;
     for (const char *m : mods) {
         obs_module_t *mod = nullptr;
-        std::string p = std::string("d:/Documents/ClipMax/tools/obs/runtime/obs-plugins/64bit/") + m + ".dll";
-        obs_open_module(&mod, p.c_str(), nullptr);
-        obs_init_module(mod);
+        auto dll = runtime_dir / "obs-plugins" / "64bit" / (std::string(m) + ".dll");
+        auto data = runtime_dir / "data" / "obs-plugins" / m;
+        std::string dll_utf8 = dll.u8string();
+        std::string data_utf8 = data.u8string();
+        int code = obs_open_module(&mod, dll_utf8.c_str(), data_utf8.c_str());
+        if (code != MODULE_SUCCESS || !mod || !obs_init_module(mod)) {
+            std::cerr << "Failed to load OBS plugin " << m << ", code=" << code << std::endl;
+            if (std::string(m) != "obs-x264" && std::string(m) != "obs-nvenc")
+                load_ok = false;
+        }
     }
-
+    if (!load_ok) {
+        obs_shutdown();
+        return false;
+    }
+    obs_post_load_modules();
     g_obs_initialized = true;
     return true;
 }
@@ -331,8 +416,18 @@ static bool start_capture_session(const json &params, std::string &out_err) {
         return false;
     }
 
-    if (!ensure_obs_init()) {
-        out_err = "Failed to initialize OBS D3D11 graphics or audio engine";
+    const int requested_fps = params.value("fps", 30);
+    const int requested_width = params.value("width", 1920);
+    const int requested_height = params.value("height", 1080);
+    if (requested_fps < 1 || requested_fps > 120 ||
+        requested_width < 320 || requested_width > 7680 ||
+        requested_height < 240 || requested_height > 4320 ||
+        requested_width % 2 || requested_height % 2) {
+        out_err = "Unsupported capture dimensions or frame rate";
+        return false;
+    }
+    if (!ensure_obs_init(requested_width, requested_height, requested_fps)) {
+        out_err = "Failed to initialize OBS video/audio/plugins";
         return false;
     }
 
@@ -347,17 +442,34 @@ static bool start_capture_session(const json &params, std::string &out_err) {
     g_cap.encoder_id = params.value("encoder", "obs_nvenc_h264_tex");
     g_cap.duration_sec = params.value("duration_sec", 30);
     g_cap.buffer_mb = params.value("buffer_mb", 256);
-    g_cap.output_dir = params.value("output_dir", "D:\\Documents\\ClipMax\\Clips\\Originals");
+    g_cap.output_dir = params.value("output_dir", std::string{});
     g_cap.audio_mode = params.value("audio_mode", "system_fallback");
     g_cap.enable_mic = params.value("enable_mic", true);
     g_cap.mic_device_id = params.value("mic_device_id", "default");
     g_cap.system_device_id = params.value("system_device_id", "default");
 
-    // Ensure output dir exists
-    CreateDirectoryA(g_cap.output_dir.c_str(), nullptr);
+    std::error_code directory_error;
+    if (g_cap.output_dir.empty() ||
+        (!std::filesystem::create_directories(std::filesystem::u8path(g_cap.output_dir), directory_error) && directory_error)) {
+        out_err = "Unable to create originals directory";
+        return false;
+    }
+    if (g_cap.target_type != "monitor" && g_cap.target_type != "window") {
+        out_err = "Unknown capture target type";
+        return false;
+    }
+    if (g_cap.target_type == "window" && !g_cap.window_hwnd) {
+        out_err = "Window unavailable; refusing silent monitor fallback";
+        return false;
+    }
 
     // 1. Create Video Source
     if (g_cap.target_type == "window" && g_cap.window_hwnd) {
+        HDESK hdesk = OpenDesktopW(L"default", 0, FALSE, GENERIC_ALL);
+        if (hdesk) {
+            SetThreadDesktop(hdesk);
+            CloseDesktop(hdesk);
+        }
         if (!IsWindow(g_cap.window_hwnd)) {
             out_err = "Target window handle is invalid or closed";
             return false;
@@ -393,7 +505,22 @@ static bool start_capture_session(const json &params, std::string &out_err) {
     } else {
         // Monitor capture
         obs_data_t *m_settings = obs_data_create();
+        std::vector<MonitorInfo> mons;
+        EnumDisplayMonitors(nullptr, nullptr, EnumMonitorsProc, reinterpret_cast<LPARAM>(&mons));
+        std::string mon_id = params.value("monitor_id", "");
+        if (mon_id.empty()) {
+            if (g_cap.monitor_index >= 0 && g_cap.monitor_index < static_cast<int>(mons.size())) {
+                mon_id = mons[g_cap.monitor_index].device_name;
+            } else if (!mons.empty()) {
+                mon_id = mons[0].device_name;
+            }
+        }
+        std::cerr << "[CaptureHost] Configured monitor capture: mon_id=" << mon_id << ", index=" << g_cap.monitor_index << ", method=2 (WGC)" << std::endl;
+        if (!mon_id.empty()) {
+            obs_data_set_string(m_settings, "monitor_id", mon_id.c_str());
+        }
         obs_data_set_int(m_settings, "monitor", g_cap.monitor_index);
+        obs_data_set_int(m_settings, "method", 2); // 2 = Windows Graphics Capture (WinRT, non-injecting, works on Win11/HAGS)
         obs_data_set_bool(m_settings, "capture_cursor", true);
         g_cap.video_source = obs_source_create("monitor_capture", "DisplaySource", m_settings, nullptr);
         obs_data_release(m_settings);
@@ -415,6 +542,11 @@ static bool start_capture_session(const json &params, std::string &out_err) {
     g_cap.sys_audio_source = obs_source_create("wasapi_output_capture", "SystemAudio", sys_settings, nullptr);
     obs_data_release(sys_settings);
 
+    if (!g_cap.sys_audio_source) {
+        out_err = "System audio loopback source could not be created";
+        internal_stop_capture("audio_source_fail");
+        return false;
+    }
     if (g_cap.sys_audio_source) {
         // Route to Track 1 (bit 0) and Track 2 (bit 1)
         obs_source_set_audio_mixers(g_cap.sys_audio_source, (1 << 0) | (1 << 1));
@@ -429,6 +561,11 @@ static bool start_capture_session(const json &params, std::string &out_err) {
         g_cap.mic_audio_source = obs_source_create("wasapi_input_capture", "Microphone", mic_settings, nullptr);
         obs_data_release(mic_settings);
 
+        if (!g_cap.mic_audio_source) {
+            out_err = "Microphone source could not be created; disable mic or select an input";
+            internal_stop_capture("microphone_fail");
+            return false;
+        }
         if (g_cap.mic_audio_source) {
             // Route to Track 1 (bit 0) and Track 3 (bit 2)
             obs_source_set_audio_mixers(g_cap.mic_audio_source, (1 << 0) | (1 << 2));
@@ -444,16 +581,14 @@ static bool start_capture_session(const json &params, std::string &out_err) {
     obs_data_set_int(v_settings, "keyint_sec", 2);
     g_cap.video_encoder = obs_video_encoder_create(g_cap.encoder_id.c_str(), "h264_enc", v_settings, nullptr);
     if (!g_cap.video_encoder) {
-        // Fallback to jim_nvenc or obs_x264
+        // Hardware-only fallback: never silently burden gameplay with x264.
         g_cap.video_encoder = obs_video_encoder_create("jim_nvenc", "h264_enc", v_settings, nullptr);
-        if (!g_cap.video_encoder) {
-            g_cap.video_encoder = obs_video_encoder_create("obs_x264", "h264_enc", v_settings, nullptr);
-        }
+        if (g_cap.video_encoder) g_cap.encoder_id = "jim_nvenc";
     }
     obs_data_release(v_settings);
 
     if (!g_cap.video_encoder) {
-        out_err = "Failed to initialize video encoder";
+        out_err = "NVIDIA NVENC hardware encoder unavailable; capture not started";
         internal_stop_capture("encoder_fail");
         return false;
     }
@@ -467,6 +602,11 @@ static bool start_capture_session(const json &params, std::string &out_err) {
         std::string a_name = "aac_track_" + std::to_string(t);
         obs_encoder_t *a_enc = obs_audio_encoder_create("ffmpeg_aac", a_name.c_str(), a_settings, static_cast<size_t>(t), nullptr);
         obs_data_release(a_settings);
+        if (!a_enc) {
+            out_err = "Could not create AAC audio encoder";
+            internal_stop_capture("audio_encoder_fail");
+            return false;
+        }
         obs_encoder_set_audio(a_enc, obs_get_audio());
         g_cap.audio_encoders.push_back(a_enc);
     }
@@ -492,10 +632,11 @@ static bool start_capture_session(const json &params, std::string &out_err) {
         obs_output_set_audio_encoder(g_cap.replay_output, g_cap.audio_encoders[t], static_cast<size_t>(t));
     }
 
-    signal_handler_connect(obs_output_get_signal_handler(g_cap.replay_output), "saved", on_replay_saved, nullptr);
+    signal_handler_connect(obs_output_get_signal_handler(g_cap.replay_output), "saved", on_replay_saved, g_cap.replay_output);
 
     if (!obs_output_start(g_cap.replay_output)) {
-        out_err = "Failed to start replay buffer";
+        const char *obs_error = obs_output_get_last_error(g_cap.replay_output);
+        out_err = std::string("Failed to start replay buffer: ") + (obs_error ? obs_error : "unknown OBS error");
         internal_stop_capture("start_fail");
         return false;
     }
@@ -517,9 +658,14 @@ static bool start_capture_session(const json &params, std::string &out_err) {
 // Stop capture implementation
 static void internal_stop_capture(const std::string &reason) {
     if (g_cap.replay_output) {
+        signal_handler_disconnect(obs_output_get_signal_handler(g_cap.replay_output), "saved", on_replay_saved, g_cap.replay_output);
         obs_output_stop(g_cap.replay_output);
-        while (obs_output_active(g_cap.replay_output)) {
+        auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(2000);
+        while (obs_output_active(g_cap.replay_output) && std::chrono::steady_clock::now() < deadline)
             std::this_thread::sleep_for(std::chrono::milliseconds(20));
+        if (obs_output_active(g_cap.replay_output)) {
+            std::cerr << "Replay buffer stop deadline exceeded, forcing stop" << std::endl;
+            obs_output_force_stop(g_cap.replay_output);
         }
         obs_output_release(g_cap.replay_output);
         g_cap.replay_output = nullptr;
@@ -534,6 +680,10 @@ static void internal_stop_capture(const std::string &reason) {
         obs_encoder_release(a_enc);
     }
     g_cap.audio_encoders.clear();
+
+    obs_set_output_source(0, nullptr);
+    obs_set_output_source(1, nullptr);
+    obs_set_output_source(2, nullptr);
 
     if (g_cap.sys_audio_source) {
         obs_source_release(g_cap.sys_audio_source);
@@ -550,9 +700,12 @@ static void internal_stop_capture(const std::string &reason) {
         g_cap.video_source = nullptr;
     }
 
-    g_cap.state = CaptureState::Off;
-    g_cap.is_armed = false;
-    g_cap.save_in_progress = false;
+    {
+        std::lock_guard<std::mutex> lock(g_state_mutex);
+        g_cap.state = CaptureState::Off;
+        g_cap.is_armed = false;
+        g_cap.save_in_progress = false;
+    }
 
     json d;
     d["state"] = "Off";
@@ -577,13 +730,18 @@ static bool trigger_save_replay(const std::string &save_id, const std::string &p
     g_cap.pending_save_id = save_id;
     g_cap.pending_save_prefix = prefix;
     g_cap.pending_save_start = std::chrono::steady_clock::now();
+    g_cap.pending_save_walltime = std::filesystem::file_time_type::clock::now();
 
     proc_handler_t *ph = obs_output_get_proc_handler(g_cap.replay_output);
     calldata_t cd;
     calldata_init(&cd);
-    proc_handler_call(ph, "save", &cd);
+    bool accepted = ph && proc_handler_call(ph, "save", &cd);
     calldata_free(&cd);
-
+    if (!accepted) {
+        g_cap.save_in_progress = false;
+        out_err = "Replay buffer did not accept save operation";
+        return false;
+    }
     return true;
 }
 
@@ -606,15 +764,27 @@ static json get_current_status() {
     }
 
     double buffered = (elapsed > g_cap.duration_sec) ? static_cast<double>(g_cap.duration_sec) : elapsed;
+    if (g_cap.save_in_progress &&
+        std::chrono::steady_clock::now() - g_cap.pending_save_start > std::chrono::seconds(15)) {
+        g_cap.save_in_progress = false;
+        send_event("save_failed", {{"reason", "Replay save timed out after 15 seconds"}});
+    }
     j["state"] = state_to_string(g_cap.state);
     j["buffered_sec"] = buffered;
     j["max_sec"] = g_cap.duration_sec;
     j["is_armed"] = g_cap.is_armed.load();
     j["target_type"] = g_cap.target_type;
+    j["encoder"] = g_cap.encoder_id;
+    j["buffered_duration_estimated"] = true;
     j["tracks"] = g_cap.track_names;
 
     // Check target window liveness
     if (g_cap.target_type == "window" && g_cap.window_hwnd) {
+        HDESK hdesk = OpenDesktopW(L"default", 0, FALSE, GENERIC_ALL);
+        if (hdesk) {
+            SetThreadDesktop(hdesk);
+            CloseDesktop(hdesk);
+        }
         if (!IsWindow(g_cap.window_hwnd)) {
             j["target_valid"] = false;
             // Trip fault
@@ -643,8 +813,17 @@ static json get_current_status() {
 
 // Main entry point
 int main(int argc, char **argv) {
-    // Set working directory to OBS runtime bin
-    SetCurrentDirectoryA("d:\\Documents\\ClipMax\\tools\\obs\\runtime\\bin\\64bit");
+    HDESK hDefaultDesk = OpenDesktopW(L"default", 0, FALSE, GENERIC_ALL);
+    if (hDefaultDesk) {
+        SetThreadDesktop(hDefaultDesk);
+        CloseDesktop(hDefaultDesk);
+    }
+
+    const auto bin_dir = runtime_bin_directory();
+    if (bin_dir.empty() || !SetCurrentDirectoryW(bin_dir.c_str())) {
+        std::cerr << "Unable to locate local OBS runtime directory" << std::endl;
+        return 2;
+    }
 
     // Start background stdin reader
     std::string line;
@@ -717,19 +896,17 @@ int main(int argc, char **argv) {
             else if (cmd == "get_status") {
                 json st = get_current_status();
                 send_response(id, true, st);
+                if (g_cap.state == CaptureState::Faulted) {
+                    // Do not leave an actively encoding source behind a faulted UI.
+                    internal_stop_capture("capture_target_lost");
+                }
             }
             else if (cmd == "stop_capture") {
-                {
-                    std::lock_guard<std::mutex> lock(g_state_mutex);
-                    internal_stop_capture("user_requested");
-                }
+                internal_stop_capture("user_requested");
                 send_response(id, true, {{"status", "Off"}});
             }
             else if (cmd == "shutdown") {
-                {
-                    std::lock_guard<std::mutex> lock(g_state_mutex);
-                    internal_stop_capture("shutdown");
-                }
+                internal_stop_capture("shutdown");
                 if (g_obs_initialized) {
                     obs_shutdown();
                     g_obs_initialized = false;

@@ -170,4 +170,31 @@ public class CoreTests
         bool isValid = DiscordWebhookClient.ValidateWebhookUrl(url, out string err);
         Assert.Equal(expectedValid, isValid);
     }
+    [Fact]
+    public void TestShortClipHighCustomCapCannotOverflowBitrate()
+    {
+        var budget = LocalClip.Core.Rules.BitrateBudgetCalculator.Calculate(250, 0.25);
+        Assert.InRange(budget.VideoBitrateBps,
+            LocalClip.Core.Rules.BitrateBudgetCalculator.VIDEO_RATE_FLOOR_BPS,
+            LocalClip.Core.Rules.BitrateBudgetCalculator.VIDEO_RATE_CEILING_BPS);
+        Assert.True(budget.VideoBitrateBps > 0);
+        Assert.Equal(250_000_000L, budget.TargetBytes);
+    }
+
+    [Fact]
+    public void TestSmallAudioOrTrimEditCannotReuseOutdatedExport()
+    {
+        var tracks = new List<AudioTrackInfo>
+        {
+            new() { StreamIndex = 1, TrackIndex = 0, Gain = 1.0 }
+        };
+        var baseFingerprint = ExportFingerprint.Compute("clip.mkv", 0.0, 30.0, tracks, 20);
+        tracks[0].Gain = 1.004;
+        Assert.NotEqual(baseFingerprint,
+            ExportFingerprint.Compute("clip.mkv", 0.0, 30.0, tracks, 20));
+        tracks[0].Gain = 1.0;
+        Assert.NotEqual(baseFingerprint,
+            ExportFingerprint.Compute("clip.mkv", 0.0004, 30.0, tracks, 20));
+    }
+
 }

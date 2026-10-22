@@ -1,3 +1,5 @@
+> **Use the current validation handoff first:** [ANTIGRAVITY-VALIDATION-HANDOFF.md](ANTIGRAVITY-VALIDATION-HANDOFF.md). The original v1.0.0 results documented here are historical and do not verify PR #1.
+
 # Agent Handoff & Codebase Inspection Guide
 
 **Target Audience:** Autonomous Coding Agents & Human Auditors  
