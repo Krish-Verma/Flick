@@ -1,0 +1,31 @@
+Flick — Windows hardware compatibility
+
+QUALIFIED FOR THIS PREVIEW:
+- Windows 11 with a 64-bit x86-64 CPU.
+- A compatible NVIDIA GeForce GPU with NVENC video encoding.
+- Tested hardware: NVIDIA RTX 5060.
+
+NOT QUALIFIED FOR RECORDING IN THIS RELEASE:
+- AMD Radeon graphics only.
+- Intel integrated graphics or Intel Arc only.
+- Windows on ARM/Snapdragon and 32-bit Windows.
+- macOS or Linux.
+- Windows 10 has not completed qualification.
+- Some game anti-cheat or exclusive-fullscreen capture scenarios.
+
+Installing Flick does not enable AMD, Intel or software recording.
+The app starts with replay recording OFF. You must explicitly select
+a source and enable replay.
+
+The browser-downloaded Flick-Setup.exe remains in Downloads until
+you delete it manually. Running the setup installs the application in
+your chosen location (default %LOCALAPPDATA%\Programs\Flick),
+adds a Start Menu shortcut and registers a normal Windows uninstaller.
+
+To remove Flick, choose Uninstall Flick in Settings > General, the
+Start Menu shortcut, or Windows Settings > Apps > Installed Apps.
+The uninstaller asks separately whether to erase Flick settings/cache,
+with NO selected by default. Clips and exports are not removed.
+
+This preview installer is unsigned. Verify its checksum and GitHub
+source before installing; do not run untrusted files.
