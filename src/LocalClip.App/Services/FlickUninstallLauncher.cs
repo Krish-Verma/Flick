@@ -32,16 +32,33 @@ public static class FlickUninstallLauncher
                 StringComparison.OrdinalIgnoreCase))
             return false;
 
-        using var key = Registry.CurrentUser.OpenSubKey(InstalledAppKey);
-        string? registered = key?.GetValue("UninstallString") as string;
-        string? displayName = key?.GetValue("DisplayName") as string;
-        if (!string.Equals(displayName, "Flick", StringComparison.OrdinalIgnoreCase) ||
-            registered == null ||
-            !registered.Contains(uninstallExe, StringComparison.OrdinalIgnoreCase))
-            return false;
-
-        path = uninstallExe;
-        return true;
+        // Older Inno Setup installs run in 32-bit setup mode and can
+        // register under HKCU's WOW6432Node view. Inspect both explicitly
+        // instead of reporting a legitimate installation as portable.
+        foreach (RegistryView view in new[] { RegistryView.Registry64, RegistryView.Registry32 })
+        {
+            try
+            {
+                using var root = RegistryKey.OpenBaseKey(RegistryHive.CurrentUser, view);
+                using var key = root.OpenSubKey(InstalledAppKey);
+                string? registered = key?.GetValue("UninstallString") as string;
+                string? displayName = key?.GetValue("DisplayName") as string;
+                if (string.Equals(displayName, "Flick", StringComparison.OrdinalIgnoreCase) &&
+                    registered != null &&
+                    registered.Contains(uninstallExe, StringComparison.OrdinalIgnoreCase))
+                {
+                    path = uninstallExe;
+                    return true;
+                }
+            }
+            catch (Exception e) when (e is UnauthorizedAccessException
+                or IOException or System.Security.SecurityException)
+            {
+                // One inaccessible registry view must not prevent the other
+                // from being checked or turn a portable copy into an installer.
+            }
+        }
+        return false;
     }
 
     public static bool TryLaunch(out string error)

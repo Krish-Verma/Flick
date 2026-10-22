@@ -39,6 +39,10 @@ Require $settingsUi 'Uninstall Flick' "General Settings needs app uninstall acti
 Require $settingsCode 'UninstallRequested' "Uninstall must require explicit user confirmation"
 Require $launcher 'Registry.CurrentUser.OpenSubKey' "Launch only installed per-user uninstaller"
 Require $launcher 'unins000.exe' "Do not attempt self-delete outside Windows uninstaller"
+Require $launcher 'RegistryView.Registry32' "Uninstall button must handle per-user 32-bit Inno registry view"
+Require $launcher 'RegistryView.Registry64' "Uninstall button must handle per-user 64-bit registry view"
+Require $install 'HKCU32' "Remove owned startup Run entry in the Inno 32-bit view"
+Require $install 'HKCU64' "Remove owned startup Run entry in the Inno 64-bit view"
 
 Require $install 'DefaultDirName=\{localappdata\}\\Programs\\Flick' "Program and user metadata must be separate"
 Require $start 'Environment.ProcessPath' "Startup must use the running executable path"

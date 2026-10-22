@@ -81,10 +81,14 @@ begin
 
   // Remove only a startup entry belonging to this installed executable.
   RunKey := 'Software\Microsoft\Windows\CurrentVersion\Run';
-  if RegQueryStringValue(HKCU, RunKey, 'Flick', StartupValue) then
+  if RegQueryStringValue(HKCU32, RunKey, 'Flick', StartupValue) then
     if Pos(Lowercase(ExpandConstant('{app}\Flick.exe')),
       Lowercase(StartupValue)) > 0 then
-      RegDeleteValue(HKCU, RunKey, 'Flick');
+      RegDeleteValue(HKCU32, RunKey, 'Flick');
+  if RegQueryStringValue(HKCU64, RunKey, 'Flick', StartupValue) then
+    if Pos(Lowercase(ExpandConstant('{app}\Flick.exe')),
+      Lowercase(StartupValue)) > 0 then
+      RegDeleteValue(HKCU64, RunKey, 'Flick');
 
   if not RemoveFlickProfile then
     Exit;
