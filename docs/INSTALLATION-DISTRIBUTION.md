@@ -2,9 +2,9 @@
 
 ## Two Windows deliverables
 
-**Portable ZIP**: dist/Flick-v1.0.0-win-x64.zip. Unzip entirely and open Flick.exe. The app must retain the adjacent bundled tools/ffmpeg and tools/obs directories. No installer is required.
+**Portable ZIP**: dist/Flick-v1.0.1-win-x64.zip. Unzip entirely and open Flick.exe. The app must retain the adjacent bundled tools/ffmpeg and tools/obs directories. No installer is required.
 
-**Conventional Setup EXE**: dist/Flick-Setup-1.0.0-win-x64-preview.exe. Compiled with Inno Setup 6 using installer/Flick.iss, scripts/build_package.ps1 and scripts/build_installer.ps1. This is a per-user, non-elevated **preview** Windows setup; the generated EXE is *not* yet a public signed release. A clean Windows installation acceptance test is required.
+**Conventional Setup EXE**: dist/Flick-Setup.exe. Compiled with Inno Setup 6 using installer/Flick.iss, scripts/build_package.ps1 and scripts/build_installer.ps1. This is a per-user, non-elevated **preview** Windows setup; the generated EXE is *not* yet a public signed release. A clean Windows installation acceptance test is required.
 
 ## User-visible installation behavior
 
@@ -40,7 +40,7 @@ dotnet build LocalClip.slnx -c Release --warnaserror
 ./scripts/run_tests.ps1
 ./scripts/build_package.ps1
 ./scripts/build_installer.ps1 -SkipPortable
-Get-FileHash .\dist\Flick-Setup-1.0.0-win-x64-preview.exe -Algorithm SHA256
+Get-FileHash .\dist\Flick-Setup.exe -Algorithm SHA256
 ~~~
 
 The build script checks that pinned OBS, FFmpeg, FFprobe and portable Flick.exe resources actually exist, uses the Inno Setup ISCC.exe compiler, and prints the resulting SHA-256. It does not download, sign, upload, publish or merge a public release. Inno Setup 6 is a source-build prerequisite; Windows runners and developers must install it from a trusted provider.

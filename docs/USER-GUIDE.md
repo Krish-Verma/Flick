@@ -6,7 +6,7 @@ Flick is a small, free, offline-first **Windows 11 x64** gameplay clipper. It ma
 
 ## 1. Install or run
 
-Two preview formats are available after a verified Windows build: extract `Flick-v1.0.0-win-x64.zip` and launch **Flick.exe**, or run the unsigned `Flick-Setup-1.0.0-win-x64-preview.exe` wizard for a normal **Start Menu** entry, optional desktop shortcut and Windows **Installed Apps** uninstall registration. The Inno Setup build is not released publicly until AntiGravity tests it. **Do not run the previous `LocalClip` `uninstall.ps1`**, which could erase the directory containing user metadata. New program files install in `%LOCALAPPDATA%\Programs\Flick`, separately from settings and clips.
+Two preview formats are available after a verified Windows build: extract `Flick-v1.0.1-win-x64.zip` and launch **Flick.exe**, or run the unsigned `Flick-Setup.exe` wizard for a normal **Start Menu** entry, optional desktop shortcut and Windows **Installed Apps** uninstall registration. The Inno Setup build is not released publicly until AntiGravity tests it. **Do not run the previous `LocalClip` `uninstall.ps1`**, which could erase the directory containing user metadata. New program files install in `%LOCALAPPDATA%\Programs\Flick`, separately from settings and clips.
 
 Flick stores settings and metadata under `%LOCALAPPDATA%\LocalClip`; originals are saved by default to `%USERPROFILE%\Videos\LocalClip\Originals`. You may change the originals folder in Settings.
 

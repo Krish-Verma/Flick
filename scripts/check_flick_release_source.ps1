@@ -35,4 +35,14 @@ Require $performance 'Flick", "LocalClip.App' "Performance QA must accept brande
 if ($install -match '(?im)^\s*UninstallDelete|deleteall') {
     throw "Do not broadly delete user files on uninstall"
 }
+# Version, filenames and release links must agree (not just compile).
+$lock = Read "dependencies.lock.json"
+$setupScript = Read "scripts/build_installer.ps1"
+$versions = Read "release/preview-version.txt"
+Require $csproj '<Version>1\.0\.1-preview\.1</Version>' "App assembly version must match preview tag"
+Require $install 'MyAppVersion "1\.0\.1"' "Inno Setup AppVersion must match"
+Require $package 'Flick-v1\.0\.1-win-x64' "Portable version must match installer"
+Require $setupScript 'Flick-Setup\.exe' "User-facing installer must be a single EXE"
+Require $lock '1\.0\.1-preview\.1' "Pinned app version must match tag"
+if ($versions.Trim() -ne "1.0.1-preview.1") { throw "Release version manifest does not match compiled version" }
 Write-Host "Flick packaging and memory source contracts PASS (not a hardware performance test)." -ForegroundColor Green

@@ -18,14 +18,24 @@ Flick is a Windows-native game clipper for capturing the last 15–120 seconds, 
 
 Windows 11 64-bit is the primary target; NVIDIA NVENC GPU required for the initial capture pipeline. Some devices/codecs, fullscreen modes and non-NVIDIA systems are not qualified. Bundled OBS and FFmpeg libraries are required at runtime. Self-contained .NET 10 publishing removes the need for end users to install the .NET SDK.
 
+## Download Flick for Windows
+
+**Newest private preview: [Flick v1.0.1 Preview 1](https://github.com/Krish-Verma/Flick/releases/tag/v1.0.1-preview.1)**
+
+**[Download Flick-Setup.exe — normal Windows installer](https://github.com/Krish-Verma/Flick/releases/download/v1.0.1-preview.1/Flick-Setup.exe)**
+
+One EXE runs the Windows setup wizard. It installs Flick in the Start Menu, registers it in Windows Installed Apps, and offers an optional desktop shortcut. You don't need to install .NET, OBS, or FFmpeg separately. For a no-install option, download Flick-v1.0.1-win-x64.zip from the same release and extract the entire folder before launching Flick.exe.
+
+This preview is **unsigned** and intended for repository collaborators/testers while the repo is private. Verify SHA-256 against SHA256SUMS.txt and do not run an untrusted executable. The newer preview is separate from the older v1.0.0 stable release; full public-release qualification is still pending. See [Install/Upgrade Guide](docs/INSTALLATION-DISTRIBUTION.md) and [Release Process](docs/RELEASE-PROCESS.md).
+
 ## Run or install
 
-The source builds two **different** local preview deliverables:
+The source builds two **different** local preview deliverables, with the installer additionally available directly from the GitHub preview release:
 
-1. **Flick-v1.0.0-win-x64.zip** — extract everything into one folder and launch **Flick.exe**. Do not move only the EXE: it requires the packaged OBS/FFmpeg runtime directory.
-2. **Flick-Setup-1.0.0-win-x64-preview.exe** — a conventional per-user Inno Setup wizard. It installs binaries under **%LOCALAPPDATA%\Programs\Flick**, registers Flick in Windows Installed Apps, creates a Start Menu shortcut and optionally a desktop shortcut. It does not require elevation.
+1. **Flick-v1.0.1-win-x64.zip** — extract everything into one folder and launch **Flick.exe**. Do not move only the EXE: it requires the packaged OBS/FFmpeg runtime directory.
+2. **Flick-Setup.exe** — a conventional per-user Inno Setup wizard. It installs binaries under **%LOCALAPPDATA%\Programs\Flick**, registers Flick in Windows Installed Apps, creates a Start Menu shortcut and optionally a desktop shortcut. It does not require elevation.
 
-Neither artifact is published as a public release. The setup build is currently **unsigned**, and Windows may show a publisher/SmartScreen warning. Do not bypass warnings for untrusted downloads. The actual installer requires a clean-machine AntiGravity smoke test before distribution.
+Both artifacts are distributed privately as a preview while public release approval is pending. The setup build is currently **unsigned**, and Windows may show a publisher/SmartScreen warning. Do not bypass warnings for untrusted downloads. The actual installer requires a clean-machine AntiGravity smoke test before distribution.
 
 Flick saves settings, indexes and thumbnail cache under the **legacy %LOCALAPPDATA%\LocalClip** path for compatibility with previous builds. Default original videos are in your Videos/LocalClip/Originals folder (or a user-selected folder). The new program directory is **different**: an ordinary uninstall removes program files, not your recordings or legacy profile data. **Do not run older LocalClip uninstall.ps1 scripts:** those previously removed the whole legacy data directory.
 
