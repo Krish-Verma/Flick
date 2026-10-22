@@ -1,14 +1,22 @@
-# Flick v1.0.1 — Newest Windows Preview
+# Flick v1.0.2 — Windows NVIDIA NVENC Preview
 
-**The current private Flick beta for Windows 11 (x64) and supported NVIDIA NVENC GPUs.** This version contains the new native Flick interface, the lighter video/thumbnail handling, and a standard Windows setup wizard. It supersedes the previous v1.0.0 ZIP-only build for preview testers.
+**The current Flick preview for Windows 11 x64 PCs with compatible NVIDIA NVENC graphics.** This version contains the new native Flick interface, the lighter video/thumbnail handling, and a standard Windows setup wizard. It supersedes the previous v1.0.0 ZIP-only build for preview testers.
 
 ## Install in one click
 
-**Download [Flick-Setup.exe](https://github.com/Krish-Verma/Flick/releases/download/v1.0.1-preview.1/Flick-Setup.exe) from the Assets list below.** Double-click the file after verifying its SHA-256 and follow the Windows installation wizard. You can launch Flick from the Start Menu, optionally add a desktop shortcut, and uninstall it from Windows Settings > Apps > Installed Apps.
+**Download [Flick-Setup.exe](https://github.com/Krish-Verma/Flick/releases/download/v1.0.2-preview.1/Flick-Setup.exe) from the Assets list below.** Double-click the file after verifying its SHA-256 and follow the Windows installation wizard. You can launch Flick from the Start Menu, optionally add a desktop shortcut, and uninstall it from Windows Settings > Apps > Installed Apps.
 
 Flick bundles .NET, OBS capture runtime, FFmpeg and FFprobe. No separate launcher, SDK, installer manager or developer setup is needed.
 
-**Portable option:** Download Flick-v1.0.1-win-x64.zip instead, extract the entire folder, then launch Flick.exe. Keep its bundled tools folder beside the EXE.
+**Portable option:** Download Flick-v1.0.2-win-x64.zip instead, extract the entire folder, then launch Flick.exe. Keep its bundled tools folder beside the EXE.
+
+## Normal uninstall, compatibility, and downloaded installer
+
+Flick now has **Settings > General > Uninstall Flick…**, as well as Windows Installed Apps and a Start Menu uninstall shortcut. Uninstalling removes program files and owned registration; the uninstaller asks separately (No by default) whether to remove the Flick settings and thumbnail cache. Original recordings, exports and imported videos are **always preserved**.
+
+The downloaded Flick-Setup.exe usually stays in the browser Downloads directory; after you run it, Windows installs the real application under LocalAppData/Programs/Flick. Delete the Setup download manually if you do not wish to keep it. No executable can guarantee zero Windows logs or browser/download traces.
+
+Recording compatibility is restricted to **Windows 11 x64 with NVIDIA NVENC**. AMD/Intel-only systems and ARM computers are not currently supported for recording. Windows 10 is unqualified. Do not interpret native Windows UI compatibility as capture/encoder support for every Windows PC.
 
 ## What's in this preview
 

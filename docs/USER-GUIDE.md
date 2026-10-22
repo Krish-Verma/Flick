@@ -6,9 +6,15 @@ Flick is a small, free, offline-first **Windows 11 x64** gameplay clipper. It ma
 
 ## 1. Install or run
 
-Two preview formats are available after a verified Windows build: extract `Flick-v1.0.1-win-x64.zip` and launch **Flick.exe**, or run the unsigned `Flick-Setup.exe` wizard for a normal **Start Menu** entry, optional desktop shortcut and Windows **Installed Apps** uninstall registration. The Inno Setup build is not released publicly until AntiGravity tests it. **Do not run the previous `LocalClip` `uninstall.ps1`**, which could erase the directory containing user metadata. New program files install in `%LOCALAPPDATA%\Programs\Flick`, separately from settings and clips.
+Two preview formats are available after a verified Windows build: extract `Flick-v1.0.2-win-x64.zip` and launch **Flick.exe**, or run the unsigned `Flick-Setup.exe` wizard for a normal **Start Menu** entry, optional desktop shortcut and Windows **Installed Apps** uninstall registration. The Inno Setup build is not released publicly until AntiGravity tests it. **Do not run the previous `LocalClip` `uninstall.ps1`**, which could erase the directory containing user metadata. New program files install in `%LOCALAPPDATA%\Programs\Flick`, separately from settings and clips.
 
 Flick stores settings and metadata under `%LOCALAPPDATA%\LocalClip`; originals are saved by default to `%USERPROFILE%\Videos\LocalClip\Originals`. You may change the originals folder in Settings.
+
+### Uninstalling the normal Windows app
+
+Choose **Settings > General > Uninstall Flick**, or open **Windows Settings > Apps > Installed Apps > Flick > Uninstall**. The installed Windows uninstaller optionally removes local settings and cache only after a separate confirmation; original recordings, exports and imported sources are never deleted. Portable ZIP copies should be closed and the extracted folder deleted manually. The downloaded Setup EXE remains in Downloads until you delete it.
+
+Compatibility: Windows 11 x64 with NVIDIA NVENC is tested. AMD/Intel GPU-only systems, Windows ARM and 32-bit Windows are not supported for replay capture in this release. Windows 10 has not been qualified.
 
 ## 2. The everyday clipping workflow
 

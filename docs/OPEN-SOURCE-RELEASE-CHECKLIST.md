@@ -35,3 +35,12 @@
 3. Merge only with owner permission; build from exact frozen commit; preserve public source and accompanying install artifact checksums.
 4. Approve making GitHub repository public and publishing a release separately. Avoid quietly uploading unsigned or unverified packages under a final-looking version.
 5. Provide a clean README installation guide, known limitations and support path for community users.
+
+## v1.0.2 installer and compatibility gates
+
+- Verify in-app Settings > General > Uninstall Flick prompts before dispatching the real registered Windows uninstaller. Portable mode must not self-delete.
+- On the Windows non-admin test account, use installed-app uninstall, Start Menu uninstall and in-app uninstall. Verify safe exit of active libobs replay worker, tray and global hotkeys, and no unintended leftover program files/shortcuts/Run registration.
+- Opt-out data removal: existing JSON, thumbnails, videos and exports retain byte-identical SHA-256 hashes. Opt-in data removal: only allowlisted app settings/index/caches disappear, while original clips, exports and imported sources remain byte-identical. Silent uninstall must retain user data by default.
+- Check the downloaded Setup EXE remains a separate Downloads file while the actual installed app is located under the selected program directory. Uninstall should not silently erase Downloads, Windows Defender logs, history or arbitrary user files.
+- Verify native x64 Windows NVIDIA NVENC hardware. Explicitly mark AMD-only/Intel-only/ARM/Windows 10 compatibility UNSUPPORTED or UNQUALIFIED rather than PASS.
+- Third-party licenses/source, code signing and public visibility review remain distinct from installer mechanics. An unsigned PREVIEW on a private repository is not a public stable release.

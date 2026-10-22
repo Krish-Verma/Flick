@@ -2,7 +2,7 @@
 
 ## Two Windows deliverables
 
-**Portable ZIP**: dist/Flick-v1.0.1-win-x64.zip. Unzip entirely and open Flick.exe. The app must retain the adjacent bundled tools/ffmpeg and tools/obs directories. No installer is required.
+**Portable ZIP**: dist/Flick-v1.0.2-win-x64.zip. Unzip entirely and open Flick.exe. The app must retain the adjacent bundled tools/ffmpeg and tools/obs directories. No installer is required.
 
 **Conventional Setup EXE**: dist/Flick-Setup.exe. Compiled with Inno Setup 6 using installer/Flick.iss, scripts/build_package.ps1 and scripts/build_installer.ps1. This is a per-user, non-elevated **preview** Windows setup; the generated EXE is *not* yet a public signed release. A clean Windows installation acceptance test is required.
 
@@ -55,3 +55,15 @@ The SDK generates Flick.ico from the checked-in logo; no personal font files or 
 - Validate real gameplay clip/save/editor/export flow using the installed app, not only portable source build.
 - Review dependency license/complete-source obligations, GitHub artifact hashes and whether publisher code signing is available. A preview unsigned installer may show Windows publisher warnings.
 - Owner explicitly approves tagging, creating a GitHub Release and making the repository public. None of these steps happen automatically.
+
+## In-app uninstall and optional local-data removal (v1.0.2 preview)
+
+In Settings > General > Uninstall Flick, the app asks for confirmation and then launches the *installed* Windows Inno Setup uninstaller before quitting its own window and capture worker. A portable ZIP copy detects that it is not registered as an installation and tells the user to remove the extracted folder after quitting rather than trying to delete itself.
+
+The same uninstaller can be started via Start Menu > Uninstall Flick or Windows Settings > Apps > Installed Apps > Flick. By default it removes only program files, Start Menu and desktop links and the startup registration that targets that exact installation. It asks a SEPARATE default-No question before erasing settings.json, clips_index.json, connected_sources.json, thumbnails and local temporary previews. Silent/unattended uninstall preserves these user-data files.
+
+The optional profile cleanup never automatically deletes recordings, exports, linked imported media or arbitrary user-chosen directories, even if the user opts into metadata cleanup. Windows-controlled caches, browser history, SmartScreen records or the downloaded Setup EXE may remain; there is no realistic guarantee of zero operating-system traces.
+
+The browser decides where the installer EXE is downloaded (usually Downloads). Installing the application does not mean running the EXE from Downloads: the setup installs all program binaries in the standard per-user program directory or another directory explicitly chosen in the wizard. Users may delete the original installer download once installation has succeeded.
+
+Only native x64 Windows PCs are permitted by the installer. The recording backend is NVIDIA NVENC only and has been qualified on Windows 11 and RTX 5060; AMD-only, Intel-only and Windows ARM capture are not supported by this preview. Windows 10 behavior is unqualified and not marketed as supported.
