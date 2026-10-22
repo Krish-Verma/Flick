@@ -1,5 +1,7 @@
 # Flick — lightweight, private gameplay clipping for Windows
 
+**Windows download:** [**Flick-Setup.exe — latest private preview**](https://github.com/Krish-Verma/Flick/releases/download/v1.0.1-preview.1/Flick-Setup.exe) · [Preview release notes](https://github.com/Krish-Verma/Flick/releases/tag/v1.0.1-preview.1)
+
 Flick is a Windows-native game clipper for capturing the last 15–120 seconds, trimming a clip without altering its original file, and exporting an MP4 suitable for sharing. The product is designed to be free, offline-first and open source, without accounts, telemetry, forced uploads or a heavyweight permanent gaming overlay.
 
 **Status: developer preview / not public-release approved.** This repository is currently private while the source and Windows installer pass final acceptance. The application is distributed under GPL-2.0-or-later for original Flick code, subject to third-party component terms. Public repository visibility and releases require explicit owner approval.
