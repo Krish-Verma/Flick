@@ -51,7 +51,7 @@ An unsigned EXE can be a valid preview, but do not instruct unknown users to byp
 
 The Actions artifact stores paths under its common root, so downloaded files may be nested as release-files/dist/Flick-Setup.exe or release-files/release/PREVIEW-RELEASE-NOTES.md. The publishing step must **locate each uniquely named file, copy it to a flat release-ready directory, recalculate downloaded SHA-256 values and only then create the prerelease**. A missing/duplicate asset blocks publication without retagging.
 
-The first attempt of v1.0.2-preview.2 compiled its installer and verified the source, but its publish job expected flat artifact paths and therefore stopped before creating a release. This source-only packaging correction also changes the reviewed release-version marker's final whitespace to explicitly retrigger the restricted main-branch release workflow without changing the application version or functional behavior. Retain the failed run as historical QA evidence.
+Historical incident: the first v1.0.1-preview.1 publishing workflow failed because it expected downloaded GitHub Actions artifacts at flat paths rather than their original nested paths. The release publishing logic was corrected to normalize and hash-check every downloaded asset before publication. Preserve historical failed CI runs as evidence, but do not confuse them with the current v1.0.2-preview.2 release gates.
 
 ## Public availability versus release labeling
 

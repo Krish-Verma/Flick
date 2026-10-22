@@ -28,7 +28,7 @@ Windows 11 x86-64 with a supported NVIDIA NVENC GPU is the qualified target. AMD
 
 ## Download Flick for Windows
 
-**Newest private preview: [Flick v1.0.2 Preview 1](https://github.com/Krish-Verma/Flick/releases/tag/v1.0.2-preview.2)**
+**Newest private preview: [Flick v1.0.2 Preview 2](https://github.com/Krish-Verma/Flick/releases/tag/v1.0.2-preview.2)**
 
 **[Download Flick-Setup.exe — normal Windows installer](https://github.com/Krish-Verma/Flick/releases/download/v1.0.2-preview.2/Flick-Setup.exe)**
 
