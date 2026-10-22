@@ -1,10 +1,10 @@
-# Flick v1.0.2 — Windows NVIDIA NVENC Preview
+# Flick v1.0.2 — Windows NVIDIA NVENC Preview 2
 
 **The current Flick preview for Windows 11 x64 PCs with compatible NVIDIA NVENC graphics.** This version contains the new native Flick interface, the lighter video/thumbnail handling, and a standard Windows setup wizard. It supersedes the previous v1.0.0 ZIP-only build for preview testers.
 
 ## Install in one click
 
-**Download [Flick-Setup.exe](https://github.com/Krish-Verma/Flick/releases/download/v1.0.2-preview.1/Flick-Setup.exe) from the Assets list below.** Double-click the file after verifying its SHA-256 and follow the Windows installation wizard. You can launch Flick from the Start Menu, optionally add a desktop shortcut, and uninstall it from Windows Settings > Apps > Installed Apps.
+**Download [Flick-Setup.exe](https://github.com/Krish-Verma/Flick/releases/download/v1.0.2-preview.2/Flick-Setup.exe) from the Assets list below.** Double-click the file after verifying its SHA-256 and follow the Windows installation wizard. You can launch Flick from the Start Menu, optionally add a desktop shortcut, and uninstall it from Windows Settings > Apps > Installed Apps.
 
 Flick bundles .NET, OBS capture runtime, FFmpeg and FFprobe. No separate launcher, SDK, installer manager or developer setup is needed.
 

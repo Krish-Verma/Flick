@@ -7,7 +7,7 @@
 AppId={{F3C41F96-EF62-4CB1-A292-91EF3F6C18E8}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
-AppVerName=Flick 1.0.2 — Windows NVIDIA NVENC Preview
+AppVerName=Flick 1.0.2 — Windows NVIDIA NVENC Preview 2
 AppPublisher=Flick Contributors
 AppPublisherURL=https://github.com/Krish-Verma/Flick
 AppSupportURL=https://github.com/Krish-Verma/Flick/issues
