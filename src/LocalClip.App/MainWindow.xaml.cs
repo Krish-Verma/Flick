@@ -191,46 +191,45 @@ public partial class MainWindow : Window
 
     private System.Drawing.Icon CreateTrayIcon()
     {
+        try { return CreateTrayIconCore(); }
+        catch { return System.Drawing.SystemIcons.Application; }
+    }
+
+    private System.Drawing.Icon CreateTrayIconCore()
+    {
+        var asset = System.Windows.Application.GetResourceStream(
+            new Uri("pack://application:,,,/Flick;component/Assets/Brand/FlickLogo.png"));
+        if (asset == null) throw new IOException("The embedded Flick brand artwork was not found.");
+        using var stream = asset.Stream;
+        using var source = new System.Drawing.Bitmap(stream);
+        // Match the WPF brand source and packaged ICO: keep a fixed dark
+        // circle, and move only its original artwork by 1/38 of the canvas.
+        const int size = 128;
+        using var bitmap = new System.Drawing.Bitmap(size, size,
+            System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+        using (var graphics = System.Drawing.Graphics.FromImage(bitmap))
+        using (var clip = new System.Drawing.Drawing2D.GraphicsPath())
+        using (var canvas = new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(255, 6, 3, 13)))
+        {
+            graphics.Clear(System.Drawing.Color.Transparent);
+            graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+            graphics.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
+            graphics.PixelOffsetMode = System.Drawing.Drawing2D.PixelOffsetMode.HighQuality;
+            var viewport = new System.Drawing.RectangleF(0, 0, size, size);
+            graphics.FillEllipse(canvas, viewport);
+            clip.AddEllipse(viewport);
+            graphics.SetClip(clip);
+            float offset = size / 38f;
+            graphics.DrawImage(source, new System.Drawing.RectangleF(offset, offset, size, size));
+        }
+        IntPtr native = bitmap.GetHicon();
         try
         {
-            var asset = System.Windows.Application.GetResourceStream(
-                new Uri("pack://application:,,,/Assets/Brand/FlickLogo.png"));
-            if (asset == null) return System.Drawing.SystemIcons.Application;
-            using var stream = asset.Stream;
-            using var source = new System.Drawing.Bitmap(stream);
-            // Match the WPF brand source and packaged ICO: keep a fixed dark
-            // circle, and move only its original artwork by 1/38 of the canvas.
-            const int size = 128;
-            using var bitmap = new System.Drawing.Bitmap(size, size,
-                System.Drawing.Imaging.PixelFormat.Format32bppArgb);
-            using (var graphics = System.Drawing.Graphics.FromImage(bitmap))
-            using (var clip = new System.Drawing.Drawing2D.GraphicsPath())
-            using (var canvas = new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(255, 6, 3, 13)))
-            {
-                graphics.Clear(System.Drawing.Color.Transparent);
-                graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
-                graphics.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
-                graphics.PixelOffsetMode = System.Drawing.Drawing2D.PixelOffsetMode.HighQuality;
-                var viewport = new System.Drawing.RectangleF(0, 0, size, size);
-                graphics.FillEllipse(canvas, viewport);
-                clip.AddEllipse(viewport);
-                graphics.SetClip(clip);
-                float offset = size / 38f;
-                graphics.DrawImage(source, new System.Drawing.RectangleF(offset, offset, size, size));
-            }
-            IntPtr native = bitmap.GetHicon();
-            try
-            {
-                var copy = (System.Drawing.Icon)System.Drawing.Icon.FromHandle(native).Clone();
-                _ownsTrayBrandIcon = true;
-                return copy;
-            }
-            finally { _ = DestroyIcon(native); }
+            var copy = (System.Drawing.Icon)System.Drawing.Icon.FromHandle(native).Clone();
+            _ownsTrayBrandIcon = true;
+            return copy;
         }
-        catch
-        {
-            return System.Drawing.SystemIcons.Application;
-        }
+        finally { _ = DestroyIcon(native); }
     }
 
     private void SetupSystemTray()

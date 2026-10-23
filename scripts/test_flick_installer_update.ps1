@@ -253,7 +253,7 @@ finally {
             $null = $appProcess.CloseMainWindow()
             # Flick's close button normally minimizes to tray. CI teardown may
             # terminate only this fixture's exact executable after a grace period.
-            if (-not $appProcess.WaitForExit(3000)) { $appProcess.Kill(); $null = $appProcess.WaitForExit(10000) }
+            if (-not $appProcess.WaitForExit(3000)) { $appProcess.Kill($true); $null = $appProcess.WaitForExit(10000) }
         }
         if (@(Get-TestFlickProcess).Count -ne 0) {
             throw 'Test Flick is still active; refusing to uninstall its running files.'
@@ -271,6 +271,7 @@ finally {
                 Start-Sleep -Milliseconds 200
             }
             if (@(Get-FlickRegistration).Count -ne 0) { throw 'Fixture uninstall left the test AppId registered.' }
+            if (Test-Path -LiteralPath $installedExe) { throw 'Fixture uninstall left the installed Flick.exe behind.' }
         }
     }
     catch { $cleanupErrors.Add($_.Exception.Message) }

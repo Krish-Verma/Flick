@@ -175,9 +175,12 @@ internal static class Program
         // Exercise the actual runtime native-icon conversion, without creating
         // a NotifyIcon or touching the Windows taskbar. Keep System.Drawing
         // types in the app assembly so this WPF-only harness stays WPF-only.
-        object icon = typeof(MainWindow).GetMethod("CreateTrayIcon", Private)!.Invoke(main, null)!;
-        if (!(bool)typeof(MainWindow).GetField("_ownsTrayBrandIcon", Private)!.GetValue(main)!)
-            throw new InvalidOperationException("Native icon rendering fell back to the generic Windows icon.");
+        // Invoke the production conversion core directly so a genuine resource
+        // or GDI error is visible in CI. Normal app startup retains its fallback.
+        object icon;
+        try { icon = typeof(MainWindow).GetMethod("CreateTrayIconCore", Private)!.Invoke(main, null)!; }
+        catch (TargetInvocationException error)
+        { throw new InvalidOperationException("Native Flick icon conversion failed.", error.InnerException ?? error); }
         using var lifetime = (IDisposable)icon;
         var handle = (IntPtr)icon.GetType().GetProperty("Handle")!.GetValue(icon)!;
         var bitmap = System.Windows.Interop.Imaging.CreateBitmapSourceFromHIcon(
