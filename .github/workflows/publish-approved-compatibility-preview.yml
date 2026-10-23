@@ -15,7 +15,7 @@ concurrency:
 
 jobs:
   publish:
-    if: github.repository == 'Krish-Verma/Flick' && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'release/publish-compatibility-preview-20261023' && github.event.pull_request.base.ref == 'main'
+    if: github.repository == 'Krish-Verma/Flick' && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'release/publish-compatibility-preview-20261023' && github.event.pull_request.base.ref == 'main' && github.event.pull_request.head.sha == '33ccc0168c7f7bff8339cd0ea5a083c2981435cd'
     runs-on: windows-latest
     timeout-minutes: 40
     permissions:
@@ -296,6 +296,7 @@ jobs:
 
   verify-preserved-upgrade-fixture:
     needs: publish
+    if: always() && github.repository == 'Krish-Verma/Flick' && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'release/publish-compatibility-preview-20261023' && github.event.pull_request.base.ref == 'main'
     runs-on: windows-latest
     timeout-minutes: 10
     permissions:
@@ -308,8 +309,12 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           $PSNativeCommandUseErrorActionPreference = $true
-          gh release download v1.0.4-preview.1 --repo Krish-Verma/Flick --pattern Flick-Setup.exe --dir preserved-baseline
+          if ($PSVersionTable.PSVersion -lt [version]'7.4') { throw 'PowerShell 7.4 or newer is required for byte-preserving native redirection' }
+          New-Item -ItemType Directory preserved-baseline -Force | Out-Null
           $path = 'preserved-baseline/Flick-Setup.exe'
+          # Direct asset GET avoids gh release's draft tag lookup. Native
+          # redirection preserves bytes on the explicitly checked pwsh version.
+          gh api repos/Krish-Verma/Flick/releases/assets/669859579 -H 'Accept: application/octet-stream' > $path
           if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw 'Read-only baseline fixture download did not produce the installer' }
           $hash = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash
           if ((Get-Item -LiteralPath $path).Length -ne 241947803 -or $hash -cne 'DA1A0BBFB6B1D5803FC0D54387682C24F43D6039BAE6A2C999822628E7828A5F') {
