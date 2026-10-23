@@ -36,9 +36,13 @@ Require $settingsCode '_settings.ExportsFolder = staged.ExportsFolder' "Existing
 Require $foldersCode 'CloseRequested\?\.Invoke\(\)' "Folder close must return to parent page"
 Require $foldersCode '_vm.CancelImport\(\)' "Leaving folder page must cancel active import"
 Require $folders 'VirtualizingStackPanel.IsVirtualizing="True"' "Connected folders list remains virtualized"
-if ($mainCode -match 'ShowDialog\(\)' -or $mainCode -match 'new SettingsWindow\([^\r\n]*Owner' -or
-    $mainCode -match 'new ConnectedFoldersWindow\([^\r\n]*Owner') {
-    throw "App-owned Settings/ConnectedFolders modal window was reintroduced"
+# R1 specifically removes the two management windows. Other existing
+# Flick-owned confirmations (e.g., Rename Clip) are redesigned in R7.
+if ($mainCode -match '(?i)(settings|folders|dialog)\.ShowDialog\(\)' -or
+    $mainCode -match 'new SettingsWindow\([^\r\n]*Owner' -or
+    $mainCode -match 'new ConnectedFoldersWindow\([^\r\n]*Owner' -or
+    $mainCode -match 'var dialog = new (SettingsWindow|ConnectedFoldersWindow)') {
+    throw "Settings/ConnectedFolders modal Window was reintroduced"
 }
 if ($settingsCode -match 'DialogResult\s*=' -or $foldersCode -match 'Window_Closing') {
     throw "Management controls must not retain Window-only modal lifecycle"
