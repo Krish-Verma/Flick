@@ -71,7 +71,7 @@ jobs:
       - name: Build solution (Release)
         run: dotnet build LocalClip.slnx --configuration Release --no-restore --warnaserror
       - name: Run hardware-independent tests
-        run: dotnet test LocalClip.slnx --configuration Release --no-build --logger "trx;LogFileName=Flick-Tests.trx" --results-directory TestResults
+        run: dotnet test LocalClip.slnx --configuration Release --no-build --logger "trx" --results-directory TestResults
       - name: Smoke-check self-contained Windows publish
         run: dotnet publish src/LocalClip.App/LocalClip.App.csproj -c Release -r win-x64 --self-contained true -o publish-smoke --nologo
       - name: Validate branded published app and generated icon

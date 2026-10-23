@@ -39,6 +39,9 @@ public class SettingsStagingTests
                 Invoke("ChangeShortcut_Click", new Button { Tag = "Toggle" });
                 Assert.True(editing);
                 Assert.Equal(Visibility.Visible, Find<StackPanel>("ShortcutEditor").Visibility);
+                Invoke("Save_Click", page); // Incomplete shortcut must not write settings/startup.
+                Assert.True(editing);
+                Assert.Equal(Visibility.Visible, Find<StackPanel>("ShortcutEditor").Visibility);
                 Invoke("CancelShortcut_Click", page);
                 Assert.False(editing);
                 Assert.Equal("Ctrl+Shift+F9", toggle.Text);

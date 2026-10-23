@@ -307,8 +307,8 @@ public partial class SettingsWindow : UserControl
     {
         if (_editingShortcut != null)
         {
-            SelectCategory("Shortcuts");
-            return; // An unfinished shortcut is discarded, never silently applied.
+            ShortcutHint.Text = "Save or cancel the shortcut change before saving Settings.";
+            return; // Never silently apply or discard an unfinished shortcut.
         }
         if (!int.TryParse(TxtDuration.Text, out int duration) ||
             duration < 15 || duration > 120)
