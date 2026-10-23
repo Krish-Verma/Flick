@@ -87,7 +87,13 @@ public partial class MainWindow : Window
             else if (WorkspacePageLayer.Visibility != Visibility.Visible)
                 RestorePosterAfterShow();
         };
-        SourceInitialized += (_, _) => _ = FlickBackdropService.TryApplyMica(this);
+        SourceInitialized += (_, _) =>
+        {
+            // Native Windows caption stays dark without custom chrome or
+            // sacrificing minimize/maximize/Win+Arrow/Snap/resize handling.
+            _ = FlickBackdropService.TryApplyDarkTitleBar(this);
+            _ = FlickBackdropService.TryApplyMica(this);
+        };
     }
 
     private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
