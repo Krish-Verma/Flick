@@ -1,8 +1,16 @@
 # Flick — Archived public-facing release entries
 
+## October 23 current download
+
+The owner approved the final design and requested one Latest entry in GitHub's Releases area. The current download is **v1.0.4-preview.1 — UNSIGNED Design Preview**. The publication workflow verifies its complete installer/ZIP/checksum assets before removing the superseded v1.0.3-preview.1, ui-refresh-preview-20261023 and v1.0.2-preview.2 Release entries. Their release IDs, source commits and artifact hashes are preserved in `release/archived-releases-20261023.json`; Git tags and source history remain.
+
+GitHub's Latest badge requires its catalogue prerelease flag to be false. The semantic version, title, release notes and installation consent continue to identify this build as an unsigned preview. The badge does not establish Windows signing trust or stable qualification.
+
+## October 22 historical cleanup
+
 On October 22, 2026, the owner asked for the GitHub Releases page to show **one clear current download** instead of several superseded versions. Historical source Git tags/commits remain in Git; only the old GitHub Release entries and attached install packages are removed.
 
-**KEEP / current private preview:**
+**Previously retained private preview (now superseded):**
 - v1.0.2-preview.2 — Flick v1.0.2 Windows NVIDIA NVENC Preview 2.
 - Installer Flick-Setup.exe SHA-256: 9582623cc417dcd48e99fb99b4b56fbff6b781675d4a19c699cf3e8e08148c0b
 - Portable ZIP SHA-256: e2c5cd3b7687efd19e117d6189e7897236b01c5edbbe35c2c99c301428c1c036

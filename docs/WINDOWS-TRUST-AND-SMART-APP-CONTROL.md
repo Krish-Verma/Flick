@@ -2,7 +2,7 @@
 
 ## Current status (October 22, 2026)
 
-**The downloadable v1.0.2-preview.2 Setup EXE is unsigned. Smart App Control on Windows 11 may block it. The trust issue is NOT fixed in that distributed binary.** A SHA-256 manifest and green GitHub Actions build prove provenance/build integrity, not trusted publisher identity or malware-free status.
+**The current v1.0.4-preview.1 Setup EXE is unsigned. Smart App Control on Windows 11 may block it. The trust issue is not fixed by the design or updater changes.** A SHA-256 manifest and green GitHub Actions build prove provenance/build integrity, not trusted publisher identity or malware-free status. GitHub's Latest download label is not a Windows trust assertion.
 
 Microsoft says there is no per-app Smart App Control exception. Do not disable the protection, change Code Integrity policy or add Defender exclusions just to run the existing Flick preview.
 

@@ -54,6 +54,59 @@ public class UpdateClientTests
     }
 
     [Theory]
+    [InlineData("1.0.3", false)]
+    [InlineData("1.0.3", true)]
+    [InlineData("1.0.3-preview.1", false)]
+    [InlineData("1.0.3-preview.1", true)]
+    public async Task LatestCataloguePreviewStillRequiresSemanticPreviewOptIn(string current, bool includePreviews)
+    {
+        var preview = Release("v1.0.4-preview.1");
+        preview["prerelease"] = false; // GitHub requires this catalogue flag for its Latest sidebar.
+        using var http = Metadata(preview);
+        var update = await new UpdateClient(http).CheckAsync(current, includePreviews, CancellationToken.None);
+        if (!includePreviews) Assert.Null(update);
+        else
+        {
+            Assert.NotNull(update);
+            Assert.Equal("1.0.4-preview.1", update.Version);
+            Assert.Equal("v1.0.4-preview.1", update.Tag);
+            Assert.True(ReleaseVersion.TryParse(update.Tag, out var semanticVersion));
+            Assert.True(semanticVersion.IsPrerelease);
+        }
+    }
+
+    [Fact]
+    public async Task LatestCataloguePreviewDoesNotHideAvailableStableUpdateFromStableChannel()
+    {
+        var preview = Release("v1.0.4-preview.1");
+        preview["prerelease"] = false;
+        using var http = Metadata(preview, Release("v1.0.3"));
+        var update = await new UpdateClient(http).CheckAsync("1.0.2", false, CancellationToken.None);
+        Assert.Equal("1.0.3", update?.Version);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task RejectsStableSemanticTagMarkedAsCataloguePrereleaseEvenWithOptIn(bool includePreviews)
+    {
+        var ambiguous = Release("v1.0.4");
+        ambiguous["prerelease"] = true;
+        using var http = Metadata(ambiguous);
+        Assert.Null(await new UpdateClient(http).CheckAsync("1.0.3", includePreviews, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task LatestCataloguePreviewCannotBypassRepositoryAssetValidation()
+    {
+        var preview = Release("v1.0.4-preview.1");
+        preview["prerelease"] = false;
+        preview["assets"]![0]!["url"] = "https://api.github.com/repos/other/Flick/releases/assets/101";
+        using var http = Metadata(preview);
+        Assert.Null(await new UpdateClient(http).CheckAsync("1.0.3", true, CancellationToken.None));
+    }
+
+    [Theory]
     [InlineData("ui-refresh-preview-20261023")]
     [InlineData("v01.0.3")]
     [InlineData("v1.0.3-preview.01")]

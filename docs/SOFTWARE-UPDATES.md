@@ -2,7 +2,7 @@
 
 ## Existing installations need one bootstrap upgrade
 
-Flick builds through the October 23 UI-refresh candidate have no updater. Install **v1.0.3-preview.1** once over the existing per-user installation to obtain Settings → General → Software Updates. The existing Inno AppId, install mode and program/data separation remain; uninstalling the older build is not required. Portable builds do not silently convert themselves into installed builds.
+Install **v1.0.4-preview.1** once over an older per-user installation. Builds before v1.0.3 have no updater; v1.0.3 does not accept semantic preview tags presented as GitHub’s Latest download. This one manual upgrade provides the current update flow and preserves your clips/settings. The existing Inno AppId, install mode and program/data separation remain; uninstalling the older build is not required. Portable builds do not silently convert themselves into installed builds.
 
 ## Update flow
 
@@ -13,6 +13,8 @@ Download is cancellable and bounded. Metadata, URL origins, expected byte size a
 Installation requires explicit consent. Stable unsigned updates are refused. Unsigned preview installation requires a separate, clear warning/choice and may still be blocked by Windows Smart App Control. Flick never disables or bypasses SAC/Defender. A corrupt or untrusted signature must never be downgraded to an ordinary unsigned preview.
 
 Flick refuses installation during replay capture/transitions, a save/indexing operation, import, export, library scan or upload. The user finishes those activities first. On an approved installed-app upgrade, the installer waits up to 30 seconds for the exact old Flick process to exit cleanly; it never kills a recording process. Inno installs using the original per-user AppId and directory, preserves settings/library/media, then restarts Flick. Normal installer launches do not inherit this special update restart path.
+
+GitHub requires its Latest catalogue entry to have `prerelease=false`. Flick still treats a semantic `-preview` tag as a preview, requires preview-channel opt-in and keeps the explicit unsigned-preview installation consent. GitHub’s Latest badge is a download-discovery label, not a claim of publisher trust or stable qualification.
 
 ## Release workflow
 

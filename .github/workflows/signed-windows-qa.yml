@@ -121,7 +121,7 @@ jobs:
           $installer = Start-Process -FilePath $setup -Wait -PassThru -ArgumentList @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART',('/DIR="' + $isolated + '"'))
           if ($installer.ExitCode -ne 0) { throw "Inno silent install smoke failed: $($installer.ExitCode)" }
           $uninstallExe = Join-Path $isolated 'unins000.exe'
-          ./scripts/verify_flick_trust.ps1 -PackageRoot (Join-Path (Get-Location) 'dist\Flick-v1.0.3-win-x64') -InstallerPath $setup -InstalledUninstallerPath $uninstallExe
+          ./scripts/verify_flick_trust.ps1 -PackageRoot (Join-Path (Get-Location) 'dist\Flick-v1.0.4-win-x64') -InstallerPath $setup -InstalledUninstallerPath $uninstallExe
           $uninstaller = Start-Process -FilePath $uninstallExe -Wait -PassThru -ArgumentList @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART')
           if ($uninstaller.ExitCode -ne 0) { throw "Inno silent uninstall failed: $($uninstaller.ExitCode)" }
           if (Test-Path -LiteralPath (Join-Path $isolated 'Flick.exe')) {
@@ -133,7 +133,7 @@ jobs:
           name: flick-signed-smart-app-control-qa-${{ github.sha }}
           path: |
             dist/Flick-Setup.exe
-            dist/Flick-v1.0.3-win-x64.zip
+            dist/Flick-v1.0.4-win-x64.zip
             dist/SHA256SUMS.txt
           if-no-files-found: error
           retention-days: 7

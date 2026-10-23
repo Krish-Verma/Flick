@@ -66,10 +66,12 @@ public sealed class UpdateClient
         {
             timeout.Token.ThrowIfCancellationRequested();
             var tag = GetString(element, "tag_name");
+            // GitHub's Latest catalogue requires prerelease=false. A semantic
+            // preview tag still requires explicit preview-channel opt-in.
             if (tag is null || duplicates.Contains(tag) || !ReleaseVersion.TryParse(tag, out var version)
-                || GetBoolean(element, "draft") != false || GetBoolean(element, "prerelease") is not bool prerelease
-                || prerelease != version.IsPrerelease
-                || (prerelease && !includePrereleases)
+                || GetBoolean(element, "draft") != false || GetBoolean(element, "prerelease") is not bool githubPrerelease
+                || (githubPrerelease && !version.IsPrerelease)
+                || (version.IsPrerelease && !includePrereleases)
                 || version.CompareTo(current) <= 0
                 || (selectedVersion is not null && version.CompareTo(selectedVersion) <= 0)) continue;
 

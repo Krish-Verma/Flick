@@ -1,12 +1,11 @@
 # Flick — lightweight gameplay clipping for Windows
 
-**Latest preview: [v1.0.3 — Updates & Brand Preview](https://github.com/Krish-Verma/Flick/releases/tag/v1.0.3-preview.1).** See [software updates](docs/SOFTWARE-UPDATES.md) for the one-time upgrade from older builds.
+**Latest download: [Flick 1.0.4 — UNSIGNED Design Preview](https://github.com/Krish-Verma/Flick/releases/latest).** See [software updates](docs/SOFTWARE-UPDATES.md) for the one-time upgrade from older builds.
 
-**Earlier download: [v1.0.2 Preview 2 — UNSIGNED TEST BUILD](https://github.com/Krish-Verma/Flick/releases/tag/v1.0.2-preview.2).** Windows Smart App Control may block this installer. **Do not disable Smart App Control to run Flick.** We're preparing a Windows-trusted, signed public release; see [Signing & Smart App Control](docs/WINDOWS-TRUST-AND-SMART-APP-CONTROL.md).
 
 Flick is a Windows-native game clipper for capturing the last 15–120 seconds, trimming a clip without altering its original file, and exporting an MP4 suitable for sharing. The product is designed to be free, offline-first and open source, without accounts, telemetry, forced uploads or a heavyweight permanent gaming overlay.
 
-**Status: unsigned developer preview, not a trusted public release.** The repository is public; Windows hardware acceptance and trusted signing remain separate release gates. The application is distributed under GPL-2.0-or-later for original Flick code, subject to third-party component terms. Unsigned prereleases are explicitly labelled; they are not stable, Windows-trusted releases.
+**Status: unsigned developer preview, not a trusted public release.** The repository is public; Windows hardware acceptance and trusted signing remain separate release gates. The application is distributed under GPL-2.0-or-later for original Flick code, subject to third-party component terms. Unsigned preview builds are explicitly labelled; they are not stable, Windows-trusted releases.
 
 ## Features
 
@@ -16,7 +15,7 @@ Flick is a Windows-native game clipper for capturing the last 15–120 seconds, 
 - Two-handle trim, per-track audio mute/gain, local original/export preview; user-controlled export folder.
 - Size-capped H.264/AAC MP4 export for Discord (20 MB default, 10/50/100 MB and custom sizes), FileDrop drag and Copy File. Optional webhook posting is disabled by default and requires explicit consent.
 - Compact Flick-branded two-second Clip Saved notification and optional chime; each independently toggleable.
-- Native Windows application, optically aligned Flick logo and restrained graphite/lavender UI.
+- Native Windows application, optically aligned Flick logo and purple interface, refined toolbar icons and subtle logo gradients.
 - In-app update checks, verified downloads and confirmed install/restart for installed copies.
 
 ## What the current Windows build supports
@@ -31,9 +30,9 @@ Windows 11 x86-64 with a supported NVIDIA NVENC GPU is the qualified target. AMD
 
 ## Download Flick for Windows
 
-**[Flick v1.0.3 Preview 1 — UNSIGNED](https://github.com/Krish-Verma/Flick/releases/tag/v1.0.3-preview.1)**
+**[Flick v1.0.4 Preview 1 — UNSIGNED](https://github.com/Krish-Verma/Flick/releases/tag/v1.0.4-preview.1)**
 
-**[Download Flick-Setup.exe](https://github.com/Krish-Verma/Flick/releases/download/v1.0.3-preview.1/Flick-Setup.exe)**
+**[Download Flick-Setup.exe](https://github.com/Krish-Verma/Flick/releases/download/v1.0.4-preview.1/Flick-Setup.exe)**
 
 Run Setup to install Flick for your Windows account, with a Start Menu shortcut and optional desktop shortcut. The package includes .NET, OBS and FFmpeg. Windows may block this unsigned preview; it has no verified publisher identity. Check SHA-256 against the release's SHA256SUMS.txt. Trusted signing and physical Windows/NVIDIA acceptance remain pending.
 
@@ -42,7 +41,7 @@ Older installed versions need **one manual upgrade** to this release. Install ov
 ## Run or install
 
 1. **Flick-Setup.exe** installs under **%LOCALAPPDATA%\Programs\Flick**, registers Flick in Windows Installed Apps and needs no administrator access.
-2. **[Flick-v1.0.3-win-x64.zip](https://github.com/Krish-Verma/Flick/releases/download/v1.0.3-preview.1/Flick-v1.0.3-win-x64.zip)** runs as a portable copy. Extract the entire folder before launching Flick.exe; keep the packaged runtime files together. Portable copies link to Releases for manual folder replacement after quitting Flick.
+2. **[Flick-v1.0.4-win-x64.zip](https://github.com/Krish-Verma/Flick/releases/download/v1.0.4-preview.1/Flick-v1.0.4-win-x64.zip)** runs as a portable copy. Extract the entire folder before launching Flick.exe; keep the packaged runtime files together. Portable copies link to Releases for manual folder replacement after quitting Flick.
 
 Flick saves settings, indexes and thumbnail cache under the **legacy %LOCALAPPDATA%\LocalClip** path for compatibility with previous builds. Default original videos are in your Videos/LocalClip/Originals folder (or a user-selected folder). The new program directory is **different**: an ordinary uninstall removes program files, not your recordings or legacy profile data. **Do not run older LocalClip uninstall.ps1 scripts:** those previously removed the whole legacy data directory.
 
