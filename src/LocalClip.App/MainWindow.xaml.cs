@@ -918,6 +918,17 @@ public partial class MainWindow : Window
         BtnPlayPause.Content = "⏸ Pause";
     }
 
+    private void EditorTool_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button { Tag: string tool }) return;
+        if (tool == "Original") { BtnPreviewMode_Click(sender, e); return; }
+        var panel = tool switch { "Trim" => TrimPanel, "Audio" => AudioPanel, _ => SharePanel };
+        bool open = panel.Visibility != Visibility.Visible;
+        TrimPanel.Visibility = AudioPanel.Visibility = SharePanel.Visibility = Visibility.Collapsed;
+        panel.Visibility = open ? Visibility.Visible : Visibility.Collapsed;
+        if (tool == "Audio") AudioExpander.IsExpanded = open;
+    }
+
     private void BtnPreviewMode_Click(object sender, RoutedEventArgs e)
     {
         if (BtnPreviewMode.ContextMenu is null) return;
