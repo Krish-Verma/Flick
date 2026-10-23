@@ -1,0 +1,5 @@
+# R6 — Deliberate shortcut editing
+
+Saved fields are read-only and muted. Change reveals Record Shortcut, Save Shortcut and Cancel. Recording is confined to the focused field and stops after a chord, Tab or Escape. Candidate chords do not change the saved display until Save Shortcut, and disk settings only change at the overall Settings Save. Category changes and Clips navigation discard pending capture. Ctrl/Alt required; Windows chords, modifier-only keys, F12, duplicates and common reserved combinations are rejected. Existing global registrations remain unchanged during editing, with action dispatch suppressed until leaving editing; there is no new hook or idle listener. On-device registered-hotkey collisions are still tested during explicit Settings Save with existing rollback.
+
+CI adds pure reserved-chord regression cases. Physical QA must test keyboards, Tab/Escape, registered combinations, category/navigation cancellation, changed replay-duration labels and restoration from tray.

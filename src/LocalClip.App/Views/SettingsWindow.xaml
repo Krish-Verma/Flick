@@ -135,26 +135,26 @@
                     <TextBlock Text="Shortcuts" Style="{StaticResource Flick.Text.PageTitle}"/>
                     <TextBlock Text="Save moments without leaving your game."
                                Style="{StaticResource Flick.Text.Caption}" Margin="0,5,0,24"/>
-                    <TextBlock Text="Toggle Replay" Style="{StaticResource Flick.Text.Control}"
-                               Margin="0,0,0,7"/>
-                    <TextBox x:Name="TxtToggleHotkey" Width="260"
-                             HorizontalAlignment="Left"
-                             Style="{StaticResource Flick.Input.Text}"
-                             PreviewKeyDown="Shortcut_PreviewKeyDown"
-                             ToolTip="Click here and press your shortcut keys"
-                             AutomationProperties.Name="Toggle Replay Hotkey"
-                             Margin="0,0,0,19"/>
-                    <TextBlock Text="Save Last Replay" Style="{StaticResource Flick.Text.Control}"
-                               Margin="0,0,0,7"/>
-                    <TextBox x:Name="TxtSaveHotkey" Width="260"
-                             HorizontalAlignment="Left"
-                             Style="{StaticResource Flick.Input.Text}"
-                             PreviewKeyDown="Shortcut_PreviewKeyDown"
-                             ToolTip="Click here and press your shortcut keys"
-                             AutomationProperties.Name="Save Replay Hotkey"/>
-                    <TextBlock Text="Click a shortcut field and press a combination. Flick checks for duplicate and Windows-reserved shortcuts before replacing active hotkeys."
-                               Style="{StaticResource Flick.Text.Muted}"
-                               TextWrapping="Wrap" Margin="0,20,0,0"/>
+                    <TextBlock Text="Start / Stop Replay" Style="{StaticResource Flick.Text.Control}" Margin="0,0,0,7"/>
+                    <DockPanel Margin="0,0,0,20">
+                        <Button DockPanel.Dock="Right" Content="Change" Tag="Toggle" Click="ChangeShortcut_Click" Style="{StaticResource Flick.Button.Secondary}" Margin="12,0,0,0"/>
+                        <TextBox x:Name="TxtToggleHotkey" IsReadOnly="True" Foreground="{DynamicResource Flick.Brush.TextMuted}" Style="{StaticResource Flick.Input.Text}" PreviewKeyDown="Shortcut_PreviewKeyDown" AutomationProperties.Name="Start or Stop Replay Shortcut"/>
+                    </DockPanel>
+                    <TextBlock x:Name="SaveShortcutLabel" Text="Save Last 30s" Style="{StaticResource Flick.Text.Control}" Margin="0,0,0,7"/>
+                    <DockPanel Margin="0,0,0,20">
+                        <Button DockPanel.Dock="Right" Content="Change" Tag="Save" Click="ChangeShortcut_Click" Style="{StaticResource Flick.Button.Secondary}" Margin="12,0,0,0"/>
+                        <TextBox x:Name="TxtSaveHotkey" IsReadOnly="True" Foreground="{DynamicResource Flick.Brush.TextMuted}" Style="{StaticResource Flick.Input.Text}" PreviewKeyDown="Shortcut_PreviewKeyDown" AutomationProperties.Name="Save Last Replay Shortcut"/>
+                    </DockPanel>
+                    <StackPanel x:Name="ShortcutEditor" Visibility="Collapsed">
+                        <TextBlock x:Name="ShortcutHint" TextWrapping="Wrap" Style="{StaticResource Flick.Text.Caption}" Margin="0,0,0,12"/>
+                        <WrapPanel>
+                            <Button Content="Record Shortcut" Click="RecordShortcut_Click" Style="{StaticResource Flick.Button.Secondary}" Margin="0,0,12,8"/>
+                            <Button x:Name="SaveShortcutButton" Content="Save Shortcut" Click="SaveShortcut_Click" IsEnabled="False" Style="{StaticResource Flick.Button.Primary}" Margin="0,0,12,8"/>
+                            <Button Content="Cancel" Click="CancelShortcut_Click" Style="{StaticResource Flick.Button.Ghost}" Margin="0,0,0,8"/>
+                        </WrapPanel>
+                    </StackPanel>
+                    <TextBlock Text="Choose Change, then Record Shortcut. Save Shortcut stages the change; Save below applies your preferences. Cancel keeps your current shortcuts."
+                               Style="{StaticResource Flick.Text.Muted}" TextWrapping="Wrap" Margin="0,20,0,0"/>
                 </StackPanel>
 
                 <!-- Storage -->
