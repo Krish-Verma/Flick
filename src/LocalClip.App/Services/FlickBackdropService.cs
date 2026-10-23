@@ -41,9 +41,9 @@ public static class FlickBackdropService
         try
         {
             int darkMode = 1;
-            int bg = ResourceColorRef(window, "Flick.Color.Surface", 28, 28, 31);
-            int fg = ResourceColorRef(window, "Flick.Color.TextPrimary", 245, 245, 247);
-            int edge = ResourceColorRef(window, "Flick.Color.Border", 59, 59, 66);
+            int bg = ResourceColorRef(window, "Flick.Color.Surface", 21, 22, 34);
+            int fg = ResourceColorRef(window, "Flick.Color.TextPrimary", 242, 239, 249);
+            int edge = ResourceColorRef(window, "Flick.Color.Divider", 37, 35, 50);
             bool dark = DwmSetWindowAttribute(
                 hwnd, DwmwaUseImmersiveDarkMode, ref darkMode, sizeof(int)) >= 0;
             bool caption = DwmSetWindowAttribute(

@@ -64,7 +64,8 @@ internal static class Program
                 DurationSeconds = 30, TrimEndSeconds = 30,
                 AudioTracks = new() {
                     new AudioTrackInfo { Name = "System Audio", StreamIndex = 0, Gain = 1 },
-                    new AudioTrackInfo { Name = "Microphone", StreamIndex = 1, Gain = .7 }
+                    // Show both checkbox states in the real audio-panel render.
+                    new AudioTrackInfo { Name = "Microphone", StreamIndex = 1, Gain = .7, IsMuted = true }
                 }
             });
         }

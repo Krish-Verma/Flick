@@ -36,7 +36,7 @@
                     Click="AddFolder_Click"/>
         </Grid>
 
-        <Border Grid.Row="2" BorderBrush="{DynamicResource Flick.Brush.Border}"
+        <Border Grid.Row="2" BorderBrush="{DynamicResource Flick.Brush.Divider}"
                 BorderThickness="0,1,0,1" Padding="0,4">
             <ListBox x:Name="FolderList" ItemsSource="{Binding ConnectedFolders}"
                      BorderThickness="0" Background="Transparent"

@@ -2,18 +2,18 @@
 
 ## Requested scope
 
-The owner likes Flick's current architecture and workflows, but finds the skin and icons too Android-like. This pass changes the visual layer toward the restraint and precision of Apple's dark desktop pro apps. It preserves the native Windows title bar, navigation rail, library/player arrangement, four editing actions, grouped settings, capture behavior, non-destructive edits, sharing consent and update flow.
+The owner likes Flick's current architecture, workflows and purple theme. This pass refines the bottom toolbar icons toward the precision of Apple's desktop apps and reduces the visual noise of dividing lines. It preserves the native Windows title bar, navigation rail, library/player arrangement, four editing actions, grouped settings, capture behavior, non-destructive edits, sharing consent and update flow.
 
-The original Flick artwork and its optical alignment remain. The sunset spectrum belongs to that artwork; a muted violet is reserved for primary actions and keyboard focus. No Apple-owned font or SF Symbols assets are redistributed.
+The original Flick artwork, optical alignment, violet-tinted surfaces and bright lavender accents remain. No Apple-owned font or SF Symbols assets are redistributed.
 
 ## Visual decisions
 
-- Neutral charcoal canvas, sidebar and raised controls replace the violet-tinted surface stack. Opaque surfaces give a stable fallback without a new blur/effect pipeline.
+- Preserve the original purple canvas, sidebar, raised controls, translucent surface colors and accent palette. A separate subtle divider color blends structural boundaries into the adjacent surfaces without weakening keyboard focus.
 - Regular 13-DIP control text, clear section weights and tabular transport numerals reduce the previous blanket semibold treatment. Windows' installed Segoe UI Variable remains the native typeface.
-- Authored vector symbols use a consistent rounded 1.5-DIP stroke. Share uses an arrow rising from a square. Play, pause, back, refresh, more and dropdown indicators no longer depend on Unicode icon substitutes.
-- Compact six-DIP control corners, flatter grouping, neutral selected rows and a contiguous source segment reduce outlined capsules. Editing actions retain their evenly spaced four-column arrangement, visible labels and 52-DIP hit targets.
+- Authored vector symbols use a consistent rounded 1.5-DIP stroke, with balanced 20-DIP toolbar boxes. Share uses an arrow rising from a square. Play, pause, back, refresh, more and dropdown indicators no longer depend on Unicode icon substitutes.
+- Compact six-DIP control corners, flatter grouping, violet selected rows and a contiguous source segment reduce outlined capsules. Editing actions retain their evenly spaced four-column arrangement, visible labels and 52-DIP hit targets.
 - Settings retain the same categories and fields with a readable content width, aligned insets and fewer nested borders. Trim grips and transport chrome are neutral; the active focus indicator stays visible.
-- The real Windows caption reads colors from the same named palette. Standard resize, Snap and window controls remain native.
+- The rail, header, library, preview and footer boundaries use the softer divider shade. The four-DIP library resize target is transparent until hovered or keyboard-focused. The real Windows caption reads colors from the same named palette. Standard resize, Snap and window controls remain native.
 - Dropdown selections stay on one line with an ellipsis at compact widths. Advanced sections use the same small disclosure chevron, with hover, keyboard focus and two-way expansion behavior preserved.
 
 ## Impeccable guidance
@@ -24,6 +24,6 @@ The Impeccable web detector cannot establish native WPF rendering correctness. A
 
 ## Verification
 
-The five existing text/background pairs measure 16.75:1, 15.61:1, 9.11:1, 5.44:1 and 7.36:1 against the final palette. Keyboard focus, disabled/busy behavior, native slider tracks and recycled list virtualization remain in the control templates.
+The five existing text/background pairs measure 17.24:1, 15.81:1, 8.88:1, 5.39:1 and 7.82:1 against the final palette. Keyboard focus, disabled/busy behavior, native slider tracks and recycled list virtualization remain in the control templates. The Windows staging test exercises the real disclosure template's two-way expansion and content visibility.
 
 Render review covers the default workspace, Trim/Audio/Share, settings, save banner, shared/native logo, a 1440×900 workspace and the existing 800×600 compact library/editor modes. Physical Windows title-bar behavior, per-monitor DPI, gameplay and GPU performance remain separate acceptance checks.

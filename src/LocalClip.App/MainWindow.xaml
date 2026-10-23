@@ -24,7 +24,7 @@
 
         <!-- Single slim navigation rail; Settings opens existing preferences
              until the dedicated settings layout is implemented in Slice 5. -->
-        <Border Grid.Column="0" Grid.RowSpan="3" Background="{DynamicResource Flick.Brush.Surface}" BorderBrush="{DynamicResource Flick.Brush.Border}" BorderThickness="0,0,1,0" Padding="11,14">
+        <Border Grid.Column="0" Grid.RowSpan="3" Background="{DynamicResource Flick.Brush.Surface}" BorderBrush="{DynamicResource Flick.Brush.Divider}" BorderThickness="0,0,1,0" Padding="11,14">
             <DockPanel LastChildFill="False">
                 <Image DockPanel.Dock="Top" Style="{StaticResource Flick.Image.BrandMark}" Width="38" Height="38" Margin="0,0,0,21" ToolTip="Flick — Your Clips"/>
                 <Button DockPanel.Dock="Top" x:Name="BtnNavClips" Style="{StaticResource Flick.Button.Icon}" Click="BtnNavClips_Click" AutomationProperties.Name="Your Clips" Background="{DynamicResource Flick.Brush.Raised}" BorderBrush="Transparent" ToolTip="Your Clips">
@@ -37,7 +37,7 @@
         </Border>
 
         <!-- Capture bar always visible. One dominant action for the active state. -->
-        <Border Grid.Row="0" Grid.Column="1" Background="{DynamicResource Flick.Brush.Frosted}" BorderBrush="{DynamicResource Flick.Brush.Border}" BorderThickness="0,0,0,1" Padding="14,7">
+        <Border Grid.Row="0" Grid.Column="1" Background="{DynamicResource Flick.Brush.Frosted}" BorderBrush="{DynamicResource Flick.Brush.Divider}" BorderThickness="0,0,0,1" Padding="14,7">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition x:Name="CaptureSourceColumn" Width="260"/>
@@ -76,7 +76,7 @@
             </Grid.ColumnDefinitions>
 
             <!-- Left: Clip Gallery -->
-            <Border x:Name="ClipLibraryPanel" Grid.Column="0" Background="{DynamicResource Flick.Brush.Surface}" BorderBrush="{DynamicResource Flick.Brush.Border}" BorderThickness="0,0,1,0">
+            <Border x:Name="ClipLibraryPanel" Grid.Column="0" Background="{DynamicResource Flick.Brush.Surface}" BorderBrush="{DynamicResource Flick.Brush.Divider}" BorderThickness="0,0,1,0">
                 <Grid Margin="12">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
@@ -192,7 +192,17 @@
                 </Grid>
             </Border>
 
-            <GridSplitter x:Name="LibrarySplitter" Grid.Column="1" Width="4" Background="{DynamicResource Flick.Brush.Raised}" ResizeBehavior="PreviousAndNext" ResizeDirection="Columns" HorizontalAlignment="Stretch" ToolTip="Resize Clip Library"/>
+            <GridSplitter x:Name="LibrarySplitter" Grid.Column="1" Width="4" ResizeBehavior="PreviousAndNext" ResizeDirection="Columns" HorizontalAlignment="Stretch" ToolTip="Resize Clip Library">
+                <GridSplitter.Style>
+                    <Style TargetType="{x:Type GridSplitter}">
+                        <Setter Property="Background" Value="Transparent"/>
+                        <Style.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True"><Setter Property="Background" Value="{DynamicResource Flick.Brush.Divider}"/></Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True"><Setter Property="Background" Value="{DynamicResource Flick.Brush.Focus}"/></Trigger>
+                        </Style.Triggers>
+                    </Style>
+                </GridSplitter.Style>
+            </GridSplitter>
 
             <!-- Scrollable editor and sticky share dock; compact mode fills entire workspace. -->
             <Grid x:Name="ClipEditorPanel" Grid.Column="2" Margin="12,10,12,12" Background="{DynamicResource Flick.Brush.Canvas}"><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*" MinHeight="80"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions><Grid Grid.Row="0" Margin="0,0,0,10">
@@ -220,7 +230,7 @@
                                     </ContextMenu>
                                 </Button.ContextMenu>
                             </Button>
-                        </Grid><Border Grid.Row="1" MinHeight="80" Background="{DynamicResource Flick.Brush.Canvas}" BorderBrush="{DynamicResource Flick.Brush.Border}" BorderThickness="1" CornerRadius="{StaticResource Flick.Corner.Panel}" ClipToBounds="True" Margin="0,0,0,6" VerticalAlignment="Stretch" x:Name="PreviewSurface" SizeChanged="PreviewSurface_SizeChanged">
+                        </Grid><Border Grid.Row="1" MinHeight="80" Background="{DynamicResource Flick.Brush.Canvas}" BorderBrush="{DynamicResource Flick.Brush.Divider}" BorderThickness="1" CornerRadius="{StaticResource Flick.Corner.Panel}" ClipToBounds="True" Margin="0,0,0,6" VerticalAlignment="Stretch" x:Name="PreviewSurface" SizeChanged="PreviewSurface_SizeChanged">
                             <Grid>
                                 <MediaElement x:Name="VideoPlayer" LoadedBehavior="Manual" UnloadedBehavior="Stop" ScrubbingEnabled="True" Stretch="Uniform" MediaOpened="VideoPlayer_MediaOpened" MediaEnded="VideoPlayer_MediaEnded" MediaFailed="VideoPlayer_MediaFailed"/>
                                 <!-- Poster stays cheap while browsing; WPF does not open the
@@ -259,29 +269,29 @@
                         </Grid><UniformGrid x:Name="EditorToolBar" Grid.Row="3" Columns="4" Margin="0,4,0,0">
                             <Button x:Name="ToolTrim" Tag="Trim" Click="EditorTool_Click" Style="{StaticResource Flick.Button.Ghost}" MinHeight="52" Padding="8,4" Margin="6,0" ToolTip="Trim" AutomationProperties.Name="Trim" IsEnabled="{Binding CanEditClip}">
                                 <StackPanel>
-                                    <Path Style="{StaticResource Flick.Icon.Symbol}" Data="{StaticResource Flick.Icon.Geometry.Trim}"/>
+                                    <Path Style="{StaticResource Flick.Icon.Symbol}" Data="{StaticResource Flick.Icon.Geometry.Trim}" Width="20" Height="20"/>
                                     <TextBlock Text="Trim" Style="{StaticResource Flick.Text.Caption}" HorizontalAlignment="Center" Margin="0,5,0,0"/>
                                 </StackPanel>
                             </Button>
                             <Button x:Name="ToolAudio" Tag="Audio" Click="EditorTool_Click" Style="{StaticResource Flick.Button.Ghost}" MinHeight="52" Padding="8,4" Margin="6,0" ToolTip="Audio" AutomationProperties.Name="Audio" IsEnabled="{Binding CanEditClip}">
                                 <StackPanel>
-                                    <Path Style="{StaticResource Flick.Icon.Symbol}" Data="{StaticResource Flick.Icon.Geometry.Audio}"/>
+                                    <Path Style="{StaticResource Flick.Icon.Symbol}" Data="{StaticResource Flick.Icon.Geometry.Audio}" Width="20" Height="20"/>
                                     <TextBlock Text="Audio" Style="{StaticResource Flick.Text.Caption}" HorizontalAlignment="Center" Margin="0,5,0,0"/>
                                 </StackPanel>
                             </Button>
                             <Button x:Name="ToolOriginal" Tag="Original" Click="EditorTool_Click" Style="{StaticResource Flick.Button.Ghost}" MinHeight="52" Padding="8,4" Margin="6,0" ToolTip="Original" AutomationProperties.Name="Original" IsEnabled="{Binding CanEditClip}">
                                 <StackPanel>
-                                    <Path Style="{StaticResource Flick.Icon.Symbol}" Data="{StaticResource Flick.Icon.Geometry.Original}"/>
+                                    <Path Style="{StaticResource Flick.Icon.Symbol}" Data="{StaticResource Flick.Icon.Geometry.Original}" Width="20" Height="20"/>
                                     <TextBlock Text="Original" Style="{StaticResource Flick.Text.Caption}" HorizontalAlignment="Center" Margin="0,5,0,0"/>
                                 </StackPanel>
                             </Button>
                             <Button x:Name="ToolShare" Tag="Share" Click="EditorTool_Click" Style="{StaticResource Flick.Button.Ghost}" MinHeight="52" Padding="8,4" Margin="6,0" ToolTip="Share: export an MP4, copy or drag the file" AutomationProperties.Name="Share" IsEnabled="True">
                                 <StackPanel>
-                                    <Path Style="{StaticResource Flick.Icon.Symbol}" Data="{StaticResource Flick.Icon.Geometry.Share}"/>
+                                    <Path Style="{StaticResource Flick.Icon.Symbol}" Data="{StaticResource Flick.Icon.Geometry.Share}" Width="20" Height="20"/>
                                     <TextBlock Text="Share" Style="{StaticResource Flick.Text.Caption}" HorizontalAlignment="Center" Margin="0,5,0,0"/>
                                 </StackPanel>
                             </Button>
-                        </UniformGrid><Border x:Name="EditorContextLayer" Grid.Row="1" Panel.ZIndex="5" VerticalAlignment="Bottom" Margin="12" Padding="12" Background="{DynamicResource Flick.Brush.Surface}" BorderBrush="{DynamicResource Flick.Brush.Border}" BorderThickness="1" CornerRadius="{StaticResource Flick.Corner.Panel}" Visibility="Collapsed" KeyboardNavigation.TabNavigation="Cycle"><DockPanel><Button DockPanel.Dock="Top" x:Name="CloseEditorTool" Content="Close" Click="CloseEditorTool_Click" HorizontalAlignment="Right" Style="{StaticResource Flick.Button.Ghost}" Margin="0,0,0,4"/><ScrollViewer x:Name="EditorContextScroll" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Focusable="False"><StackPanel x:Name="EditorContextHost"><Border IsEnabled="{Binding CanEditClip}" Background="Transparent" BorderThickness="0" Padding="12" Margin="0,8,0,0" x:Name="TrimPanel" Visibility="Collapsed">
+                        </UniformGrid><Border x:Name="EditorContextLayer" Grid.Row="1" Panel.ZIndex="5" VerticalAlignment="Bottom" Margin="12" Padding="12" Background="{DynamicResource Flick.Brush.Surface}" BorderBrush="{DynamicResource Flick.Brush.Divider}" BorderThickness="1" CornerRadius="{StaticResource Flick.Corner.Panel}" Visibility="Collapsed" KeyboardNavigation.TabNavigation="Cycle"><DockPanel><Button DockPanel.Dock="Top" x:Name="CloseEditorTool" Content="Close" Click="CloseEditorTool_Click" HorizontalAlignment="Right" Style="{StaticResource Flick.Button.Ghost}" Margin="0,0,0,4"/><ScrollViewer x:Name="EditorContextScroll" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Focusable="False"><StackPanel x:Name="EditorContextHost"><Border IsEnabled="{Binding CanEditClip}" Background="Transparent" BorderThickness="0" Padding="12" Margin="0,8,0,0" x:Name="TrimPanel" Visibility="Collapsed">
                             <components:TrimRangeControl x:Name="TrimTimeline" RangeCommitted="TrimTimeline_RangeCommitted"/>
                         </Border><Border Background="Transparent" BorderThickness="0" Padding="6,3" x:Name="AudioPanel" Visibility="Collapsed" Margin="0,8,0,0">
                             <Expander x:Name="AudioExpander" Style="{StaticResource Flick.Expander.Disclosure}" IsEnabled="{Binding CanEditClip}" Header="Export Audio" IsExpanded="False" Foreground="{DynamicResource Flick.Brush.TextPrimary}" Background="Transparent" Padding="4">
@@ -298,7 +308,7 @@
                                                         <ColumnDefinition Width="50"/>
                                                     </Grid.ColumnDefinitions>
                                                     <TextBlock Grid.Column="0" Text="{Binding Name}" ToolTip="{Binding Name}" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" Style="{StaticResource Flick.Text.Control}" VerticalAlignment="Center" Margin="0,0,9,0"/>
-                                                    <CheckBox Grid.Column="1" Content="Mute" IsChecked="{Binding IsMuted, Mode=TwoWay}" VerticalAlignment="Center" Foreground="{DynamicResource Flick.Brush.TextSecondary}" FontSize="12"/>
+                                                    <CheckBox Grid.Column="1" Content="Mute" Style="{StaticResource Flick.Input.CheckBox}" IsChecked="{Binding IsMuted, Mode=TwoWay}" VerticalAlignment="Center" Foreground="{DynamicResource Flick.Brush.TextSecondary}" FontSize="12"/>
                                                     <Slider Grid.Column="2" Minimum="0" Maximum="2" Style="{StaticResource Flick.Input.Slider}" Value="{Binding Gain, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" VerticalAlignment="Center" AutomationProperties.Name="Export Audio Volume" Margin="0,0,8,0"/>
                                                     <TextBlock Grid.Column="3" Text="{Binding Gain, StringFormat='{}{0:P0}'}" Style="{StaticResource Flick.Text.Caption}" TextAlignment="Right" VerticalAlignment="Center"/>
                                                 </Grid>
@@ -394,7 +404,7 @@
         </Border>
 
         <!-- Bottom Status Bar -->
-        <Border Grid.Row="2" Grid.Column="1" Background="{DynamicResource Flick.Brush.Surface}" BorderBrush="{DynamicResource Flick.Brush.Border}" BorderThickness="0,1,0,0" Padding="12,6">
+        <Border Grid.Row="2" Grid.Column="1" Background="{DynamicResource Flick.Brush.Surface}" BorderBrush="{DynamicResource Flick.Brush.Divider}" BorderThickness="0,1,0,0" Padding="12,6">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
