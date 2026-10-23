@@ -8,8 +8,8 @@ signing identity and Artifact Signing tools must already be configured.
 param([switch]$SkipNativeBuild)
 $ErrorActionPreference = 'Stop'
 $root = (Get-Item $PSScriptRoot).Parent.FullName
-$packageDir = Join-Path $root 'dist\Flick-v1.0.4-win-x64'
-$zip = Join-Path $root 'dist\Flick-v1.0.4-win-x64.zip'
+$packageDir = Join-Path $root 'dist\Flick-v1.0.5-win-x64'
+$zip = Join-Path $root 'dist\Flick-v1.0.5-win-x64.zip'
 $setup = Join-Path $root 'dist\Flick-Setup.exe'
 $manifest = Join-Path $root 'dist\SHA256SUMS.txt'
 $signScript = Join-Path $PSScriptRoot 'sign_flick_file.ps1'
@@ -24,19 +24,57 @@ foreach ($envName in @('FLICK_SIGNTOOL_PATH','FLICK_ARTIFACT_SIGNING_DLIB','FLIC
 & (Join-Path $PSScriptRoot 'build_package.ps1') -SkipNativeBuild:$SkipNativeBuild
 if ($LASTEXITCODE -ne 0) { throw "Portable compile/package failed" }
 
-$codeFiles = @(Get-ChildItem -LiteralPath $packageDir -Recurse -File |
-    Where-Object { $_.Extension -in @('.exe','.dll') })
-if ($codeFiles.Count -lt 2) { throw "Expected Flick.exe and native capture binaries absent." }
-foreach ($file in $codeFiles) {
-    $status = (Get-AuthenticodeSignature -LiteralPath $file.FullName).Status
-    if ($status -eq 'NotSigned') {
-        & $signScript -FilePath $file.FullName
-        if ($LASTEXITCODE -ne 0) { throw "Signing stopped at $($file.FullName)" }
-    }
-    elseif ($status -ne 'Valid') {
-        throw "Refusing to publish untrusted third-party binary: $($file.FullName), signature status $status"
+$ownedRelativePaths = @(
+    'Flick.exe',
+    'Flick.dll',
+    'LocalClip.Core.dll',
+    'tools\obs\runtime\bin\64bit\LocalClip.CaptureHost.exe'
+)
+foreach ($relative in $ownedRelativePaths) {
+    if (-not (Test-Path -LiteralPath (Join-Path $packageDir $relative) -PathType Leaf)) {
+        throw "Expected Flick-owned signing input absent: $relative"
     }
 }
+
+# Signing changes PE bytes. Upstream OBS, FFmpeg and .NET files must remain
+# exactly as redistributed; a project certificate is not an upstream identity.
+# This boundary also supports Foundation's own-binaries-only signing policy.
+$upstreamBefore = @(Get-ChildItem -LiteralPath $packageDir -Recurse -File |
+    Where-Object { $_.Extension -in @('.exe','.dll') } |
+    ForEach-Object {
+        $relative = [IO.Path]::GetRelativePath($packageDir, $_.FullName)
+        if ($relative -notin $ownedRelativePaths) {
+            [pscustomobject]@{
+                RelativePath = $relative
+                Sha256 = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash
+            }
+        }
+    })
+
+foreach ($relative in $ownedRelativePaths) {
+    $filePath = Join-Path $packageDir $relative
+    $status = (Get-AuthenticodeSignature -LiteralPath $filePath).Status
+    if ($status -eq 'NotSigned') {
+        & $signScript -FilePath $filePath
+        if ($LASTEXITCODE -ne 0) { throw "Signing stopped at $filePath" }
+    }
+    elseif ($status -ne 'Valid') {
+        throw "Refusing invalid Flick-owned signing input: $filePath, signature status $status"
+    }
+}
+
+foreach ($upstream in $upstreamBefore) {
+    $path = Join-Path $packageDir $upstream.RelativePath
+    if (-not (Test-Path -LiteralPath $path -PathType Leaf) -or
+        (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash -cne $upstream.Sha256) {
+        throw "Signing modified an upstream executable; refusing package: $($upstream.RelativePath)"
+    }
+}
+& (Join-Path $PSScriptRoot 'check_ffmpeg_runtime.ps1') -RuntimeRoot (Join-Path $packageDir 'tools\ffmpeg')
+Write-Host "Preserved $($upstreamBefore.Count) upstream EXE/DLL files byte-for-byte; signed only the four explicit Flick-owned paths."
+
+# Keep the stricter all-code Windows trust gate. Unsigned upstream files can
+# still block SAC readiness even though Foundation permits packaging them.
 & $verify -PackageRoot $packageDir
 if ($LASTEXITCODE -ne 0) { throw "Portable signature audit failed" }
 
@@ -48,7 +86,7 @@ $hostHash = (Get-FileHash -LiteralPath (Join-Path $packageDir 'tools\obs\runtime
 $zipHash = (Get-FileHash -LiteralPath $zip -Algorithm SHA256).Hash
 @(
     "# Flick signed preview SHA-256 checksums, not yet Smart App Control certified",
-    "$zipHash  Flick-v1.0.4-win-x64.zip",
+    "$zipHash  Flick-v1.0.5-win-x64.zip",
     "$exeHash  Flick.exe",
     "$hostHash  LocalClip.CaptureHost.exe"
 ) | Set-Content -LiteralPath $manifest -Encoding utf8

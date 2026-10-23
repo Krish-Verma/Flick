@@ -1,13 +1,15 @@
 ; Flick per-user Windows installer. Retain user files on uninstall.
 #define MyAppName "Flick"
-#define MyAppVersion "1.0.4"
+#define MyAppVersion "1.0.5"
 #define MyAppExeName "Flick.exe"
 
 [Setup]
 AppId={{F3C41F96-EF62-4CB1-A292-91EF3F6C18E8}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
-AppVerName=Flick 1.0.4 — Windows NVIDIA NVENC Design Preview 1
+VersionInfoProductName=Flick
+VersionInfoProductTextVersion=1.0.5-preview.1
+AppVerName=Flick 1.0.5 — Windows GPU Compatibility Candidate
 AppPublisher=Flick Contributors
 AppPublisherURL=https://github.com/Krish-Verma/Flick
 AppSupportURL=https://github.com/Krish-Verma/Flick/issues
@@ -21,7 +23,7 @@ UninstallDisplayIcon={app}\{#MyAppExeName}
 SetupIconFile=..\dist\Flick.ico
 ; Official signed builds invoke the host-provided flicksign SignTool through
 ; the Inno compiler and sign Setup AND Uninstaller. No signing certificate is
-; embedded in this repository. Ordinary private-preview builds stay unsigned.
+; embedded in this repository. Explicit unsigned-preview builds stay unsigned.
 #ifdef FLICK_REQUIRE_TRUSTED_SIGNING
 SignTool=flicksign
 SignedUninstaller=yes
@@ -38,7 +40,7 @@ RestartApplications=no
 AppMutex=LocalClip_SingleInstance_UserLock
 MinVersion=10.0
 ; Only native Windows x64 is supported. ARM and 32-bit Windows cannot
-; execute the current capture host / NVENC pipeline.
+; execute the current x64 capture host and bundled encoder runtime.
 ArchitecturesAllowed=x64os
 InfoBeforeFile=PREVIEW-SYSTEM-REQUIREMENTS.txt
 
@@ -46,7 +48,7 @@ InfoBeforeFile=PREVIEW-SYSTEM-REQUIREMENTS.txt
 Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription: "Shortcuts:"; Flags: unchecked
 
 [Files]
-Source: "..\dist\Flick-v1.0.4-win-x64\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "..\dist\Flick-v1.0.5-win-x64\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
 Name: "{autoprograms}\Flick"; Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{app}"
@@ -97,7 +99,7 @@ begin
   ParentHandle := OpenProcess($00100000, False, ParentPid);
   if ParentHandle = 0 then Exit; // Already exited; AppMutex still protects files.
   Log('Flick update: waiting for parent PID ' + IntToStr(ParentPid));
-  WaitResult := WaitForSingleObject(ParentHandle, 30000);
+      WaitResult := WaitForSingleObject(ParentHandle, 120000);
   CloseHandle(ParentHandle);
   if WaitResult <> 0 then begin
     MsgBox('Flick is still closing. No update was installed. Try again after Flick has quit.', mbError, MB_OK);

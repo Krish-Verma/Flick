@@ -460,7 +460,28 @@
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
-                <TextBlock Grid.Column="0" Text="{Binding StatusDetails}" ToolTip="{Binding StatusDetails}" Foreground="{DynamicResource Flick.Brush.TextSecondary}" FontSize="12" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" Margin="0,0,16,0"/>
+                <StackPanel Grid.Column="0" Margin="0,0,16,0">
+                    <TextBlock Text="{Binding StatusDetails}" ToolTip="{Binding StatusDetails}" Foreground="{DynamicResource Flick.Brush.TextSecondary}" FontSize="12" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"/>
+                    <TextBlock Text="{Binding CaptureEncodingText}" ToolTip="{Binding CaptureEncodingText}" FontSize="12" Margin="0,3,0,0" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis">
+                        <TextBlock.Style>
+                            <Style TargetType="{x:Type TextBlock}" BasedOn="{StaticResource Flick.Text.Caption}">
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding CaptureEncodingText}" Value=""><Setter Property="Visibility" Value="Collapsed"/></DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
+                    <TextBlock Text="{Binding SoftwareFallbackWarning}" ToolTip="{Binding SoftwareFallbackWarning}" FontSize="12" Margin="0,2,0,0" TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite">
+                        <TextBlock.Style>
+                            <Style TargetType="{x:Type TextBlock}" BasedOn="{StaticResource Flick.Text.Caption}">
+                                <Setter Property="Foreground" Value="{DynamicResource Flick.Brush.Warning}"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding SoftwareFallbackWarning}" Value=""><Setter Property="Visibility" Value="Collapsed"/></DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
+                </StackPanel>
                 <TextBlock Grid.Column="1" x:Name="TxtResourceStats" Text="{Binding ResourceStatsText}" ToolTip="{Binding ResourceStatsText}" Foreground="{DynamicResource Flick.Brush.TextMuted}" FontSize="11" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" HorizontalAlignment="Right"/>
             </Grid>
         </Border>

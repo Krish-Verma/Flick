@@ -8,6 +8,7 @@ using System.Windows.Threading;
 using LocalClip.App;
 using LocalClip.App.ViewModels;
 using LocalClip.App.Views.Components;
+using LocalClip.Core.Ipc;
 using LocalClip.Core.Models;
 using LocalClip.Core.Rules;
 using LocalClip.Core.Storage;
@@ -127,6 +128,20 @@ internal static class Program
         Render("15-share-custom-compact.png", 800, 600);
         Find<Expander>("AdvancedShareExpander").IsExpanded = true;
         Render("16-share-expanded-compact.png", 800, 600);
+        Invoke("CloseEditorContext");
+        vm.CaptureStatus = "Armed";
+        vm.BufferedDurationText = "~30.0s / 30s";
+        vm.StatusDetails = "Ready to save retained replay.";
+        typeof(MainViewModel).GetMethod("SetCaptureProfile", Private)!.Invoke(vm, new object[] {
+            new CaptureEncodingProfile("obs_qsv11_v2", "Intel Quick Sync H.264", false, 1920, 1080, 60)
+        });
+        Invoke("UpdateStatusBadgeColor");
+        Render("17-hardware-status-compact.png", 800, 600);
+        typeof(MainViewModel).GetMethod("SetCaptureProfile", Private)!.Invoke(vm, new object[] {
+            new CaptureEncodingProfile("obs_x264", "CPU x264 H.264", true, 1280, 720, 30)
+        });
+        Render("18-cpu-warning-compact.png", 800, 600);
+        Render("19-cpu-warning-wide.png", 1240, 720);
         string applicationVersion = typeof(MainWindow).Assembly
             .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? "unknown";
         File.WriteAllText(Path.Combine(output, "PROVENANCE.txt"),
@@ -136,6 +151,7 @@ internal static class Program
             "Workspace/settings: 1240x720 DIPs, 96 DPI. Synthetic clip names/thumbnails/monitor only.\n" +
             "Additional views: 1440x900 workspace; existing 800x600 compact library and editor branches.\n" +
             "Compact Share: default, Custom 250 MB and expanded optional posting; no export or post action invoked.\n" +
+            "Encoder status: synthetic Intel/CPU profiles exercise real bindings and the persistent compatibility warning. No encoder or capture host started.\n" +
             "Brand samples: actual shared Image style rasterized by WPF at 96/120/144/192 DPI; not a physical per-monitor DPI session.\n" +
             "No gameplay, media decoder, OS titlebar, real recording, updater network request, or full UI acceptance claimed.\n");
         vm.Dispose();

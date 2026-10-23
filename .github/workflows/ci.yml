@@ -14,6 +14,81 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  media-workflow:
+    name: Real synthetic media workflow (no recording hardware)
+    runs-on: windows-latest
+    timeout-minutes: 25
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+      DOTNET_NOLOGO: 'true'
+      FLICK_HARDWARE_TESTS: '0'
+      FLICK_MEDIA_TESTS: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.402'
+      - name: Restore verified media runtimes
+        shell: pwsh
+        run: ./scripts/setup_tools.ps1
+      - name: Exercise real trim, audio, export, validation and cancellation
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $env:FLICK_TEST_FFMPEG = Join-Path (Get-Location) 'tools\ffmpeg\ffmpeg.exe'
+          $env:FLICK_TEST_FFPROBE = Join-Path (Get-Location) 'tools\ffmpeg\ffprobe.exe'
+          $env:FLICK_TEST_FFMPEG_VERSION = ((Get-Content dependencies.lock.json -Raw | ConvertFrom-Json).pinnedDependencies.ffmpeg.version -split '-')[0]
+          $env:FLICK_MEDIA_OUTPUT_DIR = Join-Path (Get-Location) 'MediaTestResults\fixtures'
+          dotnet test tests/LocalClip.Core.Tests/LocalClip.Core.Tests.csproj -c Release `
+            --filter 'FullyQualifiedName~MediaWorkflowTests' `
+            --logger 'trx;LogFileName=media-workflow.trx' --results-directory MediaTestResults
+          if ($LASTEXITCODE -ne 0) { throw 'Real media workflow tests failed' }
+          [xml]$report = Get-Content 'MediaTestResults/media-workflow.trx' -Raw
+          $ns = [Xml.XmlNamespaceManager]::new($report.NameTable)
+          $ns.AddNamespace('t','http://microsoft.com/schemas/VisualStudio/TeamTest/2010')
+          $counter = $report.SelectSingleNode('/t:TestRun/t:ResultSummary/t:Counters',$ns)
+          $cases = @($report.SelectNodes('/t:TestRun/t:Results/t:UnitTestResult',$ns))
+          if ($null -eq $counter -or [int]$counter.total -ne 5 -or [int]$counter.executed -ne 5 -or
+              [int]$counter.passed -ne 5 -or [int]$counter.failed -ne 0 -or [int]$counter.notExecuted -ne 0 -or
+              $cases.Count -ne 5 -or @($cases | Where-Object outcome -ne 'Passed').Count -ne 0) {
+            throw 'Exactly five real media tests must execute and pass; skipped tests are not acceptance.'
+          }
+      - name: Record exact FFmpeg build configuration
+        if: always()
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory MediaTestResults -Force | Out-Null
+          if (Test-Path tools/ffmpeg/ffmpeg.exe) {
+            & tools/ffmpeg/ffmpeg.exe -version 2>&1 | Set-Content MediaTestResults/ffmpeg-version.txt
+            & tools/ffmpeg/ffmpeg.exe -buildconf 2>&1 | Set-Content MediaTestResults/ffmpeg-buildconf.txt
+            & tools/ffmpeg/ffmpeg.exe -L 2>&1 | Set-Content MediaTestResults/ffmpeg-license.txt
+            Get-FileHash tools/ffmpeg/ffmpeg.exe,tools/ffmpeg/ffprobe.exe -Algorithm SHA256 |
+              Format-List | Out-String | Set-Content MediaTestResults/ffmpeg-hashes.txt
+          }
+      - name: Upload synthetic media test receipts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: flick-real-media-workflow
+          path: MediaTestResults/
+          if-no-files-found: error
+          retention-days: 30
+
+  encoder-policy:
+    name: Encoder negotiation policy (no GPU required)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile and exercise cross-vendor selection and bounded CPU policy
+        run: |
+          mkdir -p native-policy-ci
+          g++ -std=c++17 -O2 -Wall -Wextra -Werror \
+            -Isrc/LocalClip.CaptureHost \
+            tests/LocalClip.CaptureHost.Tests/encoder_policy_tests.cpp \
+            -o native-policy-ci/encoder-policy-tests
+          native-policy-ci/encoder-policy-tests
+
   dotnet:
     name: WPF build and hardware-independent tests
     runs-on: windows-latest
@@ -29,6 +104,29 @@ jobs:
           dotnet-version: '10.0.402'
       - name: Restore solution
         run: dotnet restore LocalClip.slnx
+      - name: Audit direct and transitive NuGet dependencies
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $output = dotnet list LocalClip.slnx package --vulnerable --include-transitive --format json --output-version 1 --no-restore
+          if ($LASTEXITCODE -ne 0) { throw 'NuGet vulnerability audit could not complete' }
+          New-Item -ItemType Directory TestResults -Force | Out-Null
+          $json = $output -join [Environment]::NewLine
+          $json | Set-Content TestResults/nuget-audit.json -Encoding utf8
+          $audit = $json | ConvertFrom-Json
+          if ($audit.version -ne 1 -or @($audit.projects).Count -eq 0 -or
+              @($audit.logs | Where-Object level -in @('Warning','Error')).Count -gt 0) {
+            throw 'NuGet audit returned incomplete results or warnings/errors.'
+          }
+          foreach ($project in $audit.projects) {
+            foreach ($framework in $project.frameworks) {
+              foreach ($package in @($framework.topLevelPackages) + @($framework.transitivePackages)) {
+                if ($null -ne $package -and @($package.vulnerabilities).Count -gt 0) {
+                  throw "Known vulnerable dependency: $($package.id) $($package.resolvedVersion)"
+                }
+              }
+            }
+          }
       - name: Validate PowerShell script syntax
         shell: pwsh
         run: |
@@ -88,7 +186,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: flick-unit-test-results
-          path: TestResults/**/*.trx
+          path: TestResults/**
           if-no-files-found: warn
 
   native:
@@ -122,9 +220,10 @@ jobs:
         run: |
           mkdir -p native-ci
           g++ --version
+          windres -Isrc/LocalClip.CaptureHost src/LocalClip.CaptureHost/nativeversion.rc -O coff -o native-ci/capture-version.o
           g++ -O2 -std=c++17 -static-libgcc -static-libstdc++ \
             -Itools/obs/include/libobs -Isrc/LocalClip.CaptureHost \
-            src/LocalClip.CaptureHost/main.cpp \
+            src/LocalClip.CaptureHost/main.cpp native-ci/capture-version.o \
             -Ltools/obs/runtime/bin/64bit -Wl,-Bstatic -lwinpthread \
             -Wl,-Bdynamic -lobs -ldwmapi -o native-ci/LocalClip.CaptureHost.exe
       - name: Confirm native executable exists
@@ -134,7 +233,7 @@ jobs:
             throw "Native host compile did not produce an executable"
           }
 
-# Native CI compiles the capture host; it does not perform NVIDIA NVENC
+# Native CI compiles the capture host; it does not perform real GPU/CPU
 # recording, real audio capture, game FPS checks, portable GUI launch,
 # Discord drag/paste or long-duration soaks. These require owner hardware.
 

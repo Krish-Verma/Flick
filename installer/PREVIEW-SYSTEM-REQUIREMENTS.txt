@@ -1,21 +1,32 @@
-Flick — Windows hardware compatibility
+Flick — Windows GPU compatibility candidate
 
-QUALIFIED FOR THIS PREVIEW:
-- Windows 11 with a 64-bit x86-64 CPU.
-- A compatible NVIDIA GeForce GPU with NVENC video encoding.
-- Tested hardware: NVIDIA RTX 5060.
+THIS BUILD IS AN UNQUALIFIED DEVELOPMENT CANDIDATE:
+- Targets Windows 11 with a 64-bit x86-64 CPU and working Direct3D 11 graphics.
+- Tries available NVIDIA NVENC, AMD AMF and Intel Quick Sync H.264 encoders.
+- If allowed and no hardware path starts, CPU compatibility recording uses
+  x264 at no more than 1280x720 and 30 fps. It can increase CPU use and reduce
+  gameplay performance. You can disable this fallback in Recording settings.
+- Encoder availability depends on your exact GPU, drivers and capture setup.
 
-NOT QUALIFIED FOR RECORDING IN THIS RELEASE:
-- AMD Radeon graphics only.
-- Intel integrated graphics or Intel Arc only.
-- Windows on ARM/Snapdragon and 32-bit Windows.
-- macOS or Linux.
-- Windows 10 has not completed qualification.
-- Some game anti-cheat or exclusive-fullscreen capture scenarios.
+REQUIRED BEFORE RECORDING:
+- Current graphics drivers from your GPU or device manufacturer.
+- Microsoft Visual C++ v14 x64 Redistributable:
+  https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist
+  Flick does not automatically download or install this prerequisite.
+- All bundled OBS/FFmpeg files must remain with Flick. A self-contained .NET
+  build does not remove the separate OBS C++ runtime requirement.
 
-Installing Flick does not enable AMD, Intel or software recording.
-The app starts with replay recording OFF. You must explicitly select
-a source and enable replay.
+NVIDIA, AMD, Intel, hybrid-GPU and CPU recording paths require physical
+Windows acceptance on this exact candidate. Historical RTX 5060 results
+are not qualification of this build. The published v1.0.4-preview.1 Design
+Preview predates this compatibility work and remains NVIDIA-only.
+
+NOT QUALIFIED:
+- Windows on ARM/Snapdragon, 32-bit Windows, macOS and Linux.
+- Windows 10 and clean Windows installations without verified prerequisites.
+- All games, anti-cheat systems, DRM-protected content and HDR configurations.
+Software encoding does not bypass capture restrictions or missing graphics
+support. Replay starts OFF; you must select a source and enable it.
 
 The browser-downloaded Flick-Setup.exe remains in Downloads until
 you delete it manually. Running the setup installs the application in

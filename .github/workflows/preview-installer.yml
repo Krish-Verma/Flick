@@ -4,8 +4,15 @@ on:
   pull_request:
     paths:
       - 'src/LocalClip.App/**'
+      - 'src/LocalClip.Core/**'
+      - 'src/LocalClip.CaptureHost/**'
       - 'installer/**'
       - 'scripts/build_*.ps1'
+      - 'scripts/setup_tools.ps1'
+      - 'scripts/check_obs_runtime.ps1'
+      - 'scripts/check_ffmpeg_runtime.ps1'
+      - 'dependencies.lock.json'
+      - 'scripts/verify_flick_release.ps1'
       - '.github/workflows/preview-installer.yml'
   workflow_dispatch:
 
@@ -51,9 +58,11 @@ jobs:
         shell: msys2 {0}
         run: |
           test -f tools/obs/runtime/bin/64bit/obs.dll
+          mkdir -p native-build
+          windres -Isrc/LocalClip.CaptureHost src/LocalClip.CaptureHost/nativeversion.rc -O coff -o native-build/capture-version.o
           g++ -O2 -std=c++17 -static-libgcc -static-libstdc++ \
             -Itools/obs/include/libobs -Isrc/LocalClip.CaptureHost \
-            src/LocalClip.CaptureHost/main.cpp \
+            src/LocalClip.CaptureHost/main.cpp native-build/capture-version.o \
             -Ltools/obs/runtime/bin/64bit -Wl,-Bstatic -lwinpthread \
             -Wl,-Bdynamic -lobs -ldwmapi \
             -o tools/obs/runtime/bin/64bit/LocalClip.CaptureHost.exe
@@ -70,21 +79,37 @@ jobs:
       - name: Check preview hashes and included tools
         shell: pwsh
         run: |
+          ./scripts/verify_flick_release.ps1
           $checksums = 'dist/SHA256SUMS.txt'
           $setup = 'dist/Flick-Setup.exe'
-          $portable = 'dist/Flick-v1.0.4-win-x64.zip'
+          $portable = 'dist/Flick-v1.0.5-win-x64.zip'
           foreach ($path in @($checksums, $setup, $portable)) {
             if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw "Missing $path" }
           }
           $manifest = Get-Content -LiteralPath $checksums -Raw
-          foreach ($name in @('Flick.exe', 'Flick-v1.0.4-win-x64.zip',
+          foreach ($name in @('Flick.exe', 'Flick-v1.0.5-win-x64.zip',
                               'Flick-Setup.exe', 'LocalClip.CaptureHost.exe')) {
             if (-not $manifest.Contains($name)) { throw "Missing hash entry: $name" }
           }
           Write-Host "Unsigned preview compiled; no hardware acceptance is asserted."
       - name: Verify per-user install, update wait, restart and data retention
         shell: pwsh
-        run: ./scripts/test_flick_installer_update.ps1
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $true
+          $baselineDirectory = Join-Path $env:RUNNER_TEMP 'flick-baseline-1.0.4'
+          New-Item -ItemType Directory $baselineDirectory -Force | Out-Null
+          # Authenticated read also works after the previous Release is hidden
+          # as a draft. Its immutable tag and installer hash remain the fixture.
+          gh release download v1.0.4-preview.1 --repo Krish-Verma/Flick --pattern Flick-Setup.exe --dir $baselineDirectory
+          $baseline = Join-Path $env:RUNNER_TEMP 'Flick-1.0.4-Setup.exe'
+          Move-Item (Join-Path $baselineDirectory 'Flick-Setup.exe') $baseline
+          if ((Get-FileHash $baseline -Algorithm SHA256).Hash -cne 'DA1A0BBFB6B1D5803FC0D54387682C24F43D6039BAE6A2C999822628E7828A5F') {
+            throw 'Public Flick 1.0.4 baseline installer hash mismatch.'
+          }
+          ./scripts/test_flick_installer_update.ps1 -BaselineSetupPath $baseline
       - name: Upload installer lifecycle evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -99,7 +124,7 @@ jobs:
           name: flick-unsigned-preview-${{ github.sha }}
           path: |
             dist/Flick-Setup.exe
-            dist/Flick-v1.0.4-win-x64.zip
+            dist/Flick-v1.0.5-win-x64.zip
             dist/SHA256SUMS.txt
           if-no-files-found: error
           retention-days: 7

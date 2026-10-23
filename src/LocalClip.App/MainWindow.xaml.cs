@@ -63,6 +63,7 @@ public partial class MainWindow : Window
     private bool _posterCacheDetached;
     private Button? _activeEditorTool;
     private bool _updateInstallInProgress;
+    private bool _quitInProgress;
 
     public MainWindow()
     {
@@ -76,9 +77,9 @@ public partial class MainWindow : Window
 
         _hotkeyManager = new HotkeyManager();
         _hotkeyManager.OnCaptureToggleHotkeyPressed += async () =>
-        { if (!_updateInstallInProgress) await _vm.ToggleCaptureAsync(); };
+        { if (!_updateInstallInProgress && !_quitInProgress) await _vm.ToggleCaptureAsync(); };
         _hotkeyManager.OnSaveReplayHotkeyPressed += async () =>
-        { if (!_updateInstallInProgress) await _vm.SaveReplayAsync(); };
+        { if (!_updateInstallInProgress && !_quitInProgress) await _vm.SaveReplayAsync(); };
 
         _playerTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(200) };
         _playerTimer.Tick += PlayerTimer_Tick;
@@ -249,7 +250,7 @@ public partial class MainWindow : Window
 
         _trayReplayItem = new System.Windows.Forms.ToolStripMenuItem("Start Replay");
         _trayReplayItem.Click += (sender, args) =>
-            _ = Dispatcher.BeginInvoke(new Action(async () => { if (!_updateInstallInProgress) await _vm.ToggleCaptureAsync(); }));
+            _ = Dispatcher.BeginInvoke(new Action(async () => { if (!_updateInstallInProgress && !_quitInProgress) await _vm.ToggleCaptureAsync(); }));
         menu.Items.Add(_trayReplayItem);
 
         _traySaveItem = new System.Windows.Forms.ToolStripMenuItem("Save Last 30 Seconds")
@@ -257,7 +258,7 @@ public partial class MainWindow : Window
             Enabled = false
         };
         _traySaveItem.Click += (sender, args) =>
-            _ = Dispatcher.BeginInvoke(new Action(async () => { if (!_updateInstallInProgress) await _vm.SaveReplayAsync(); }));
+            _ = Dispatcher.BeginInvoke(new Action(async () => { if (!_updateInstallInProgress && !_quitInProgress) await _vm.SaveReplayAsync(); }));
         menu.Items.Add(_traySaveItem);
         menu.Items.Add(new System.Windows.Forms.ToolStripSeparator());
 
@@ -376,10 +377,36 @@ public partial class MainWindow : Window
             ResetPlayerForSelection();
     }
 
-    private void RealQuit()
+    private async void RealQuit()
     {
-        _isRealClosing = true;
-        Close();
+        if (_quitInProgress || _isRealClosing) return;
+        _quitInProgress = true;
+        bool wasEnabled = IsEnabled;
+        IsEnabled = false;
+        SuspendPlayback(clearSource: true);
+        _vm.StatusDetails = "Finishing replay saves before quitting...";
+        try
+        {
+            if (!await _vm.PrepareToQuitAsync())
+            {
+                _vm.StatusDetails = "A replay save is still being finalized. Flick stayed open to protect it. Try quitting again after it finishes.";
+                return;
+            }
+            _isRealClosing = true;
+            Close();
+        }
+        catch (Exception error)
+        {
+            _vm.StatusDetails = "Flick could not finish closing safely: " + error.Message;
+        }
+        finally
+        {
+            if (!_isRealClosing)
+            {
+                IsEnabled = wasEnabled;
+                _quitInProgress = false;
+            }
+        }
     }
 
     private void Window_Closing(object sender, CancelEventArgs e)
@@ -622,13 +649,13 @@ public partial class MainWindow : Window
     // Top Bar Handlers
     private async void BtnToggleCapture_Click(object sender, RoutedEventArgs e)
     {
-        if (_updateInstallInProgress) return;
+        if (_updateInstallInProgress || _quitInProgress) return;
         await _vm.ToggleCaptureAsync();
     }
 
     private async void BtnSaveReplay_Click(object sender, RoutedEventArgs e)
     {
-        if (_updateInstallInProgress) return;
+        if (_updateInstallInProgress || _quitInProgress) return;
         await _vm.SaveReplayAsync();
     }
 
@@ -641,7 +668,7 @@ public partial class MainWindow : Window
 
     private void OpenSettings()
     {
-        if (FlickDialog.IsOpen || _updateInstallInProgress) return;
+        if (FlickDialog.IsOpen || _updateInstallInProgress || _quitInProgress) return;
         if (_foldersPage != null) CloseConnectedFolders();
         if (_settingsPage != null)
         {
@@ -674,6 +701,7 @@ public partial class MainWindow : Window
             !ReferenceEquals(WorkspacePageHost.Content, originatingSettings))
             return "Open Software Updates again to install the update.";
         if (_updateInstallInProgress) return "An update installation is already being prepared.";
+        if (_quitInProgress) return "Flick is already finishing its work before closing.";
         if (!FlickUninstallLauncher.IsInstalled)
             return "This copy is portable. Open Release Notes for a new ZIP, then quit Flick and replace its extracted application folder.";
         if (UpdateRequiresFinishingWork())

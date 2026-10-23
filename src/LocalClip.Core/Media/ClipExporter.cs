@@ -108,7 +108,7 @@ public class ClipExporter
         {
             long existingSize = new FileInfo(clip.ExportedFilePath).Length;
             if (existingSize <= targetCapBytes &&
-                IsValidShareMedia(await _prober.ProbeFileAsync(clip.ExportedFilePath), duration) &&
+                IsValidShareMedia(await ProbeExportAsync(clip.ExportedFilePath, ct), duration) &&
                 await VerifyFullDecodeAsync(clip.ExportedFilePath, ct))
             {
                 return new ExportResult
@@ -132,6 +132,7 @@ public class ClipExporter
         const int MAX_ATTEMPTS = 3;
         long previousOvershoot = 0;
         int attempt = 0;
+        bool hardwareEncodeFailed = false;
 
         while (attempt < MAX_ATTEMPTS)
         {
@@ -158,10 +159,12 @@ public class ClipExporter
             string audioFilter = BuildAudioMixFilter(clip.AudioTracks);
 
             // Execute encode
+            bool useSoftware = hardwareEncodeFailed ||
+                (attempt == MAX_ATTEMPTS && settings.UseTwoPassSoftwareIfHardwareOvershoots);
             progress?.Report(new ExportProgress
             {
                 Percent = (attempt - 1) * 30.0 + 15.0,
-                Stage = $"Encoding MP4 ({budget.RecommendedWidth}x{budget.RecommendedHeight} @ {budget.VideoBitrateBps / 1000} kbps)...",
+                Stage = $"Encoding MP4 with {(useSoftware ? "CPU compatibility" : "NVIDIA hardware")} ({budget.RecommendedWidth}x{budget.RecommendedHeight} @ {budget.VideoBitrateBps / 1000} kbps)...",
                 Attempt = attempt
             });
 
@@ -172,12 +175,17 @@ public class ClipExporter
                 duration,
                 budget,
                 audioFilter,
-                useSoftware: attempt == MAX_ATTEMPTS && settings.UseTwoPassSoftwareIfHardwareOvershoots,
+                useSoftware,
                 ct
             );
+            ct.ThrowIfCancellationRequested();
 
             if (!encodeSuccess || !File.Exists(tempExportPath))
             {
+                // NVENC may be registered in FFmpeg on a PC with no NVIDIA
+                // encoder. After an actual failed attempt, use the bounded CPU
+                // path for all remaining retries, independently of size overshoot.
+                if (!useSoftware) hardwareEncodeFailed = true;
                 try { File.Delete(tempExportPath); } catch { }
                 if (attempt < MAX_ATTEMPTS) continue;
                 return new ExportResult
@@ -219,7 +227,7 @@ public class ClipExporter
                 Attempt = attempt
             });
 
-            var probeOut = await _prober.ProbeFileAsync(tempExportPath);
+            var probeOut = await ProbeExportAsync(tempExportPath, ct);
             if (!IsValidShareMedia(probeOut, duration))
             {
                 try { File.Delete(tempExportPath); } catch { }
@@ -351,7 +359,10 @@ public class ClipExporter
         return sb.ToString();
     }
 
-    private async Task<bool> RunFfmpegEncodeAsync(
+    protected virtual Task<ProbeResult> ProbeExportAsync(string filePath, CancellationToken ct) =>
+        _prober.ProbeFileAsync(filePath, ct);
+
+    protected virtual async Task<bool> RunFfmpegEncodeAsync(
         string inputPath,
         string outputPath,
         double startSec,
@@ -365,7 +376,10 @@ public class ClipExporter
         string durStr = durationSec.ToString("F3", CultureInfo.InvariantCulture);
 
         string vEncoder = useSoftware ? "libx264 -preset fast -threads 4" : "h264_nvenc -preset p4 -tune hq";
-        string scaleFilter = $"scale={budget.RecommendedWidth}:{budget.RecommendedHeight}";
+        // Imported videos may be rotated or use odd coded dimensions. Preserve
+        // their displayed aspect ratio and produce even YUV420-compatible output
+        // rather than stretching a portrait frame or repeatedly failing x264.
+        string scaleFilter = $"scale={budget.RecommendedWidth}:{budget.RecommendedHeight}:force_original_aspect_ratio=decrease:force_divisible_by=2";
 
         string filterComplex = $"[0:v]{scaleFilter},format=yuv420p[outv];{audioFilter}";
 
@@ -396,26 +410,29 @@ public class ClipExporter
             try { if (!proc.HasExited) proc.Kill(entireProcessTree: true); } catch { }
             throw new InvalidOperationException("Failed to confine FFmpeg encode worker");
         }
-        Task<string> stderr = proc.StandardError.ReadToEndAsync();
-        using var registration = ct.Register(() =>
+        using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(10));
+        using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, timeout.Token);
+        Task<string> stderr = proc.StandardError.ReadToEndAsync(linked.Token);
+        using var registration = linked.Token.Register(() =>
         {
             try { if (!proc.HasExited) proc.Kill(entireProcessTree: true); } catch { }
         });
 
         try
         {
-            await proc.WaitForExitAsync(ct);
+            await proc.WaitForExitAsync(linked.Token);
             await stderr;
             return proc.ExitCode == 0;
         }
         catch (OperationCanceledException)
         {
             try { if (!proc.HasExited) proc.Kill(entireProcessTree: true); } catch { }
+            ct.ThrowIfCancellationRequested();
             return false;
         }
     }
 
-    private async Task<bool> VerifyFullDecodeAsync(string filePath, CancellationToken ct)
+    protected virtual async Task<bool> VerifyFullDecodeAsync(string filePath, CancellationToken ct)
     {
         var psi = new ProcessStartInfo
         {
@@ -434,19 +451,22 @@ public class ClipExporter
             try { if (!proc.HasExited) proc.Kill(entireProcessTree: true); } catch { }
             throw new InvalidOperationException("Failed to confine FFmpeg validation worker");
         }
-        using var registration = ct.Register(() =>
+        using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(2));
+        using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, timeout.Token);
+        using var registration = linked.Token.Register(() =>
         {
             try { if (!proc.HasExited) proc.Kill(entireProcessTree: true); } catch { }
         });
 
         try
         {
-            string err = await proc.StandardError.ReadToEndAsync(ct);
-            await proc.WaitForExitAsync(ct);
+            string err = await proc.StandardError.ReadToEndAsync(linked.Token);
+            await proc.WaitForExitAsync(linked.Token);
             return proc.ExitCode == 0 && string.IsNullOrWhiteSpace(err);
         }
         catch
         {
+            ct.ThrowIfCancellationRequested();
             return false;
         }
     }

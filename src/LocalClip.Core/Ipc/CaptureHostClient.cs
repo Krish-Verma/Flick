@@ -17,6 +17,7 @@ public class CaptureHostClient : IDisposable
     private StreamWriter? _writer;
     private JobObject? _jobObject;
     private readonly ConcurrentDictionary<string, TaskCompletionSource<IpcResponse>> _pendingRequests = new();
+    private readonly PendingReplaySaves _pendingSaves = new();
     private CancellationTokenSource? _cts;
     private readonly string _hostExePath;
     private readonly string _workingDir;
@@ -26,9 +27,25 @@ public class CaptureHostClient : IDisposable
     public event Action<string, string>? ReplaySaved; // saveId, filePath
     public event Action<string, string, IReadOnlyList<string>>? ReplaySavedWithTracks;
     public event Action<string>? FaultOccurred;
+    public event Action<CaptureEncodingProfile>? CaptureConfigured;
+    public CaptureEncodingProfile? CurrentProfile { get; private set; }
+    public string LastStartError { get; private set; } = "";
+    public string LastSaveError { get; private set; } = "";
+    public bool HasPendingReplaySaves => _pendingSaves.Count != 0;
+    public event Action? PendingReplaySavesChanged;
+    public event Action<string>? ReplaySaveAborted;
 
     private volatile bool _expectedShutdown;
-    public bool IsRunning => _process != null && !_process.HasExited;
+    private volatile bool _hostExitConfirmed = true;
+    public bool IsRunning
+    {
+        get
+        {
+            var process = _process;
+            try { return process != null && !process.HasExited; }
+            catch (InvalidOperationException) { return false; }
+        }
+    }
     public int? HostProcessId => IsRunning ? _process?.Id : null;
 
     public CaptureHostClient(string? hostExePath = null)
@@ -58,6 +75,8 @@ public class CaptureHostClient : IDisposable
     {
         if (IsRunning) return;
         if (_process != null) Dispose();
+        if (!_hostExitConfirmed)
+            throw new InvalidOperationException("The previous capture helper has not confirmed its exit.");
         _expectedShutdown = false;
 
         if (!File.Exists(_hostExePath))
@@ -82,6 +101,7 @@ public class CaptureHostClient : IDisposable
         try
         {
             _process = System.Diagnostics.Process.Start(psi) ?? throw new InvalidOperationException("Failed to launch CaptureHost");
+            _hostExitConfirmed = false;
             if (!_jobObject.AssignProcess(_process))
             {
                 try { if (!_process.HasExited) _process.Kill(entireProcessTree: true); } catch { }
@@ -96,24 +116,26 @@ public class CaptureHostClient : IDisposable
         }
 
         // Background stdout reader thread
-        var stdoutThread = new Thread(ReadStdoutLoop) { IsBackground = true, Name = "CaptureHostStdoutReader" };
+        var process = _process!;
+        var stdout = process.StandardOutput;
+        var stderr = process.StandardError;
+        var token = _cts!.Token;
+        var stdoutThread = new Thread(() => ReadStdoutLoop(process, stdout, token)) { IsBackground = true, Name = "CaptureHostStdoutReader" };
         stdoutThread.Start();
 
         // Background stderr drainer thread
-        var stderrThread = new Thread(ReadStderrLoop) { IsBackground = true, Name = "CaptureHostStderrDrainer" };
+        var stderrThread = new Thread(() => ReadStderrLoop(process, stderr, token)) { IsBackground = true, Name = "CaptureHostStderrDrainer" };
         stderrThread.Start();
     }
 
-    private void ReadStdoutLoop()
+    private void ReadStdoutLoop(System.Diagnostics.Process process, StreamReader reader, CancellationToken token)
     {
-        var reader = _process?.StandardOutput;
-        if (reader == null) return;
-
         try
         {
-            while (!_cts?.IsCancellationRequested == true && !reader.EndOfStream)
+            while (!token.IsCancellationRequested && !reader.EndOfStream)
             {
                 string? line = reader.ReadLine();
+                if (!ReferenceEquals(_process, process)) break;
                 if (string.IsNullOrWhiteSpace(line)) continue;
 
                 try
@@ -146,6 +168,11 @@ public class CaptureHostClient : IDisposable
                         string evName = evProp.GetString() ?? "";
                         JsonElement? evData = root.TryGetProperty("data", out var dataProp) ? dataProp.Clone() : null;
 
+                        if (evName == "capture_configured" && CaptureEncodingProfile.TryParse(evData, out var configured))
+                        {
+                            CurrentProfile = configured;
+                            CaptureConfigured?.Invoke(configured!);
+                        }
                         EventReceived?.Invoke(evName, evData);
 
                         if (evName == "state_changed" && evData.HasValue && evData.Value.TryGetProperty("state", out var stateProp))
@@ -172,6 +199,13 @@ public class CaptureHostClient : IDisposable
                             string reason = evData.Value.TryGetProperty("reason", out var rsn) ? rsn.GetString() ?? "Unknown fault" : "Unknown fault";
                             FaultOccurred?.Invoke(reason);
                         }
+
+                        // Indexing subscribers begin their work synchronously before
+                        // a successful native save stops protecting the updater gate.
+                        if ((evName is "replay_saved" or "save_failed") && evData is JsonElement terminal &&
+                            terminal.ValueKind == JsonValueKind.Object && terminal.TryGetProperty("save_id", out var savedId) &&
+                            savedId.ValueKind == JsonValueKind.String && _pendingSaves.Complete(savedId.GetString() ?? ""))
+                            PendingReplaySavesChanged?.Invoke();
                     }
                 }
                 catch (Exception ex)
@@ -183,7 +217,11 @@ public class CaptureHostClient : IDisposable
         catch { }
         finally
         {
-            if (!_expectedShutdown)
+            // EOF can precede OS process termination by a few milliseconds. This
+            // reader is off the UI thread and belongs to exactly one helper.
+            try { process.WaitForExit(2500); } catch { }
+            if (ReferenceEquals(_process, process)) ConfirmSaveHostExit(process);
+            if (ReferenceEquals(_process, process) && !_expectedShutdown)
             {
                 var error = new IOException("Capture host exited unexpectedly; pending requests aborted.");
                 foreach (var entry in _pendingRequests)
@@ -193,15 +231,14 @@ public class CaptureHostClient : IDisposable
         }
     }
 
-    private void ReadStderrLoop()
+    private void ReadStderrLoop(System.Diagnostics.Process process, StreamReader reader, CancellationToken token)
     {
-        var reader = _process?.StandardError;
-        if (reader == null) return;
         try
         {
-            while (!_cts?.IsCancellationRequested == true && !reader.EndOfStream)
+            while (!token.IsCancellationRequested && !reader.EndOfStream)
             {
                 string? line = reader.ReadLine();
+                if (!ReferenceEquals(_process, process)) break;
                 if (!string.IsNullOrWhiteSpace(line)) { Console.WriteLine("[CaptureHost] " + line); }
             }
         }
@@ -212,6 +249,8 @@ public class CaptureHostClient : IDisposable
     {
         if (!IsRunning)
         {
+            if (cmd is "save_replay" or "stop_capture" or "shutdown")
+                throw new InvalidOperationException("The capture helper is no longer running.");
             Start();
         }
 
@@ -226,11 +265,20 @@ public class CaptureHostClient : IDisposable
         var tcs = new TaskCompletionSource<IpcResponse>(TaskCreationOptions.RunContinuationsAsynchronously);
         _pendingRequests[id] = tcs;
 
-        string json = JsonSerializer.Serialize(req);
-        lock (_writer!)
+        try
         {
-            _writer.WriteLine(json);
-            _writer.Flush();
+            string json = JsonSerializer.Serialize(req);
+            var writer = _writer ?? throw new IOException("Capture helper input is unavailable.");
+            lock (writer)
+            {
+                writer.WriteLine(json);
+                writer.Flush();
+            }
+        }
+        catch
+        {
+            _pendingRequests.TryRemove(id, out _);
+            throw;
         }
 
         using var cts = new CancellationTokenSource(timeoutMs);
@@ -296,9 +344,10 @@ public class CaptureHostClient : IDisposable
         return result;
     }
 
-    public async Task<bool> StartCaptureAsync(AppSettings settings)
+    public static object CreateStartParameters(AppSettings settings)
     {
-        var parameters = new
+        ArgumentNullException.ThrowIfNull(settings);
+        return new
         {
             target_type = settings.TargetType.ToLowerInvariant(),
             monitor_index = settings.MonitorIndex,
@@ -308,6 +357,7 @@ public class CaptureHostClient : IDisposable
             height = settings.VideoHeight,
             bitrate_kbps = settings.VideoBitrateKbps,
             encoder = settings.VideoEncoder,
+            allow_software_fallback = settings.AllowSoftwareFallback,
             duration_sec = settings.ReplayDurationSeconds,
             buffer_mb = settings.BufferMemoryLimitMb,
             output_dir = settings.OriginalsFolder,
@@ -317,20 +367,64 @@ public class CaptureHostClient : IDisposable
             system_device_id = settings.SystemAudioDeviceId
         };
 
-        var resp = await SendCommandAsync("start_capture", parameters);
-        return resp.Ok;
+    }
+
+    public async Task<bool> StartCaptureAsync(AppSettings settings)
+    {
+        CurrentProfile = null;
+        LastStartError = "";
+        // Hardware discovery can try multiple vendor plugins before bounded CPU fallback.
+        IpcResponse response;
+        try { response = await SendCommandAsync("start_capture", CreateStartParameters(settings), 60000); }
+        catch
+        {
+            // A timed-out native startup must not later begin an unacknowledged
+            // capture. Closing the confined helper also ends pending attempts.
+            Dispose();
+            throw;
+        }
+        var result = CaptureStartResult.FromResponse(response);
+        LastStartError = result.Error;
+        if (result.Profile != null)
+        {
+            CurrentProfile = result.Profile;
+            CaptureConfigured?.Invoke(result.Profile);
+        }
+        if (!result.Success) CurrentProfile = null;
+        return result.Success;
     }
 
     public async Task<bool> SaveReplayAsync(string saveId, string prefix = "Clip")
     {
+        LastSaveError = "";
+        if (!IsRunning)
+        {
+            ConfirmSaveHostExit(_process);
+            LastSaveError = "Replay capture is no longer active.";
+            return false;
+        }
+        _pendingSaves.Begin(saveId);
+        PendingReplaySavesChanged?.Invoke();
         var parameters = new
         {
             save_id = saveId,
             prefix = prefix
         };
 
-        var resp = await SendCommandAsync("save_replay", parameters);
-        return resp.Ok;
+        try
+        {
+            var resp = await SendCommandAsync("save_replay", parameters);
+            LastSaveError = resp.Ok ? "" : resp.Error ?? "Replay save was not accepted.";
+            if (_pendingSaves.Acknowledge(saveId, resp.Ok)) PendingReplaySavesChanged?.Invoke();
+            return resp.Ok;
+        }
+        catch
+        {
+            // A lost acknowledgement does not prove rejection. Keep this ID
+            // pending until a terminal event or confirmed helper exit arrives.
+            ConfirmSaveHostExit(_process);
+            throw;
+        }
     }
 
     public async Task<CaptureHostStatus> GetStatusAsync()
@@ -342,6 +436,8 @@ public class CaptureHostClient : IDisposable
         }
 
         var r = resp.Result.Value;
+        CaptureEncodingProfile.TryParse(r, out var profile);
+        if (profile != null) CurrentProfile = profile;
         return new CaptureHostStatus
         {
             State = r.TryGetProperty("state", out var s) ? s.GetString() ?? "Off" : "Off",
@@ -351,7 +447,8 @@ public class CaptureHostClient : IDisposable
             TargetType = r.TryGetProperty("target_type", out var tt) ? tt.GetString() ?? "" : "",
             TargetValid = !r.TryGetProperty("target_valid", out var tv) || tv.GetBoolean(),
             PrivateBytes = r.TryGetProperty("private_bytes", out var pb) ? pb.GetInt64() : 0,
-            WorkingSet = r.TryGetProperty("working_set", out var ws) ? ws.GetInt64() : 0
+            WorkingSet = r.TryGetProperty("working_set", out var ws) ? ws.GetInt64() : 0,
+            Profile = profile
         };
     }
 
@@ -360,7 +457,7 @@ public class CaptureHostClient : IDisposable
         if (!IsRunning) return true;
         try
         {
-            var resp = await SendCommandAsync("stop_capture", null, 10000);
+            var resp = await SendCommandAsync("stop_capture", null, 30000);
             return resp.Ok;
         }
         catch
@@ -375,7 +472,7 @@ public class CaptureHostClient : IDisposable
         _expectedShutdown = true;
         try
         {
-            await SendCommandAsync("shutdown", null, 8000);
+            await SendCommandAsync("shutdown", null, 30000);
         }
         catch { }
 
@@ -383,17 +480,20 @@ public class CaptureHostClient : IDisposable
         {
             if (_process != null && !_process.HasExited)
             {
-                _process.WaitForExit(2000);
+                await _process.WaitForExitAsync().WaitAsync(TimeSpan.FromMilliseconds(2500));
             }
         }
         catch { }
 
-        Dispose();
+        // Forced confinement cleanup can wait briefly for process termination.
+        // Keep the dispatcher free to consume terminal save notifications.
+        await Task.Run(Dispose);
     }
 
     public void Dispose()
     {
         _expectedShutdown = true;
+        CurrentProfile = null;
         _cts?.Cancel();
         foreach (var entry in _pendingRequests)
             if (_pendingRequests.TryRemove(entry.Key, out var request))
@@ -409,11 +509,25 @@ public class CaptureHostClient : IDisposable
 
         _jobObject?.Dispose();
         _jobObject = null;
+        try { if (_process != null && !_process.HasExited) _process.WaitForExit(2500); } catch { }
+        ConfirmSaveHostExit(_process);
         _process?.Dispose();
         _process = null;
         _writer = null;
         _cts?.Dispose();
         _cts = null;
         GC.SuppressFinalize(this);
+    }
+
+    private void ConfirmSaveHostExit(System.Diagnostics.Process? process)
+    {
+        bool exited = _hostExitConfirmed;
+        try { if (process != null) exited = process.HasExited; }
+        catch (InvalidOperationException) { exited = false; }
+        if (exited) _hostExitConfirmed = true;
+        var abandoned = _pendingSaves.HostExited(exited);
+        if (abandoned.Count == 0) return;
+        PendingReplaySavesChanged?.Invoke();
+        ReplaySaveAborted?.Invoke("The capture helper exited before a pending replay save completed. Check your clips before retrying.");
     }
 }

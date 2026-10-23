@@ -51,4 +51,5 @@ public class CaptureHostStatus
     public bool TargetValid { get; set; } = true;
     public long PrivateBytes { get; set; }
     public long WorkingSet { get; set; }
+    public CaptureEncodingProfile? Profile { get; set; }
 }

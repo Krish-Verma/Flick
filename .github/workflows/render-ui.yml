@@ -2,6 +2,8 @@ name: Render Flick WPF interface
 on:
   pull_request:
     paths:
+      - 'src/LocalClip.App/**'
+      - 'src/LocalClip.Core/**'
       - 'tools/Flick.UiRender/**'
       - '.github/workflows/render-ui.yml'
   workflow_dispatch:

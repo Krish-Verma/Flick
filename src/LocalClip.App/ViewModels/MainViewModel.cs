@@ -51,6 +51,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
     private bool _isArmed = false;
     private string _statusDetails = "";
     private string _resourceStatsText = "Memory: -- | CPU: --";
+    private CaptureEncodingProfile? _captureProfile;
 
     // Targets
     private ObservableCollection<TargetItem> _targets = new();
@@ -90,7 +91,9 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
     private int _replayIndexOperations;
     private int _discordUploadOperations;
     private int _libraryRescanOperations;
-    public bool IsReplaySavePending => _saveRequestOperations > 0 || _replayIndexOperations > 0;
+    private Task? _stopCaptureTask;
+    public bool IsReplaySavePending => _saveRequestOperations > 0 || _replayIndexOperations > 0
+        || _captureHost.HasPendingReplaySaves;
     // These operations outlive their initiating page. The updater also checks
     // the separate capture/save/import/export flags before closing the app.
     public bool IsBackgroundWorkActive => Volatile.Read(ref _discordUploadOperations) > 0
@@ -155,7 +158,31 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
     public string CaptureStatus
     {
         get => _captureStatus;
-        set { _captureStatus = value; OnPropertyChanged(); }
+        set
+        {
+            _captureStatus = value;
+            if (value is "Off" or "Faulted" or "Paused") SetCaptureProfile(null);
+            OnPropertyChanged();
+        }
+    }
+
+    public string CaptureEncodingText => _captureProfile?.DisplayText ?? "";
+    public string SoftwareFallbackWarning => _captureProfile?.SoftwareWarning ?? "";
+
+    private void SetCaptureProfile(CaptureEncodingProfile? profile)
+    {
+        if (_captureProfile == profile) return;
+        _captureProfile = profile;
+        OnPropertyChanged(nameof(CaptureEncodingText));
+        OnPropertyChanged(nameof(SoftwareFallbackWarning));
+    }
+
+    private void OnCaptureConfigured(CaptureEncodingProfile profile)
+    {
+        Application.Current?.Dispatcher.Invoke(() =>
+        {
+            if (CaptureStatus is "Starting" or "Buffering" or "Armed") SetCaptureProfile(profile);
+        });
     }
 
     public string BufferedDurationText
@@ -334,7 +361,10 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
         _captureHost.StateChanged += OnHostStateChanged;
         _captureHost.ReplaySavedWithTracks += OnHostReplaySaved;
         _captureHost.FaultOccurred += OnHostFaultOccurred;
+        _captureHost.CaptureConfigured += OnCaptureConfigured;
         _captureHost.EventReceived += OnHostEventReceived;
+        _captureHost.PendingReplaySavesChanged += OnPendingReplaySavesChanged;
+        _captureHost.ReplaySaveAborted += OnReplaySaveAborted;
 
         // Status polling timer
         _pollTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
@@ -466,6 +496,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
         // Never let folder indexing compete with the live gameplay encoder.
         _importCancellation?.Cancel();
         _thumbnailCancellation?.Cancel();
+        SetCaptureProfile(null);
         CaptureStatus = "Starting";
         StatusDetails = "Initializing capture encoder and audio...";
         try
@@ -473,7 +504,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
             if (!await _captureHost.StartCaptureAsync(_settings))
             {
                 CaptureStatus = "Faulted";
-                StatusDetails = "Capture host refused to start. Check target, encoder and logs.";
+                StatusDetails = _captureHost.LastStartError;
             }
         }
         catch (Exception ex)
@@ -485,7 +516,19 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
 
     public async Task StopCaptureAsync()
     {
-        if (CaptureStatus == "Stopping") return;
+        if (_stopCaptureTask is { } existingStop)
+        {
+            await existingStop;
+            return;
+        }
+        var stop = StopCaptureCoreAsync();
+        _stopCaptureTask = stop;
+        try { await stop; }
+        finally { if (ReferenceEquals(_stopCaptureTask, stop)) _stopCaptureTask = null; }
+    }
+
+    private async Task StopCaptureCoreAsync()
+    {
         CaptureStatus = "Stopping";
         bool stopped = false;
         try { stopped = await _captureHost.StopCaptureAsync(); }
@@ -501,6 +544,23 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
         }
     }
 
+    public async Task<bool> PrepareToQuitAsync()
+    {
+        // A timer tick must not restart an exited helper during finalization.
+        _pollTimer.Stop();
+        bool ready = false;
+        try
+        {
+            await StopCaptureAsync();
+            var deadline = Stopwatch.StartNew();
+            while (IsReplaySavePending && deadline.Elapsed < TimeSpan.FromSeconds(30))
+                await Task.Delay(100);
+            ready = !IsReplaySavePending;
+            return ready;
+        }
+        finally { if (!ready) _pollTimer.Start(); }
+    }
+
     public async Task SaveReplayAsync()
     {
         if (CaptureStatus != "Buffering" && CaptureStatus != "Armed")
@@ -510,22 +570,51 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
         }
 
         _saveRequestOperations++;
+        OnPropertyChanged(nameof(IsReplaySavePending));
         StatusDetails = "Snapshotting replay buffer to original MKV...";
         string saveId = "clip_" + DateTime.UtcNow.ToString("yyyyMMdd_HHmmss") + "_" + Guid.NewGuid().ToString("N");
         try
         {
             if (!await _captureHost.SaveReplayAsync(saveId, "Clip"))
             {
-                StatusDetails = "Failed to trigger replay save.";
+                StatusDetails = _captureHost.LastSaveError;
                 ReplaySaveFailed?.Invoke(StatusDetails);
             }
         }
         catch (Exception ex)
         {
-            StatusDetails = "Replay save failed: " + ex.Message;
+            StatusDetails = _captureHost.HasPendingReplaySaves
+                ? "Replay save status could not be confirmed. Flick is still tracking the save: " + ex.Message
+                : "Replay save failed: " + ex.Message;
             ReplaySaveFailed?.Invoke(StatusDetails);
         }
-        finally { _saveRequestOperations--; }
+        finally
+        {
+            _saveRequestOperations--;
+            OnPropertyChanged(nameof(IsReplaySavePending));
+        }
+    }
+
+    private void OnPendingReplaySavesChanged()
+    {
+        var dispatcher = Application.Current?.Dispatcher;
+        if (dispatcher != null && !dispatcher.HasShutdownStarted)
+            _ = dispatcher.BeginInvoke(new Action(() => OnPropertyChanged(nameof(IsReplaySavePending))));
+    }
+
+    private void OnReplaySaveAborted(string reason)
+    {
+        var dispatcher = Application.Current?.Dispatcher;
+        if (dispatcher != null && !dispatcher.HasShutdownStarted)
+        {
+            void ReportFailure()
+            {
+                StatusDetails = reason;
+                ReplaySaveFailed?.Invoke(reason);
+            }
+            if (dispatcher.CheckAccess()) ReportFailure();
+            else _ = dispatcher.BeginInvoke(new Action(ReportFailure));
+        }
     }
 
     private void OnHostStateChanged(string state)
@@ -536,7 +625,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
             if (state == "Armed")
             {
                 IsArmed = true;
-                StatusDetails = "Ready to Save: Full replay buffer available.";
+                StatusDetails = "Ready to save retained replay.";
             }
             else if (state == "Buffering")
             {
@@ -555,6 +644,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
         Application.Current?.Dispatcher.Invoke(async () =>
         {
             _replayIndexOperations++;
+            OnPropertyChanged(nameof(IsReplaySavePending));
             try
             {
                 StatusDetails = $"Saved original clip: {Path.GetFileName(filePath)}";
@@ -580,8 +670,17 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
                         ReplaySaveFailed?.Invoke(StatusDetails);
                     }
                 }
+                else
+                {
+                    StatusDetails = "The capture helper reported a saved clip, but its original file is unavailable.";
+                    ReplaySaveFailed?.Invoke(StatusDetails);
+                }
             }
-            finally { _replayIndexOperations--; }
+            finally
+            {
+                _replayIndexOperations--;
+                OnPropertyChanged(nameof(IsReplaySavePending));
+            }
         });
     }
 
@@ -618,6 +717,8 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
             try
             {
                 var st = await _captureHost.GetStatusAsync();
+                if (st.Profile != null && CaptureStatus is ("Buffering" or "Armed"))
+                    SetCaptureProfile(st.Profile);
                 if (st.State == "Buffering" || st.State == "Armed")
                 {
                     BufferedDurationText = $"~{st.BufferedSec:F1}s / {st.MaxSec:F0}s";
@@ -1184,6 +1285,13 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
         _importCancellation?.Cancel();
         _thumbnailCancellation?.Cancel();
         _pollTimer.Stop();
+        _captureHost.CaptureConfigured -= OnCaptureConfigured;
+        _captureHost.PendingReplaySavesChanged -= OnPendingReplaySavesChanged;
+        _captureHost.ReplaySaveAborted -= OnReplaySaveAborted;
+        _captureHost.StateChanged -= OnHostStateChanged;
+        _captureHost.ReplaySavedWithTracks -= OnHostReplaySaved;
+        _captureHost.FaultOccurred -= OnHostFaultOccurred;
+        _captureHost.EventReceived -= OnHostEventReceived;
         _captureHost.Dispose();
         GC.SuppressFinalize(this);
     }

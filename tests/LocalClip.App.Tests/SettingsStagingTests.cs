@@ -37,6 +37,8 @@ public class SettingsStagingTests
                 Assert.Equal(Visibility.Collapsed, Find<Button>("BtnInstallUpdate").Visibility);
                 Assert.True(Find<Button>("BtnCheckUpdates").IsEnabled);
                 Assert.True(Find<CheckBox>("ChkPreviewUpdates").IsChecked);
+                Assert.True(Find<CheckBox>("ChkSoftwareFallback").IsChecked);
+                Assert.True(settings.AllowSoftwareFallback);
                 // Exercise the actual disclosure template: its keyboard-focusable
                 // toggle must update the Expander and reveal/hide its content.
                 var disclosure = Find<Expander>("WebhookExpander");
@@ -70,11 +72,13 @@ public class SettingsStagingTests
                 Assert.Equal("Ctrl+Shift+F9", toggle.Text);
                 Assert.Equal("Ctrl+Shift+F9", settings.CaptureToggleHotkey);
                 Find<ComboBox>("CmbNotificationTone").SelectedIndex = 1;
+                Find<CheckBox>("ChkSoftwareFallback").IsChecked = false;
                 bool closed = false;
                 page.CloseRequested += saved => { Assert.False(saved); closed = true; };
                 Invoke("Cancel_Click", page);
                 Assert.True(closed);
                 Assert.Equal("Chime", settings.ClipSavedSoundTone);
+                Assert.True(settings.AllowSoftwareFallback);
                 // No overlay/sound requested, even with a missing configured file.
                 using var notification = new FlickNotificationService(page.Dispatcher);
                 notification.NotifySaved(30, false, false, "Custom", @"Z:\missing.wav");

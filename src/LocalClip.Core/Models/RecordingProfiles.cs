@@ -2,7 +2,7 @@ using System;
 
 namespace LocalClip.Core.Models;
 
-/// <summary>Minimal, predictable NVENC profiles; never silently switch to software encoding.</summary>
+/// <summary>Requested quality profiles; encoder selection and CPU compatibility are independent preferences.</summary>
 public static class RecordingProfiles
 {
     public const string Light = "Light";
@@ -24,7 +24,6 @@ public static class RecordingProfiles
         settings.VideoHeight = profile.height;
         settings.VideoFps = profile.fps;
         settings.VideoBitrateKbps = profile.kbps;
-        settings.VideoEncoder = "obs_nvenc_h264_tex";
         return true;
     }
 

@@ -64,7 +64,7 @@ Package: $PackageName.zip
 - **Blueprint & Handoff Specs:** ClipperBlueprint/ (authoritative specifications)
 - **Source Code:** src/LocalClip.App/, src/LocalClip.Core/, src/LocalClip.CaptureHost/
 - **Test Suite:** tests/LocalClip.Core.Tests/ (41 automated tests)
-- **Toolchains & Runtimes:** tools/ffmpeg/ (v9.0.1), tools/obs/ (v32.2.2 runtime & headers)
+- **Toolchains & Runtimes:** tools/ffmpeg/ (v9.0.2), tools/obs/ (v32.2.2 runtime & headers)
 - **Build & Test Automation:** scripts/build_package.ps1, scripts/run_tests.ps1
 - **Real Verification Evidence:** TestOutput/ (captured MKVs, 20MB Discord export MP4, thumbnails)
 - **Documentation:** docs/ (User Guide, Architecture, Implementation State, Test Results, Agent Handoff Guide)

@@ -123,8 +123,7 @@ public class MediaProber
                     string codecType = stream.TryGetProperty("codec_type", out var ct) ? ct.GetString() ?? "" : "";
                     if (codecType == "video" && width == 0)
                     {
-                        width = stream.TryGetProperty("width", out var w) ? w.GetInt32() : 0;
-                        height = stream.TryGetProperty("height", out var h) ? h.GetInt32() : 0;
+                        (width, height) = ReadDisplayDimensions(stream);
                         videoCodec = stream.TryGetProperty("codec_name", out var cn) ? cn.GetString() ?? "" : "";
 
                         if (stream.TryGetProperty("r_frame_rate", out var rfr))
@@ -183,6 +182,39 @@ public class MediaProber
         {
             return new ProbeResult { IsValid = false, ErrorMessage = "Failed to parse probe JSON: " + ex.Message };
         }
+    }
+
+    /// <summary>Dimensions after FFmpeg's default display-matrix autorotation.</summary>
+    public static (int Width, int Height) ReadDisplayDimensions(JsonElement videoStream)
+    {
+        int width = videoStream.TryGetProperty("width", out var w) ? w.GetInt32() : 0;
+        int height = videoStream.TryGetProperty("height", out var h) ? h.GetInt32() : 0;
+        double rotation = 0;
+        bool matrixRotation = false;
+        if (videoStream.TryGetProperty("side_data_list", out var sideData) && sideData.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var side in sideData.EnumerateArray())
+            {
+                if (side.ValueKind != JsonValueKind.Object || !side.TryGetProperty("rotation", out var angle) ||
+                    !TryReadRotation(angle, out rotation)) continue;
+                matrixRotation = true;
+                break;
+            }
+        }
+        if (!matrixRotation && videoStream.TryGetProperty("tags", out var tags) && tags.ValueKind == JsonValueKind.Object &&
+            tags.TryGetProperty("rotate", out var legacyRotation))
+            _ = TryReadRotation(legacyRotation, out rotation);
+        if (Math.Abs(Math.Abs(Math.IEEERemainder(rotation, 180)) - 90) < 0.001)
+            (width, height) = (height, width);
+        return (width, height);
+    }
+
+    private static bool TryReadRotation(JsonElement angle, out double rotation)
+    {
+        rotation = 0;
+        return (angle.ValueKind == JsonValueKind.Number && angle.TryGetDouble(out rotation) ||
+                angle.ValueKind == JsonValueKind.String && double.TryParse(angle.GetString(), NumberStyles.Float,
+                    CultureInfo.InvariantCulture, out rotation)) && double.IsFinite(rotation);
     }
 
     public async Task<string> GenerateThumbnailAsync(string videoPath, string outputThumbnailPath,

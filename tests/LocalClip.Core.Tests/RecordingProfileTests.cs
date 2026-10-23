@@ -18,7 +18,7 @@ public class RecordingProfileTests
         Assert.Equal(height, settings.VideoHeight);
         Assert.Equal(fps, settings.VideoFps);
         Assert.Equal(kbps, settings.VideoBitrateKbps);
-        Assert.Equal("obs_nvenc_h264_tex", settings.VideoEncoder);
+        Assert.Equal("auto", settings.VideoEncoder);
     }
 
     [Fact]

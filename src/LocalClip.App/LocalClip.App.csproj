@@ -11,7 +11,8 @@
     <Product>Flick</Product>
     <Title>Flick Gameplay Clipper</Title>
     <Authors>Flick Contributors</Authors>
-    <Version>1.0.4-preview.1</Version>
+    <Version>1.0.5-preview.1</Version>
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
     <ApplicationIcon>Assets\Brand\Flick.ico</ApplicationIcon>
     <TargetFramework>net10.0-windows</TargetFramework>
     <Nullable>enable</Nullable>
