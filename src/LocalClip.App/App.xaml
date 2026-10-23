@@ -10,6 +10,7 @@
                 <ResourceDictionary Source="Resources/Theme/Flick.Metrics.xaml"/>
                 <ResourceDictionary Source="Resources/Theme/Flick.Typography.xaml"/>
                 <ResourceDictionary Source="Resources/Theme/Flick.Controls.xaml"/>
+                <ResourceDictionary Source="Resources/Theme/Flick.Chrome.xaml"/>
             </ResourceDictionary.MergedDictionaries>
         </ResourceDictionary>
     </Application.Resources>
