@@ -37,7 +37,8 @@ public partial class MainWindow : Window
     private readonly DispatcherTimer _playerTimer;
     private SettingsWindow? _settingsPage;
     private ConnectedFoldersWindow? _foldersPage;
-    private bool _foldersReturnToSettings;    private bool _settingsMicrophoneWasEnabled;
+    private bool _foldersReturnToSettings;
+    private bool _settingsMicrophoneWasEnabled;
     private bool _isDraggingSlider = false;
     private bool _isRealClosing = false;
     private System.Windows.Point? _shareDragStart;
@@ -606,7 +607,7 @@ public partial class MainWindow : Window
         }
         _settingsMicrophoneWasEnabled = _vm.Settings.EnableMicrophone;
         var settings = new SettingsWindow(_vm.Settings,
-            () => _vm.CaptureStatus is "Armed" or "Buffering");
+            () => _vm.CaptureStatus is "Starting" or "Armed" or "Buffering");
         settings.CloseRequested += CloseSettingsPage;
         settings.ManageFoldersRequested += (_, _) => OpenConnectedFolders();
         settings.PreviewNotificationRequested += (show, sound) =>
@@ -636,7 +637,7 @@ public partial class MainWindow : Window
         _vm.RefreshExportPreferences();
         UpdateSharePresetSelection();
         UpdateStatusBadgeColor();
-        bool captureActive = _vm.CaptureStatus is "Armed" or "Buffering";
+        bool captureActive = _vm.CaptureStatus is "Starting" or "Armed" or "Buffering";
         if (captureActive && _settingsMicrophoneWasEnabled &&
             !_vm.Settings.EnableMicrophone)
         {

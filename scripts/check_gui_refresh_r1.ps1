@@ -32,6 +32,8 @@ Require $settingsCode 'partial class SettingsWindow : UserControl' "Settings C# 
 Require $foldersCode 'partial class ConnectedFoldersWindow : System.Windows.Controls.UserControl' "Folders C# root must match XAML"
 Require $settingsCode 'public event Action<bool>\? CloseRequested' "Settings edits must have explicit staged Save/Cancel route"
 Require $settingsCode 'staged.Save\(\)' "Settings must preserve atomic disk write"
+Require $settingsCode '_isCaptureActive\(\)' "Settings must check current recording status when saving"
+Require $mainCode 'CaptureStatus is "Starting" or "Armed" or "Buffering"' "Live capture state required even if recording starts after opening Settings"
 Require $settingsCode '_settings.ExportsFolder = staged.ExportsFolder' "Existing export preference must persist"
 Require $foldersCode 'CloseRequested\?\.Invoke\(\)' "Folder close must return to parent page"
 Require $foldersCode '_vm.CancelImport\(\)' "Leaving folder page must cancel active import"
