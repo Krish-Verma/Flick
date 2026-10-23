@@ -10,9 +10,17 @@ namespace LocalClip.App.Views;
 /// Explicit, in-place import and folder management. Never moves, duplicates,
 /// mutates, or silently deletes files belonging to another recording app.
 /// </summary>
-public partial class ConnectedFoldersWindow : Window
+public partial class ConnectedFoldersWindow : System.Windows.Controls.UserControl
 {
     private readonly MainViewModel _vm;
+
+    public event Action? CloseRequested;
+
+    public void LeavePage()
+    {
+        // Cancel the pending scan, not recording or user's source files.
+        if (_vm.IsImporting) _vm.CancelImport();
+    }
 
     public ConnectedFoldersWindow(MainViewModel vm)
     {
@@ -112,11 +120,9 @@ public partial class ConnectedFoldersWindow : Window
 
     private void CancelScan_Click(object sender, RoutedEventArgs e) => _vm.CancelImport();
 
-    private void Close_Click(object sender, RoutedEventArgs e) => Close();
-
-    private void Window_Closing(object? sender, CancelEventArgs e)
+    private void Close_Click(object sender, RoutedEventArgs e)
     {
-        // Closing a dialog cancels only its current import, not recording.
-        if (_vm.IsImporting) _vm.CancelImport();
+        LeavePage();
+        CloseRequested?.Invoke();
     }
 }

@@ -18,7 +18,7 @@ namespace LocalClip.App.Views;
 /// Save; Preview Notification and Manage Folders are explicit separate actions.
 /// Recording stays armed while simply browsing Settings.
 /// </summary>
-public partial class SettingsWindow : Window
+public partial class SettingsWindow : UserControl
 {
     private readonly AppSettings _settings;
     private readonly bool _captureActive;
@@ -27,6 +27,8 @@ public partial class SettingsWindow : Window
 
     public bool UninstallRequested { get; private set; }
 
+    /// <summary>True only after a successful, deliberate Save.</summary>
+    public event Action<bool>? CloseRequested;
     public event Action<bool, bool>? PreviewNotificationRequested;
     public event EventHandler? ManageFoldersRequested;
 
@@ -344,8 +346,7 @@ public partial class SettingsWindow : Window
             _settings.DiscordWebhookChannelName = staged.DiscordWebhookChannelName;
             _settings.MaskedWebhookUrl = staged.MaskedWebhookUrl;
             _settings.EnableDiscordWebhook = staged.EnableDiscordWebhook;
-            DialogResult = true;
-            Close();
+            CloseRequested?.Invoke(true);
         }
         catch (Exception ex)
         {
@@ -362,26 +363,24 @@ public partial class SettingsWindow : Window
     {
         if (!FlickUninstallLauncher.IsInstalled)
         {
-            MessageBox.Show(this,
+            MessageBox.Show(Window.GetWindow(this),
                 "This is a portable copy or Flick was not installed normally. Quit Flick through the tray and delete the extracted application folder. Your videos and settings live separately.",
                 "Portable Flick", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
-        if (MessageBox.Show(this,
+        if (MessageBox.Show(Window.GetWindow(this),
                 "Uninstall Flick now? Any active replay buffer will be stopped. The uninstaller will ask separately whether to remove Flick settings and caches. Original recordings and exported videos are kept.",
                 "Uninstall Flick", MessageBoxButton.YesNo,
                 MessageBoxImage.Warning, MessageBoxResult.No) != MessageBoxResult.Yes)
             return;
 
         UninstallRequested = true;
-        DialogResult = false;
-        Close();
+        CloseRequested?.Invoke(false);
     }
 
     private void Cancel_Click(object sender, RoutedEventArgs e)
     {
-        DialogResult = false;
-        Close();
+        CloseRequested?.Invoke(false);
     }
 
     private void RestoreDefaults_Click(object sender, RoutedEventArgs e)
