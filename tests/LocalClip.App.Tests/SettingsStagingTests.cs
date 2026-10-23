@@ -21,9 +21,13 @@ public class SettingsStagingTests
         {
             try
             {
-                Application.ResourceAssembly = typeof(global::LocalClip.App.App).Assembly;
-                var app = new global::LocalClip.App.App();
-                app.InitializeComponent(); // Resources only: no Run/startup/native capture.
+                var app = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
+                // Testhost owns Application.ResourceAssembly. Load the actual
+                // production dictionaries by assembly-qualified pack URI.
+                foreach (string dictionary in new[] { "Colors", "Metrics", "Typography", "Controls", "Chrome" })
+                    app.Resources.MergedDictionaries.Add(new ResourceDictionary {
+                        Source = new Uri($"/Flick;component/Resources/Theme/Flick.{dictionary}.xaml", UriKind.Relative)
+                    });
                 var settings = AppSettings.CreateDefault();
                 var page = new SettingsWindow(settings, () => false);
                 T Find<T>(string name) => (T)page.FindName(name);
