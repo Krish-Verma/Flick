@@ -85,7 +85,8 @@ public partial class MainWindow : Window
                 SuspendPlayback(clearSource: true);
                 ReleasePosterWhileHidden();
             }
-            else RestorePosterAfterShow();
+            else if (WorkspacePageLayer.Visibility != Visibility.Visible)
+                RestorePosterAfterShow();
         };
         SourceInitialized += (_, _) => _ = FlickBackdropService.TryApplyMica(this);
     }
@@ -336,7 +337,9 @@ public partial class MainWindow : Window
         WindowState = WindowState.Normal;
         RestorePosterAfterShow();
         Activate();
-        if (VideoPlayer.Source is null) ResetPlayerForSelection();
+        if (WorkspacePageLayer.Visibility != Visibility.Visible &&
+            VideoPlayer.Source is null)
+            ResetPlayerForSelection();
     }
 
     private void RealQuit()
@@ -424,6 +427,8 @@ public partial class MainWindow : Window
     private void ShowWorkspacePage(UserControl page)
     {
         // The editor may be hidden, but the independent capture host continues.
+        // Abandon a pending FFmpeg local preview before leaving the editor.
+        CancelPendingPreview();
         SuspendPlayback(clearSource: true);
         ReleasePosterWhileHidden();
         WorkspaceContentGrid.Visibility = Visibility.Collapsed;
