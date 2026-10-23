@@ -56,6 +56,9 @@ jobs:
       - name: Validate Slice 6 adaptive layout and contrast
         shell: pwsh
         run: ./scripts/check_gui_slice6.ps1
+      - name: Validate GUI Refresh R1 single-window navigation
+        shell: pwsh
+        run: ./scripts/check_gui_refresh_r1.ps1
       - name: Verify release packaging and memory source contracts
         shell: pwsh
         run: ./scripts/check_flick_release_source.ps1
