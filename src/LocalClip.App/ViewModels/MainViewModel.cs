@@ -51,6 +51,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
     private bool _isArmed = false;
     private string _statusDetails = "";
     private string _resourceStatsText = "Memory: -- | CPU: --";
+    private CaptureEncodingProfile? _captureProfile;
 
     // Targets
     private ObservableCollection<TargetItem> _targets = new();
@@ -155,7 +156,31 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
     public string CaptureStatus
     {
         get => _captureStatus;
-        set { _captureStatus = value; OnPropertyChanged(); }
+        set
+        {
+            _captureStatus = value;
+            if (value is "Off" or "Faulted" or "Paused") SetCaptureProfile(null);
+            OnPropertyChanged();
+        }
+    }
+
+    public string CaptureEncodingText => _captureProfile?.DisplayText ?? "";
+    public string SoftwareFallbackWarning => _captureProfile?.SoftwareWarning ?? "";
+
+    private void SetCaptureProfile(CaptureEncodingProfile? profile)
+    {
+        if (_captureProfile == profile) return;
+        _captureProfile = profile;
+        OnPropertyChanged(nameof(CaptureEncodingText));
+        OnPropertyChanged(nameof(SoftwareFallbackWarning));
+    }
+
+    private void OnCaptureConfigured(CaptureEncodingProfile profile)
+    {
+        Application.Current?.Dispatcher.Invoke(() =>
+        {
+            if (CaptureStatus is "Starting" or "Buffering" or "Armed") SetCaptureProfile(profile);
+        });
     }
 
     public string BufferedDurationText
@@ -334,6 +359,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
         _captureHost.StateChanged += OnHostStateChanged;
         _captureHost.ReplaySavedWithTracks += OnHostReplaySaved;
         _captureHost.FaultOccurred += OnHostFaultOccurred;
+        _captureHost.CaptureConfigured += OnCaptureConfigured;
         _captureHost.EventReceived += OnHostEventReceived;
 
         // Status polling timer
@@ -466,6 +492,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
         // Never let folder indexing compete with the live gameplay encoder.
         _importCancellation?.Cancel();
         _thumbnailCancellation?.Cancel();
+        SetCaptureProfile(null);
         CaptureStatus = "Starting";
         StatusDetails = "Initializing capture encoder and audio...";
         try
@@ -473,7 +500,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
             if (!await _captureHost.StartCaptureAsync(_settings))
             {
                 CaptureStatus = "Faulted";
-                StatusDetails = "Capture host refused to start. Check target, encoder and logs.";
+                StatusDetails = _captureHost.LastStartError;
             }
         }
         catch (Exception ex)
@@ -618,6 +645,8 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
             try
             {
                 var st = await _captureHost.GetStatusAsync();
+                if (st.Profile != null && CaptureStatus is ("Buffering" or "Armed"))
+                    SetCaptureProfile(st.Profile);
                 if (st.State == "Buffering" || st.State == "Armed")
                 {
                     BufferedDurationText = $"~{st.BufferedSec:F1}s / {st.MaxSec:F0}s";
@@ -1184,6 +1213,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
         _importCancellation?.Cancel();
         _thumbnailCancellation?.Cancel();
         _pollTimer.Stop();
+        _captureHost.CaptureConfigured -= OnCaptureConfigured;
         _captureHost.Dispose();
         GC.SuppressFinalize(this);
     }

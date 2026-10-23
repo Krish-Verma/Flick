@@ -101,6 +101,11 @@
                                    Style="{StaticResource Flick.Text.Caption}"
                                    TextWrapping="Wrap"/>
                     </Border>
+                    <CheckBox x:Name="ChkSoftwareFallback" Content="Allow CPU compatibility fallback"
+                              Style="{StaticResource Flick.Toggle}" Margin="0,20,0,8"
+                              AutomationProperties.Name="Allow CPU compatibility fallback"/>
+                    <TextBlock Text="Uses CPU encoding only if hardware encoding is unavailable. CPU mode is limited to 720p / 30 FPS and may reduce game performance. Turn this off to require hardware encoding."
+                               Style="{StaticResource Flick.Text.Muted}" TextWrapping="Wrap"/>
                     <TextBlock Text="Capture starts Off, even when Windows launches Flick. Recording changes take effect on the next manual replay start."
                                Style="{StaticResource Flick.Text.Muted}"
                                TextWrapping="Wrap" Margin="0,18,0,0"/>

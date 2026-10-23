@@ -63,4 +63,6 @@ if (!(Test-Path $ObsRuntimeBin)) {
     Write-Host "OBS Studio runtime already present in: $(Join-Path $ObsDir 'runtime')" -ForegroundColor Green
 }
 
+& (Join-Path $PSScriptRoot "check_obs_runtime.ps1") -RuntimeRoot (Join-Path $ObsDir "runtime")
+
 Write-Host "`nAll tools are ready for building and running Flick." -ForegroundColor Green

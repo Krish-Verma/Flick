@@ -14,6 +14,21 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  encoder-policy:
+    name: Encoder negotiation policy (no GPU required)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile and exercise cross-vendor selection and bounded CPU policy
+        run: |
+          mkdir -p native-policy-ci
+          g++ -std=c++17 -O2 -Wall -Wextra -Werror \
+            -Isrc/LocalClip.CaptureHost \
+            tests/LocalClip.CaptureHost.Tests/encoder_policy_tests.cpp \
+            -o native-policy-ci/encoder-policy-tests
+          native-policy-ci/encoder-policy-tests
+
   dotnet:
     name: WPF build and hardware-independent tests
     runs-on: windows-latest
@@ -134,7 +149,7 @@ jobs:
             throw "Native host compile did not produce an executable"
           }
 
-# Native CI compiles the capture host; it does not perform NVIDIA NVENC
+# Native CI compiles the capture host; it does not perform real GPU/CPU
 # recording, real audio capture, game FPS checks, portable GUI launch,
 # Discord drag/paste or long-duration soaks. These require owner hardware.
 

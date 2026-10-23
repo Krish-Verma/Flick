@@ -271,6 +271,7 @@ public partial class SettingsWindow : UserControl
                 _ => 1
             };
             ChkMicrophone.IsChecked = settings.EnableMicrophone;
+            ChkSoftwareFallback.IsChecked = settings.AllowSoftwareFallback;
             ChkStartWithWindows.IsChecked = settings.StartWithWindows;
             ChkStartMinimized.IsChecked = settings.StartMinimizedToTray;
             ChkClipSavedOverlay.IsChecked = settings.ShowClipSavedOverlay;
@@ -559,6 +560,7 @@ public partial class SettingsWindow : UserControl
             staged.ExportsFolder = exports;
             staged.ReplayDurationSeconds = duration;
             staged.EnableMicrophone = ChkMicrophone.IsChecked == true;
+            staged.AllowSoftwareFallback = ChkSoftwareFallback.IsChecked == true;
             staged.StartWithWindows = ChkStartWithWindows.IsChecked == true;
             staged.StartMinimizedToTray = ChkStartMinimized.IsChecked == true;
             staged.ShowClipSavedOverlay = ChkClipSavedOverlay.IsChecked == true;
@@ -595,6 +597,7 @@ public partial class SettingsWindow : UserControl
             _settings.VideoEncoder = staged.VideoEncoder;
             _settings.QualityPreset = staged.QualityPreset;
             _settings.EnableMicrophone = staged.EnableMicrophone;
+            _settings.AllowSoftwareFallback = staged.AllowSoftwareFallback;
             _settings.StartWithWindows = staged.StartWithWindows;
             _settings.StartMinimizedToTray = staged.StartMinimizedToTray;
             _settings.ShowClipSavedOverlay = staged.ShowClipSavedOverlay;

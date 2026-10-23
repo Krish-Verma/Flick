@@ -26,6 +26,9 @@ public class CaptureHostClient : IDisposable
     public event Action<string, string>? ReplaySaved; // saveId, filePath
     public event Action<string, string, IReadOnlyList<string>>? ReplaySavedWithTracks;
     public event Action<string>? FaultOccurred;
+    public event Action<CaptureEncodingProfile>? CaptureConfigured;
+    public CaptureEncodingProfile? CurrentProfile { get; private set; }
+    public string LastStartError { get; private set; } = "";
 
     private volatile bool _expectedShutdown;
     public bool IsRunning => _process != null && !_process.HasExited;
@@ -146,6 +149,11 @@ public class CaptureHostClient : IDisposable
                         string evName = evProp.GetString() ?? "";
                         JsonElement? evData = root.TryGetProperty("data", out var dataProp) ? dataProp.Clone() : null;
 
+                        if (evName == "capture_configured" && CaptureEncodingProfile.TryParse(evData, out var configured))
+                        {
+                            CurrentProfile = configured;
+                            CaptureConfigured?.Invoke(configured!);
+                        }
                         EventReceived?.Invoke(evName, evData);
 
                         if (evName == "state_changed" && evData.HasValue && evData.Value.TryGetProperty("state", out var stateProp))
@@ -296,9 +304,10 @@ public class CaptureHostClient : IDisposable
         return result;
     }
 
-    public async Task<bool> StartCaptureAsync(AppSettings settings)
+    public static object CreateStartParameters(AppSettings settings)
     {
-        var parameters = new
+        ArgumentNullException.ThrowIfNull(settings);
+        return new
         {
             target_type = settings.TargetType.ToLowerInvariant(),
             monitor_index = settings.MonitorIndex,
@@ -308,6 +317,7 @@ public class CaptureHostClient : IDisposable
             height = settings.VideoHeight,
             bitrate_kbps = settings.VideoBitrateKbps,
             encoder = settings.VideoEncoder,
+            allow_software_fallback = settings.AllowSoftwareFallback,
             duration_sec = settings.ReplayDurationSeconds,
             buffer_mb = settings.BufferMemoryLimitMb,
             output_dir = settings.OriginalsFolder,
@@ -317,8 +327,31 @@ public class CaptureHostClient : IDisposable
             system_device_id = settings.SystemAudioDeviceId
         };
 
-        var resp = await SendCommandAsync("start_capture", parameters);
-        return resp.Ok;
+    }
+
+    public async Task<bool> StartCaptureAsync(AppSettings settings)
+    {
+        CurrentProfile = null;
+        LastStartError = "";
+        // Hardware discovery can try multiple vendor plugins before bounded CPU fallback.
+        IpcResponse response;
+        try { response = await SendCommandAsync("start_capture", CreateStartParameters(settings), 60000); }
+        catch
+        {
+            // A timed-out native startup must not later begin an unacknowledged
+            // capture. Closing the confined helper also ends pending attempts.
+            Dispose();
+            throw;
+        }
+        var result = CaptureStartResult.FromResponse(response);
+        LastStartError = result.Error;
+        if (result.Profile != null)
+        {
+            CurrentProfile = result.Profile;
+            CaptureConfigured?.Invoke(result.Profile);
+        }
+        if (!result.Success) CurrentProfile = null;
+        return result.Success;
     }
 
     public async Task<bool> SaveReplayAsync(string saveId, string prefix = "Clip")
@@ -342,6 +375,8 @@ public class CaptureHostClient : IDisposable
         }
 
         var r = resp.Result.Value;
+        CaptureEncodingProfile.TryParse(r, out var profile);
+        if (profile != null) CurrentProfile = profile;
         return new CaptureHostStatus
         {
             State = r.TryGetProperty("state", out var s) ? s.GetString() ?? "Off" : "Off",
@@ -351,7 +386,8 @@ public class CaptureHostClient : IDisposable
             TargetType = r.TryGetProperty("target_type", out var tt) ? tt.GetString() ?? "" : "",
             TargetValid = !r.TryGetProperty("target_valid", out var tv) || tv.GetBoolean(),
             PrivateBytes = r.TryGetProperty("private_bytes", out var pb) ? pb.GetInt64() : 0,
-            WorkingSet = r.TryGetProperty("working_set", out var ws) ? ws.GetInt64() : 0
+            WorkingSet = r.TryGetProperty("working_set", out var ws) ? ws.GetInt64() : 0,
+            Profile = profile
         };
     }
 
@@ -394,6 +430,7 @@ public class CaptureHostClient : IDisposable
     public void Dispose()
     {
         _expectedShutdown = true;
+        CurrentProfile = null;
         _cts?.Cancel();
         foreach (var entry in _pendingRequests)
             if (_pendingRequests.TryRemove(entry.Key, out var request))

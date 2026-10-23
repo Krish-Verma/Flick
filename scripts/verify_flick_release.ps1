@@ -31,4 +31,5 @@ foreach ($path in @(
     throw "Required runtime or notice missing: $path"
   }
 }
+& (Join-Path $PSScriptRoot "check_obs_runtime.ps1") -RuntimeRoot (Join-Path $dist "Flick-v1.0.4-win-x64\tools\obs\runtime")
 Write-Host "Flick preview distribution integrity PASS; Windows install/real-GPU testing is separate." -ForegroundColor Green

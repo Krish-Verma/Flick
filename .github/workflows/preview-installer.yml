@@ -4,8 +4,13 @@ on:
   pull_request:
     paths:
       - 'src/LocalClip.App/**'
+      - 'src/LocalClip.Core/**'
+      - 'src/LocalClip.CaptureHost/**'
       - 'installer/**'
       - 'scripts/build_*.ps1'
+      - 'scripts/setup_tools.ps1'
+      - 'scripts/check_obs_runtime.ps1'
+      - 'scripts/verify_flick_release.ps1'
       - '.github/workflows/preview-installer.yml'
   workflow_dispatch:
 
@@ -70,6 +75,7 @@ jobs:
       - name: Check preview hashes and included tools
         shell: pwsh
         run: |
+          ./scripts/verify_flick_release.ps1
           $checksums = 'dist/SHA256SUMS.txt'
           $setup = 'dist/Flick-Setup.exe'
           $portable = 'dist/Flick-v1.0.4-win-x64.zip'

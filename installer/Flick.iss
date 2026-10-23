@@ -7,7 +7,7 @@
 AppId={{F3C41F96-EF62-4CB1-A292-91EF3F6C18E8}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
-AppVerName=Flick 1.0.4 — Windows NVIDIA NVENC Design Preview 1
+AppVerName=Flick 1.0.4 — Windows GPU Compatibility Candidate
 AppPublisher=Flick Contributors
 AppPublisherURL=https://github.com/Krish-Verma/Flick
 AppSupportURL=https://github.com/Krish-Verma/Flick/issues
@@ -38,7 +38,7 @@ RestartApplications=no
 AppMutex=LocalClip_SingleInstance_UserLock
 MinVersion=10.0
 ; Only native Windows x64 is supported. ARM and 32-bit Windows cannot
-; execute the current capture host / NVENC pipeline.
+; execute the current x64 capture host and bundled encoder runtime.
 ArchitecturesAllowed=x64os
 InfoBeforeFile=PREVIEW-SYSTEM-REQUIREMENTS.txt
 

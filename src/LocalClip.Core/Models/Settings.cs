@@ -7,7 +7,7 @@ namespace LocalClip.Core.Models;
 
 public class AppSettings
 {
-    public int SchemaVersion { get; set; } = 2;
+    public int SchemaVersion { get; set; } = 3;
 
     // Capture Target
     public string TargetType { get; set; } = "Monitor"; // "Monitor" or "Window"
@@ -21,7 +21,8 @@ public class AppSettings
     public int VideoHeight { get; set; } = 1080;
     public int VideoFps { get; set; } = 30;
     public int VideoBitrateKbps { get; set; } = 15000;
-    public string VideoEncoder { get; set; } = "obs_nvenc_h264_tex"; // NVENC hardware only, jim_nvenc fallback; no silent x264 capture
+    public string VideoEncoder { get; set; } = "auto"; // Prefer available hardware; report the actual encoder/profile.
+    public bool AllowSoftwareFallback { get; set; } = true; // Bounded 720p/30 compatibility mode when hardware is unavailable.
     public int ReplayDurationSeconds { get; set; } = 30;
     public int BufferMemoryLimitMb { get; set; } = 256;
     public string QualityPreset { get; set; } = "Balanced"; // Light, Balanced, Smooth; user-visible presets
@@ -128,14 +129,31 @@ public class AppSettings
     {
         try
         {
-            var loaded = JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(filePath))
+            string json = File.ReadAllText(filePath);
+            var loaded = JsonSerializer.Deserialize<AppSettings>(json)
                 ?? throw new JsonException("Settings JSON contains no configuration.");
+            using var document = JsonDocument.Parse(json);
+            bool legacyEncoderDefault = !document.RootElement.TryGetProperty("SchemaVersion", out _) || loaded.SchemaVersion < 3;
             var defaults = CreateDefault();
             bool repaired = false;
             if (loaded.SchemaVersion < 2)
             {
                 loaded.EnableMicrophone = false;
                 loaded.SchemaVersion = 2;
+                repaired = true;
+            }
+            // Previous presets always wrote this NVIDIA-only default, even on
+            // other GPUs. Migrate that legacy default in memory, while retaining
+            // explicitly selected vendor encoders and the user's CPU opt-out.
+            if (legacyEncoderDefault && loaded.VideoEncoder == "obs_nvenc_h264_tex")
+            {
+                loaded.VideoEncoder = defaults.VideoEncoder;
+                repaired = true;
+            }
+            if (loaded.SchemaVersion < 3) loaded.SchemaVersion = 3;
+            if (string.IsNullOrWhiteSpace(loaded.VideoEncoder))
+            {
+                loaded.VideoEncoder = defaults.VideoEncoder;
                 repaired = true;
             }
             if (loaded.ReplayDurationSeconds is < 15 or > 120)
