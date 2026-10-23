@@ -18,6 +18,7 @@ The logo's gradient identity appears in small functional details: the selected C
 - Settings retain the same categories and fields with a readable content width, aligned insets and fewer nested borders. Trim grips and transport chrome are neutral; the active focus indicator stays visible.
 - The rail, header, library, preview and footer boundaries use the softer divider shade. The four-DIP library resize target is transparent until hovered or keyboard-focused. The real Windows caption reads colors from the same named palette. Standard resize, Snap and window controls remain native.
 - Dropdown selections stay on one line with an ellipsis at compact widths. Advanced sections use the same small disclosure chevron, with hover, keyboard focus and two-way expansion behavior preserved.
+- Share uses a content-sized panel, a single heading/Close row and tighter internal spacing. Its default, custom-size and expanded optional-posting states are checked at compact window sizes.
 
 ## Impeccable guidance
 

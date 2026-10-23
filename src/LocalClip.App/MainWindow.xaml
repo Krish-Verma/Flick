@@ -311,7 +311,38 @@
                                     <TextBlock Text="Share" Style="{StaticResource Flick.Text.Caption}" HorizontalAlignment="Center" Margin="0,5,0,0"/>
                                 </StackPanel>
                             </Button>
-                        </UniformGrid><Border x:Name="EditorContextLayer" Grid.Row="1" Panel.ZIndex="5" VerticalAlignment="Bottom" Margin="12" Padding="12" Background="{DynamicResource Flick.Brush.Surface}" BorderBrush="{DynamicResource Flick.Brush.Divider}" BorderThickness="1" CornerRadius="{StaticResource Flick.Corner.Panel}" Visibility="Collapsed" KeyboardNavigation.TabNavigation="Cycle"><DockPanel><Button DockPanel.Dock="Top" x:Name="CloseEditorTool" Content="Close" Click="CloseEditorTool_Click" HorizontalAlignment="Right" Style="{StaticResource Flick.Button.Ghost}" Margin="0,0,0,4"/><ScrollViewer x:Name="EditorContextScroll" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Focusable="False"><StackPanel x:Name="EditorContextHost"><Border IsEnabled="{Binding CanEditClip}" Background="Transparent" BorderThickness="0" Padding="12" Margin="0,8,0,0" x:Name="TrimPanel" Visibility="Collapsed">
+                        </UniformGrid>
+                        <Border x:Name="EditorContextLayer" Grid.Row="1" Panel.ZIndex="5" VerticalAlignment="Bottom" Margin="12" Background="{DynamicResource Flick.Brush.Surface}" BorderBrush="{DynamicResource Flick.Brush.Divider}" BorderThickness="1" CornerRadius="{StaticResource Flick.Corner.Panel}" Visibility="Collapsed" KeyboardNavigation.TabNavigation="Cycle">
+                            <Border.Style>
+                                <Style TargetType="{x:Type Border}">
+                                    <Setter Property="Padding" Value="12"/>
+                                    <Setter Property="HorizontalAlignment" Value="Stretch"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding Visibility, ElementName=SharePanel}" Value="Visible">
+                                            <Setter Property="MaxWidth" Value="600"/>
+                                            <Setter Property="HorizontalAlignment" Value="Right"/>
+                                            <Setter Property="Padding" Value="12,8"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Border.Style>
+                            <DockPanel>
+                                <DockPanel DockPanel.Dock="Top" LastChildFill="False">
+                                    <Button DockPanel.Dock="Right" x:Name="CloseEditorTool" Content="Close" Click="CloseEditorTool_Click" HorizontalAlignment="Right" Style="{StaticResource Flick.Button.Ghost}" Margin="0,0,0,4"/>
+                                    <TextBlock Text="Share Clip" VerticalAlignment="Center" Margin="4,0,12,4">
+                                        <TextBlock.Style>
+                                            <Style TargetType="{x:Type TextBlock}" BasedOn="{StaticResource Flick.Text.Section}">
+                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding Visibility, ElementName=SharePanel}" Value="Visible">
+                                                        <Setter Property="Visibility" Value="Visible"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+                                </DockPanel>
+                                <ScrollViewer x:Name="EditorContextScroll" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Focusable="False"><StackPanel x:Name="EditorContextHost"><Border IsEnabled="{Binding CanEditClip}" Background="Transparent" BorderThickness="0" Padding="12" Margin="0,8,0,0" x:Name="TrimPanel" Visibility="Collapsed">
                             <components:TrimRangeControl x:Name="TrimTimeline" RangeCommitted="TrimTimeline_RangeCommitted"/>
                         </Border><Border Background="Transparent" BorderThickness="0" Padding="6,3" x:Name="AudioPanel" Visibility="Collapsed" Margin="0,8,0,0">
                             <Expander x:Name="AudioExpander" Style="{StaticResource Flick.Expander.Disclosure}" IsEnabled="{Binding CanEditClip}" Header="Export Audio" IsExpanded="False" Foreground="{DynamicResource Flick.Brush.TextPrimary}" Background="Transparent" Padding="4">
@@ -341,7 +372,7 @@
                                     </DockPanel>
                                 </StackPanel>
                             </Expander>
-                        </Border><Border Style="{StaticResource Flick.Surface.Frosted}" Background="Transparent" BorderThickness="0" Padding="12" Margin="0,8,0,0" x:Name="SharePanel" Visibility="Collapsed">
+                        </Border><Border Style="{StaticResource Flick.Surface.Frosted}" Background="Transparent" BorderThickness="0" Padding="4,0" Margin="0" x:Name="SharePanel" Visibility="Collapsed">
                     <StackPanel>
                         <Grid>
                             <Grid.ColumnDefinitions>
@@ -351,7 +382,6 @@
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
                             <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,14,0">
-                                <TextBlock Text="Share Clip" Style="{StaticResource Flick.Text.Section}"/>
                                 <TextBlock Text="Export an MP4 · Choose a file-size limit" Style="{StaticResource Flick.Text.Caption}" TextTrimming="CharacterEllipsis"/>
                             </StackPanel>
                             <ComboBox Grid.Column="1" x:Name="CmbExportCap" Style="{StaticResource Flick.Input.Combo}" Width="115" Height="36" MinWidth="0" Margin="0,0,8,0" VerticalAlignment="Center" SelectionChanged="ExportCap_SelectionChanged" AutomationProperties.Name="Export Size Limit" ToolTip="File-size cap in decimal MB; Discord destination limits may vary.">
@@ -362,25 +392,25 @@
                                 <ComboBoxItem Content="Custom" Tag="Custom"/>
                             </ComboBox>
                             <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" x:Name="CustomCapPanel" Visibility="Collapsed" Margin="0,0,8,0">
-                                <TextBox x:Name="TxtCustomMb" Width="58" Style="{StaticResource Flick.Input.Text}" Text="20" ToolTip="1–250 decimal MB" LostFocus="TxtCustomMb_LostFocus" PreviewKeyDown="CustomMb_PreviewKeyDown"/>
+                                <TextBox x:Name="TxtCustomMb" Width="68" Padding="6,0" Style="{StaticResource Flick.Input.Text}" Text="20" ToolTip="1–250 decimal MB" LostFocus="TxtCustomMb_LostFocus" PreviewKeyDown="CustomMb_PreviewKeyDown"/>
                                 <TextBlock Text="MB" Style="{StaticResource Flick.Text.Caption}" VerticalAlignment="Center" Margin="5,0,0,0"/>
                             </StackPanel>
                             <Button Grid.Column="3" x:Name="BtnExport" Content="Export Clip" Click="BtnExport_Click" Style="{StaticResource Flick.Button.Primary}" IsEnabled="{Binding CanStartExport}" MinWidth="111" Padding="14,0"/>
                         </Grid>
 
-                        <Grid Margin="0,10,0,0">
+                        <Grid Margin="0,4,0,0">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*" MinWidth="70"/>
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
                             <StackPanel Grid.Column="0" VerticalAlignment="Center">
-                                <ProgressBar Height="4" Margin="0,0,0,7" IsIndeterminate="True" Foreground="{DynamicResource Flick.Brush.Accent}" Visibility="{Binding IsExporting, Converter={StaticResource BoolToVis}}" AutomationProperties.Name="Local Export Running"/>
+                                <ProgressBar Height="4" Margin="0,0,0,5" IsIndeterminate="True" Foreground="{DynamicResource Flick.Brush.Accent}" Visibility="{Binding IsExporting, Converter={StaticResource BoolToVis}}" AutomationProperties.Name="Local Export Running"/>
                                 <TextBlock Text="{Binding ExportStatusMessage}" Style="{StaticResource Flick.Text.Caption}" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" ToolTip="{Binding ExportStatusMessage}"/>
                             </StackPanel>
                             <Button Grid.Column="1" Content="Cancel Export" Click="BtnCancelExport_Click" Style="{StaticResource Flick.Button.Secondary}" Visibility="{Binding IsExporting, Converter={StaticResource BoolToVis}}" Margin="10,0,0,0" MinHeight="30" Padding="9,0"/>
                         </Grid>
 
-                        <Border Margin="0,10,0,0" Padding="9,8" Background="{DynamicResource Flick.Brush.Surface}" BorderBrush="{DynamicResource Flick.Brush.BorderStrong}" BorderThickness="1" CornerRadius="{StaticResource Flick.Corner.Control}" Visibility="{Binding IsExportReady, Converter={StaticResource BoolToVis}}">
+                        <Border Margin="0,6,0,0" Padding="9,8" Background="{DynamicResource Flick.Brush.Surface}" BorderBrush="{DynamicResource Flick.Brush.BorderStrong}" BorderThickness="1" CornerRadius="{StaticResource Flick.Corner.Control}" Visibility="{Binding IsExportReady, Converter={StaticResource BoolToVis}}">
                             <Grid>
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*" MinWidth="125"/>
@@ -403,8 +433,8 @@
                             </Grid>
                         </Border>
 
-                        <Expander x:Name="AdvancedShareExpander" Style="{StaticResource Flick.Expander.Disclosure}" IsExpanded="False" Header="Discord: Optional Direct Posting" Margin="0,7,0,0" Foreground="{DynamicResource Flick.Brush.TextSecondary}" Background="Transparent">
-                            <Grid Margin="10,7,0,3">
+                        <Expander x:Name="AdvancedShareExpander" Style="{StaticResource Flick.Expander.Disclosure}" IsExpanded="False" Header="Discord: Optional Direct Posting" Margin="0,4,0,0" Foreground="{DynamicResource Flick.Brush.TextSecondary}" Background="Transparent">
+                            <Grid Margin="10,4,0,2">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*" MinWidth="120"/>
                                     <ColumnDefinition Width="Auto"/>

@@ -118,6 +118,15 @@ internal static class Program
         Render("12-library-compact.png", 800, 600);
         Invoke("ShowCompactEditor");
         Render("13-editor-compact.png", 800, 600);
+        // Exercise the actual compact Share controls without exporting a file
+        // or contacting Discord. Extra options must fit the smaller panel too.
+        Invoke("EditorTool_Click", Find<Button>("ToolShare"), new RoutedEventArgs());
+        Render("14-share-compact.png", 800, 600);
+        Find<ComboBox>("CmbExportCap").SelectedIndex = 4;
+        Find<TextBox>("TxtCustomMb").Text = "250";
+        Render("15-share-custom-compact.png", 800, 600);
+        Find<Expander>("AdvancedShareExpander").IsExpanded = true;
+        Render("16-share-expanded-compact.png", 800, 600);
         string applicationVersion = typeof(MainWindow).Assembly
             .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? "unknown";
         File.WriteAllText(Path.Combine(output, "PROVENANCE.txt"),
@@ -126,6 +135,7 @@ internal static class Program
             "Application and renderer commit: " + Environment.GetEnvironmentVariable("GITHUB_SHA") + "\n" +
             "Workspace/settings: 1240x720 DIPs, 96 DPI. Synthetic clip names/thumbnails/monitor only.\n" +
             "Additional views: 1440x900 workspace; existing 800x600 compact library and editor branches.\n" +
+            "Compact Share: default, Custom 250 MB and expanded optional posting; no export or post action invoked.\n" +
             "Brand samples: actual shared Image style rasterized by WPF at 96/120/144/192 DPI; not a physical per-monitor DPI session.\n" +
             "No gameplay, media decoder, OS titlebar, real recording, updater network request, or full UI acceptance claimed.\n");
         vm.Dispose();
