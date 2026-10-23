@@ -164,7 +164,7 @@ public class HotkeyManager : IDisposable
     {
         if (msg == WM_HOTKEY)
         {
-            if (IsShortcutEditing) { handled = true; return IntPtr.Zero; }
+            if (IsShortcutEditing || LocalClip.App.Services.FlickDialog.IsOpen) { handled = true; return IntPtr.Zero; }
             int id = wParam.ToInt32();
             if (id == _toggleId)
             {

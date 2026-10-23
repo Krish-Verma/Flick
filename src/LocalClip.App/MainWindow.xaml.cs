@@ -55,6 +55,9 @@ public partial class MainWindow : Window
     private bool _initialLayoutApplied;
     // Only the currently selected small poster is unloaded while hidden; the
     // clip library and editing model are preserved for instant tray restoration.
+    internal FrameworkElement InteractionSurface => MainInteractionSurface;
+    internal Border ModalLayer => DialogLayer;
+    internal ContentControl DialogHost => DialogContentHost;
     private bool _posterCacheDetached;
     private Button? _activeEditorTool;
 
@@ -165,7 +168,7 @@ public partial class MainWindow : Window
         if (!_hotkeyManager.TryConfigure(_vm.Settings.CaptureToggleHotkey,
                 _vm.Settings.SaveReplayHotkey, out string error))
         {
-            MessageBox.Show(error + " The previous shortcuts were restored if possible.",
+            LocalClip.App.Services.FlickDialog.Show(error + " The previous shortcuts were restored if possible.",
                 "Flick hotkey conflict", MessageBoxButton.OK, MessageBoxImage.Warning);
             if (oldToggle != null && oldSave != null)
             {
@@ -397,7 +400,7 @@ public partial class MainWindow : Window
 
     private bool ConfirmSourceReset()
     {
-        return MessageBox.Show(
+        return LocalClip.App.Services.FlickDialog.Show(
             "Changing the capture source will stop replay and clear the current unsaved buffer. Continue?",
             "Change Capture Source", MessageBoxButton.YesNo, MessageBoxImage.Warning)
             == MessageBoxResult.Yes;
@@ -480,6 +483,7 @@ public partial class MainWindow : Window
 
     private void OpenConnectedFolders()
     {
+        if (FlickDialog.IsOpen) return;
         if (_foldersPage != null)
         {
             ShowWorkspacePage(_foldersPage);
@@ -607,6 +611,7 @@ public partial class MainWindow : Window
 
     private void OpenSettings()
     {
+        if (FlickDialog.IsOpen) return;
         if (_foldersPage != null) CloseConnectedFolders();
         if (_settingsPage != null)
         {
@@ -636,7 +641,7 @@ public partial class MainWindow : Window
             if (FlickUninstallLauncher.TryLaunch(out string error))
                 RealQuit();
             else
-                MessageBox.Show(this, error, "Flick Uninstall",
+                LocalClip.App.Services.FlickDialog.Show(this, error, "Flick Uninstall",
                     MessageBoxButton.OK, MessageBoxImage.Error);
             return;
         }
@@ -687,29 +692,8 @@ public partial class MainWindow : Window
     {
         if (_vm.SelectedClip == null) return;
         string current = _vm.SelectedClip.Title;
-        // Simple input prompt dialog
-        var w = new Window
-        {
-            Title = "Rename Clip",
-            Width = 360,
-            Height = 160,
-            WindowStartupLocation = WindowStartupLocation.CenterOwner,
-            Owner = this,
-            Background = new SolidColorBrush(Color.FromRgb(24, 24, 27)),
-            Foreground = new SolidColorBrush(Color.FromRgb(250, 250, 250))
-        };
-        var sp = new StackPanel { Margin = new Thickness(16) };
-        var txt = new TextBox { Text = current, Margin = new Thickness(0, 8, 0, 16), Padding = new Thickness(6, 4, 6, 4) };
-        var btn = new Button { Content = "Save", Padding = new Thickness(12, 6, 12, 6), HorizontalAlignment = HorizontalAlignment.Right, Background = new SolidColorBrush(Color.FromRgb(37, 99, 235)) };
-        btn.Click += (s, ev) => { w.DialogResult = true; w.Close(); };
-        sp.Children.Add(new TextBlock { Text = "Enter new clip title:" });
-        sp.Children.Add(txt);
-        sp.Children.Add(btn);
-        w.Content = sp;
-        if (w.ShowDialog() == true)
-        {
-            _vm.RenameSelectedClip(txt.Text);
-        }
+        string? title = FlickDialog.Prompt("Rename Clip", "Enter a clip title:", current);
+        if (title != null) _vm.RenameSelectedClip(title);
     }
 
     private void BtnDelete_Click(object sender, RoutedEventArgs e)
@@ -719,7 +703,7 @@ public partial class MainWindow : Window
 
     private void MainWindow_PreviewKeyDown(object sender, KeyEventArgs e)
     {
-        if (WorkspacePageLayer.Visibility == Visibility.Visible) return;
+        if (FlickDialog.IsOpen || WorkspacePageLayer.Visibility == Visibility.Visible) return;
         if (e.Key == Key.Escape && EditorContextLayer.Visibility == Visibility.Visible)
         {
             CloseEditorContext();

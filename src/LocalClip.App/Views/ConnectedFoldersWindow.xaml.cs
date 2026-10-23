@@ -35,7 +35,7 @@ public partial class ConnectedFoldersWindow : System.Windows.Controls.UserContro
     {
         if (_vm.IsImporting)
         {
-            MessageBox.Show("Wait for the current scan or cancel it first.",
+            LocalClip.App.Services.FlickDialog.Show("Wait for the current scan or cancel it first.",
                 "Flick Import", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
@@ -46,7 +46,7 @@ public partial class ConnectedFoldersWindow : System.Windows.Controls.UserContro
         };
         if (picker.ShowDialog() != System.Windows.Forms.DialogResult.OK) return;
 
-        if (MessageBox.Show(
+        if (LocalClip.App.Services.FlickDialog.Show(
             "Link this folder and index its supported MP4/MKV videos? Original files stay in place, and nothing is uploaded or copied.",
             "Add Clip Folder", MessageBoxButton.YesNo, MessageBoxImage.Question)
             != MessageBoxResult.Yes) return;
@@ -57,16 +57,16 @@ public partial class ConnectedFoldersWindow : System.Windows.Controls.UserContro
                 ChkIncludeSubfolders.IsChecked == true);
             _vm.RefreshConnectedFolders();
             if (result.FolderUnavailable)
-                MessageBox.Show("Folder is currently unavailable. The link is preserved.",
+                LocalClip.App.Services.FlickDialog.Show("Folder is currently unavailable. The link is preserved.",
                     "Import Folder", MessageBoxButton.OK, MessageBoxImage.Information);
             else if (result.TotalDiscovered == 0)
-                MessageBox.Show("No supported MP4 or MKV files were found.",
+                LocalClip.App.Services.FlickDialog.Show("No supported MP4 or MKV files were found.",
                     "Import Folder", MessageBoxButton.OK, MessageBoxImage.Information);
         }
         catch (OperationCanceledException) { }
         catch (Exception ex)
         {
-            MessageBox.Show("Could not index the selected folder: " + ex.Message,
+            LocalClip.App.Services.FlickDialog.Show("Could not index the selected folder: " + ex.Message,
                 "Flick Import", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
     }
@@ -75,7 +75,7 @@ public partial class ConnectedFoldersWindow : System.Windows.Controls.UserContro
     {
         if (FolderList.SelectedItem is not ConnectedClipFolder folder)
         {
-            MessageBox.Show("Select a connected folder to rescan.", "Flick Library",
+            LocalClip.App.Services.FlickDialog.Show("Select a connected folder to rescan.", "Flick Library",
                 MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
@@ -83,7 +83,7 @@ public partial class ConnectedFoldersWindow : System.Windows.Controls.UserContro
         catch (OperationCanceledException) { }
         catch (Exception ex)
         {
-            MessageBox.Show("Rescan failed: " + ex.Message, "Flick Library",
+            LocalClip.App.Services.FlickDialog.Show("Rescan failed: " + ex.Message, "Flick Library",
                 MessageBoxButton.OK, MessageBoxImage.Warning);
         }
     }
@@ -92,17 +92,17 @@ public partial class ConnectedFoldersWindow : System.Windows.Controls.UserContro
     {
         if (FolderList.SelectedItem is not ConnectedClipFolder folder)
         {
-            MessageBox.Show("Select a folder first.", "Flick Library",
+            LocalClip.App.Services.FlickDialog.Show("Select a folder first.", "Flick Library",
                 MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
         if (_vm.IsImporting)
         {
-            MessageBox.Show("Cancel the scan before unlinking a folder.", "Flick Library",
+            LocalClip.App.Services.FlickDialog.Show("Cancel the scan before unlinking a folder.", "Flick Library",
                 MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
-        if (MessageBox.Show(
+        if (LocalClip.App.Services.FlickDialog.Show(
                 $"Unlink '{folder.DisplayName}' from Flick? Its imported entries will disappear from the Flick library, but the videos and exports will remain untouched.",
                 "Unlink Clip Folder", MessageBoxButton.YesNo, MessageBoxImage.Question)
             != MessageBoxResult.Yes) return;
@@ -113,7 +113,7 @@ public partial class ConnectedFoldersWindow : System.Windows.Controls.UserContro
         }
         catch (Exception ex)
         {
-            MessageBox.Show("Unable to unlink the folder: " + ex.Message,
+            LocalClip.App.Services.FlickDialog.Show("Unable to unlink the folder: " + ex.Message,
                 "Flick Library", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
     }
