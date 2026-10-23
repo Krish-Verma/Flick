@@ -1,6 +1,6 @@
 # Flick UI Refresh — Eight-Slice Implementation Plan (2026-10-23)
 
-Status: Approved direction; implementation proceeds through independently reviewable GitHub PRs. Refactor existing Windows WPF UI, not the recording engine.
+Status: R1–R8 source implementations are available in stacked private draft PRs #16–#23. R1–R8 initial source CI passed; final added UI staging tests require their own exact-head CI. Physical Windows visual/hardware/performance acceptance remains pending. Refactor existing Windows WPF UI, not the recording engine.
 
 ## Design and functional contract
 
@@ -44,3 +44,9 @@ Status: Approved direction; implementation proceeds through independently review
 4. User returns to the same clip/editor state; no decoder runs offscreen. Capture bar/status and tray remain alive during page navigation. No extra Flick-owned windows.
 5. Keep existing folder picker an OS-owned dialog; remove only Flick-owned windows. Future R7 replaces remaining Flick-owned confirmations.
 6. Add source regression tests for XAML UserControl roots, no modal management ShowDialog and one-window hosting; independent Windows CI verifies generated XAML/code-behind binding.
+
+## Reference layout and implementation audit (October 23)
+
+Use the owner-provided Proposed Interface reference for hierarchy: narrow clip library, dominant video, compact transport, four clearly spaced labelled Trim / Audio / Original / Share actions. Keep Flick's actual logo/native window controls and all existing functions. The no-title/no-ID restriction applies to the save banner, not library/editor identification.
+
+R3 #18, R4 #19, R5 #20, R6 #21, R7 #22 and R8 #23 are source-implemented. R8 is the cumulative candidate including R1/R2; no refresh PR is merged and the downloadable v1.0.2 Preview 2 does not include this refresh. Read `GUI-REFRESH-R3-R8-ANTIGRAVITY-HANDOFF.md` for acceptance. OAuth remains intentionally architecture-gated, and trusted signing/public release are separate unfinished gates. Do not call R7 physical QA complete based on source CI.

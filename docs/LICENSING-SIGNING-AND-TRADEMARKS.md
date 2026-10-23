@@ -47,3 +47,13 @@ References:
 - Current Flick signing blocker: docs/WINDOWS-TRUST-AND-SMART-APP-CONTROL.md
 
 This document is technical release guidance, not a substitute for professional legal review.
+
+## October 23 recommendation: free license and a potential free signing route
+
+Retain GPL-2.0-or-later for this OBS/libobs-linked application. GPL and MIT are both free to adopt; MIT is not a required paid upgrade. Vercel's Next.js uses MIT (https://github.com/vercel/next.js/blob/canary/license.md), but that separate project's choice does not remove Flick's upstream GPL obligations. No relicense is performed by the UI refresh.
+
+The likely no-fee Windows signing option is **SignPath Foundation**, conditional on approval, not an automatically issued free Microsoft license. Its current terms (https://signpath.org/terms.html, checked October 23, 2026) require an OSI-approved license across components, active maintenance and an existing release; MFA, named signing roles, an explicit code-signing/privacy policy and approval for each signing request are additional requirements. A currently private, unapproved project must not claim enrollment or a trusted certificate.
+
+Important packaging distinction: Foundation policy permits including unsigned upstream OSS binaries in a signed package but prohibits stamping unmodified upstream binaries with the project's Foundation certificate. Flick's existing Azure signing path must not be reused indiscriminately for SignPath. Inventory the actual OBS, FFmpeg, .NET and other shipped components; confirm source/license eligibility and upstream signatures; then design a provider-specific signing allowlist for Flick-owned artifacts. Approval of an installer does not establish that every contained DLL passes enforced Smart App Control.
+
+Recommended next owner step after reviewing the public-source/dependency obligations: apply to SignPath Foundation and obtain its eligibility decision. Do not publish the repository, accept terms, enroll an identity or change release secrets as part of UI implementation. After approval, configure a protected signing workflow, sign the eligible application/installer/uninstaller and run actual SAC-on acceptance. Keep the current release gates until that succeeds.

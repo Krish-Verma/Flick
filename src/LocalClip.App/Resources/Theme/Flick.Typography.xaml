@@ -46,7 +46,7 @@
          38-DIP logo geometry is shared by nav, Settings and toast to prevent
          optical drift in fractional scaling and to keep original branding. -->
     <Style x:Key="Flick.Image.BrandMark" TargetType="{x:Type Image}">
-        <Setter Property="Source" Value="pack://application:,,,/Assets/Brand/FlickLogo.png"/>
+        <Setter Property="Source" Value="pack://application:,,,/Flick;component/Assets/Brand/FlickLogo.png"/>
         <Setter Property="Width" Value="{StaticResource Flick.Size.ToastLogo}"/>
         <Setter Property="Height" Value="{StaticResource Flick.Size.ToastLogo}"/>
         <Setter Property="Stretch" Value="Uniform"/>

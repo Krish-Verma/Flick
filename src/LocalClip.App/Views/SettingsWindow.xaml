@@ -229,6 +229,14 @@
                               Style="{StaticResource Flick.Toggle}"
                               Content="Play Confirmation Sound"
                               Margin="0,0,0,12"/>
+                    <ComboBox x:Name="CmbNotificationTone" Style="{StaticResource Flick.Input.Combo}" SelectedIndex="0" Margin="0,0,0,10" AutomationProperties.Name="Confirmation Sound">
+                        <ComboBoxItem Content="Minimal Chime"/><ComboBoxItem Content="Quiet Tone"/><ComboBoxItem Content="Local WAV File"/>
+                    </ComboBox>
+                    <TextBlock x:Name="CustomSoundName" Text="No custom sound selected" TextTrimming="CharacterEllipsis" Style="{StaticResource Flick.Text.Muted}" Margin="0,0,0,8"/>
+                    <WrapPanel Margin="0,0,0,12">
+                        <Button Content="Choose WAV…" Click="ChooseSound_Click" Style="{StaticResource Flick.Button.Secondary}" Margin="0,0,12,0"/>
+                        <Button Content="Reset Sound" Click="ResetSound_Click" Style="{StaticResource Flick.Button.Ghost}"/>
+                    </WrapPanel>
                     <Button Content="Preview Notification"
                             Style="{StaticResource Flick.Button.Secondary}"
                             HorizontalAlignment="Left"

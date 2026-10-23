@@ -1,0 +1,7 @@
+# R8 — Save banner and bounded sound
+
+The confirmed-save banner says **Clip Saved**, followed only by the saved clip's actual rounded duration, e.g. **30 sec**. No title, filename, ID or clip number enters the notification API; preview and tray fallback use the same format. Library/editor titles are unaffected. Failures retain distinct failure feedback and never play a success chime.
+
+Settings provides independently enabled overlay/sound, Minimal Chime, Quiet Tone and an explicit local WAV picker, preview and reset. Choices remain staged until Settings Save. PCM WAV must be local, mono/stereo, 8/16-bit, 8–48 kHz, ≤1 MiB and ≤3 seconds; RIFF sizes, chunk bounds, byte rate, sample alignment and payload are checked. Network paths, direct reparse links and other codecs fail closed. Invalid/missing files during a save fall back to the built-in chime. No custom audio is read at startup or while sound is disabled.
+
+A coalesced background task performs file IO/validation and sound decoding only after explicit preview or confirmed save. The UI/save path never waits for audio. Streams/player are disposed after the bounded sound; disabling sound cancels playback. No persistent audio cache, new media engine, timer or process is created. Tests cover malformed/truncated/oversized/overlong WAV and notification preference persistence. Real games, corrupt/missing/removable-file fallback, audio listening and idle-memory measurements remain physical QA requirements.

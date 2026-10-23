@@ -150,7 +150,7 @@
                                        Style="{StaticResource Flick.Text.Caption}" Margin="{StaticResource Flick.Gap.Section}"/>
                             <components:FlickClipToast HorizontalAlignment="Left"
                                                        Heading="Clip Saved"
-                                                       Detail="Last Round Clutch · 0:29"/>
+                                                       Detail="30 sec"/>
                             <TextBlock Text="Static visual chrome only. Slice 2 will implement notification display and sound."
                                        Style="{StaticResource Flick.Text.Caption}" Margin="0,12,0,0"
                                        TextWrapping="Wrap"/>

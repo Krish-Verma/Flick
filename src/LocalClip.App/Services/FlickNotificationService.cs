@@ -1,5 +1,8 @@
 using System;
 using System.IO;
+using System.Threading;
+using System.Threading.Tasks;
+using LocalClip.Core.Rules;
 using System.Media;
 using System.Windows;
 using System.Windows.Media.Animation;
@@ -19,7 +22,10 @@ public sealed class FlickNotificationService : IDisposable
     private ToastOverlayWindow? _window;
     private DispatcherTimer? _dismissTimer;
     private SoundPlayer? _chime;
-    private MemoryStream? _chimeData;
+    private readonly object _soundGate = new();
+    private CancellationTokenSource? _soundStop;
+    private int _soundBusy;
+    private int _soundEpoch;
     private bool _disposed;
     private int _generation;
 
@@ -28,22 +34,19 @@ public sealed class FlickNotificationService : IDisposable
         _dispatcher = dispatcher ?? throw new ArgumentNullException(nameof(dispatcher));
     }
 
-    public void NotifySaved(string clipTitle, double durationSeconds, bool showOverlay, bool playSound)
+    public void NotifySaved(double durationSeconds, bool showOverlay, bool playSound, string tone = "Chime", string customPath = "")
     {
         if (_disposed) return;
         if (!_dispatcher.CheckAccess())
         {
             _ = _dispatcher.BeginInvoke(new Action(() =>
-                NotifySaved(clipTitle, durationSeconds, showOverlay, playSound)));
+                NotifySaved(durationSeconds, showOverlay, playSound, tone, customPath)));
             return;
         }
 
-        if (playSound) PlayChime();
+        if (playSound) PlayChime(tone, customPath);
         if (!showOverlay) return;
-        int seconds = Math.Max(0, (int)Math.Round(durationSeconds));
-        string detail = string.IsNullOrWhiteSpace(clipTitle)
-            ? FormatTime(seconds) : clipTitle.Trim() + " · " + FormatTime(seconds);
-        Show("Clip Saved", detail, error: false);
+        Show("Clip Saved", NotificationWaveRules.DurationText(durationSeconds), error: false);
     }
 
     public void NotifySaveFailed(string message, bool showOverlay)
@@ -57,16 +60,16 @@ public sealed class FlickNotificationService : IDisposable
         Show("Couldn't Save Clip", "Check Flick for details", error: true);
     }
 
-    public void Preview(bool playSound)
+    public void Preview(bool playSound, string tone = "Chime", string customPath = "")
     {
         if (_disposed) return;
         if (!_dispatcher.CheckAccess())
         {
-            _ = _dispatcher.BeginInvoke(new Action(() => Preview(playSound)));
+            _ = _dispatcher.BeginInvoke(new Action(() => Preview(playSound, tone, customPath)));
             return;
         }
-        if (playSound) PlayChime();
-        Show("Clip Saved", "Last Round Clutch · 0:29", error: false);
+        if (playSound) PlayChime(tone, customPath);
+        Show("Clip Saved", "30 sec", error: false);
     }
 
     private void Show(string heading, string detail, bool error)
@@ -138,28 +141,59 @@ public sealed class FlickNotificationService : IDisposable
         window.BeginAnimation(Window.OpacityProperty, animation);
     }
 
-    private static string FormatTime(int seconds) =>
-        $"{seconds / 60}:{seconds % 60:00}";
-
-    private void PlayChime()
+    public void StopSound()
     {
-        try
+        lock (_soundGate)
         {
-            if (_chime is null)
-            {
-                _chimeData = CreateChimeWave();
-                _chime = new SoundPlayer(_chimeData);
-                _chime.Load();
-            }
-            _chime.Play();
-        }
-        catch (Exception)
-        {
-            // Audio notifications must never interrupt or invalidate a real save.
+            _soundEpoch++;
+            try { _soundStop?.Cancel(); _chime?.Stop(); } catch { }
         }
     }
 
-    private static MemoryStream CreateChimeWave()
+    private void PlayChime(string tone, string customPath)
+    {
+        // Coalesce bursts; IO, validation and decoding never run on the save/UI path.
+        if (Interlocked.CompareExchange(ref _soundBusy, 1, 0) != 0) return;
+        int epoch;
+        lock (_soundGate) epoch = _soundEpoch;
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                MemoryStream wave;
+                try
+                {
+                    wave = tone == "Custom" ? new MemoryStream(NotificationSoundFile.Read(customPath))
+                        : CreateChimeWave(tone == "Quiet");
+                }
+                catch { wave = CreateChimeWave(false); }
+                using var stop = new CancellationTokenSource();
+                _ = NotificationWaveRules.TryGetDuration(wave.ToArray(), out double seconds);
+                using (wave)
+                using (var player = new SoundPlayer(wave))
+                {
+                    player.Load();
+                    lock (_soundGate)
+                    {
+                        if (_disposed || epoch != _soundEpoch) return;
+                        _chime = player;
+                        _soundStop = stop;
+                        player.Play(); // Start atomically with the disabled/disposed check.
+                    }
+                    await Task.Delay(TimeSpan.FromSeconds(seconds + .05), stop.Token);
+                    lock (_soundGate) if (ReferenceEquals(_chime, player)) _chime = null;
+                }
+            }
+            catch { /* Confirmation audio never invalidates a saved clip. */ }
+            finally
+            {
+                lock (_soundGate) { _chime = null; _soundStop = null; }
+                Interlocked.Exchange(ref _soundBusy, 0);
+            }
+        });
+    }
+
+    private static MemoryStream CreateChimeWave(bool quiet)
     {
         const int sampleRate = 22050;
         const int sampleCount = 3969; // 180ms
@@ -183,9 +217,9 @@ public sealed class FlickNotificationService : IDisposable
                 double t = (double)i / sampleRate;
                 double ramp = Math.Min(1d, t / 0.012) *
                               Math.Min(1d, (sampleCount - i) / (sampleRate * 0.065));
-                double frequency = i < sampleCount * .48 ? 784 : 1046.5;
+                double frequency = i < sampleCount * .48 ? (quiet ? 660 : 784) : (quiet ? 784 : 1046.5);
                 double tone = Math.Sin(2d * Math.PI * frequency * t);
-                writer.Write((short)(tone * ramp * 5400)); // deliberately quiet
+                writer.Write((short)(tone * ramp * (quiet ? 2600 : 5400))); // deliberately quiet
             }
         }
         memory.Position = 0;
@@ -203,9 +237,6 @@ public sealed class FlickNotificationService : IDisposable
             _window.Close();
             _window = null;
         }
-        _chime?.Dispose();
-        _chimeData?.Dispose();
-        _chime = null;
-        _chimeData = null;
+        StopSound(); // Worker owns bounded stream/player disposal; no idle cache.
     }
 }
