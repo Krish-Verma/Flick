@@ -655,6 +655,16 @@
             </Grid>
         </Grid>
 
+        <!-- R1: Settings/Folders are hosted in the same Flick window.
+             Pages are created lazily and removed on navigation. -->
+        <Border x:Name="WorkspacePageLayer" Grid.Row="1" Grid.Column="1"
+                Visibility="Collapsed" Panel.ZIndex="10"
+                Background="{DynamicResource Flick.Brush.Canvas}">
+            <ContentControl x:Name="WorkspacePageHost" Focusable="False"
+                            HorizontalContentAlignment="Stretch"
+                            VerticalContentAlignment="Stretch"/>
+        </Border>
+
         <!-- Bottom Status Bar -->
         <Border Grid.Row="2" Grid.Column="1" Background="{DynamicResource Flick.Brush.Surface}" BorderBrush="{DynamicResource Flick.Brush.Border}" BorderThickness="0,1,0,0" Padding="12,6">
             <Grid>
