@@ -1,0 +1,3 @@
+# R4 — Contextual editing
+
+One scrollable in-window drawer overlays only the preview region. Trim and Audio retain their existing range/gain/mute/reset bindings and non-destructive persistence. Only one drawer is visible; Close/Escape returns focus to its invoking labelled toolbar action. Switching clips closes drawers before updating the same editing model. Native Original/Export/External Player source menu stays available from both Original actions. Drawer height follows preview allocation, so editing does not push playback or toolbar controls below the compact window. Windows keyboard, DPI, real scrubbing and mixed audio listening remain physical QA gates.

@@ -56,6 +56,7 @@ public partial class MainWindow : Window
     // Only the currently selected small poster is unloaded while hidden; the
     // clip library and editing model are preserved for instant tray restoration.
     private bool _posterCacheDetached;
+    private Button? _activeEditorTool;
 
     public MainWindow()
     {
@@ -716,6 +717,13 @@ public partial class MainWindow : Window
 
     private void MainWindow_PreviewKeyDown(object sender, KeyEventArgs e)
     {
+        if (WorkspacePageLayer.Visibility == Visibility.Visible) return;
+        if (e.Key == Key.Escape && EditorContextLayer.Visibility == Visibility.Visible)
+        {
+            CloseEditorContext();
+            e.Handled = true;
+            return;
+        }
         if (e.Key != Key.Space || Keyboard.Modifiers != ModifierKeys.None) return;
         // Space is a preview shortcut only when the user is pointing at the
         // player, never while typing in trim boxes or operating source controls.
@@ -789,6 +797,7 @@ public partial class MainWindow : Window
 
     private void ResetPlayerForSelection()
     {
+        CloseEditorContext();
         CancelPendingPreview();
 
         _playerTimer.Stop();
@@ -918,21 +927,49 @@ public partial class MainWindow : Window
         BtnPlayPause.Content = "⏸ Pause";
     }
 
+    private void CloseEditorTool_Click(object sender, RoutedEventArgs e) => CloseEditorContext();
+
+    private void CloseEditorContext()
+    {
+        EditorContextLayer.Visibility = Visibility.Collapsed;
+        TrimPanel.Visibility = AudioPanel.Visibility = SharePanel.Visibility = Visibility.Collapsed;
+        AudioExpander.IsExpanded = false;
+        if (_activeEditorTool != null)
+        {
+            System.Windows.Automation.AutomationProperties.SetHelpText(_activeEditorTool, "Closed");
+            _activeEditorTool.Focus();
+        }
+        _activeEditorTool = null;
+    }
+
+    private void PreviewSurface_SizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        // Drawers scroll inside the existing preview allocation: no minimum
+        // editor height that pushes transport/actions out of a compact window.
+        EditorContextScroll.MaxHeight = Math.Max(32, PreviewSurface.ActualHeight - 100);
+    }
+
     private void EditorTool_Click(object sender, RoutedEventArgs e)
     {
-        if (sender is not Button { Tag: string tool }) return;
+        if (sender is not Button { Tag: string tool } button) return;
         if (tool == "Original") { BtnPreviewMode_Click(sender, e); return; }
         var panel = tool switch { "Trim" => TrimPanel, "Audio" => AudioPanel, _ => SharePanel };
         bool open = panel.Visibility != Visibility.Visible;
-        TrimPanel.Visibility = AudioPanel.Visibility = SharePanel.Visibility = Visibility.Collapsed;
-        panel.Visibility = open ? Visibility.Visible : Visibility.Collapsed;
-        if (tool == "Audio") AudioExpander.IsExpanded = open;
+        CloseEditorContext();
+        if (!open) return;
+        _activeEditorTool = button;
+        panel.Visibility = Visibility.Visible;
+        EditorContextLayer.Visibility = Visibility.Visible;
+        if (tool == "Audio") AudioExpander.IsExpanded = true;
+        System.Windows.Automation.AutomationProperties.SetHelpText(button, "Open");
+        CloseEditorTool.Focus();
+        EditorContextScroll.ScrollToTop();
     }
 
     private void BtnPreviewMode_Click(object sender, RoutedEventArgs e)
     {
         if (BtnPreviewMode.ContextMenu is null) return;
-        BtnPreviewMode.ContextMenu.PlacementTarget = BtnPreviewMode;
+        BtnPreviewMode.ContextMenu.PlacementTarget = sender as Button ?? BtnPreviewMode;
         BtnPreviewMode.ContextMenu.IsOpen = true;
     }
 
