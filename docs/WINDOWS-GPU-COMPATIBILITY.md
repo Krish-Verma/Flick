@@ -2,16 +2,9 @@
 
 ## Release boundary
 
-The published **v1.0.4-preview.1 Design Preview is NVIDIA-only**. Its existing
-download is not changed by this development work. Historical RTX 5060 recording
-results describe that earlier baseline, not the compatibility candidate.
+The **v1.0.5-preview.1 unsigned compatibility preview** adds automatic H.264 selection and bounded CPU fallback. The previous 1.0.4 Design Preview was NVIDIA-only and is retained as a hidden draft for authenticated upgrade-test access. Historical RTX 5060 recordings describe that earlier baseline.
 
-This source candidate adds automatic H.264 encoder selection and bounded CPU
-compatibility recording. Source, deterministic tests, payload checks and a
-successful Windows build do not qualify actual recordings. No NVIDIA, AMD,
-Intel, hybrid or CPU hardware row below has fresh acceptance evidence for this
-candidate yet. A new release must identify its exact source, package and tested
-machine/driver combination before any row is marked qualified.
+Source a6d2cd880c9716e96e9957279b4848eb8d3ca076 passed Windows compilation, deterministic policy/unit tests, five real synthetic-media workflows and WPF rendering. This does not qualify actual capture on NVIDIA, AMD, Intel, hybrid or CPU configurations. No row below has fresh physical acceptance for 1.0.5 yet. Record the exact package and tested machine/driver combination before marking any row qualified.
 
 ## Candidate behavior and requirements
 

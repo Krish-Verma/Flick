@@ -1,14 +1,14 @@
 # Code signing policy
 
 Status: October 23, 2026. Flick's repository and preview downloads are public.
-The published `v1.0.4-preview.1` installer is unsigned. No Foundation approval,
+The published `v1.0.5-preview.1` installer is unsigned. No Foundation approval,
 certificate entitlement or completed signed release has been verified in this
-work. This policy describes the intended process, not an operational signing
+work. The free Foundation application was submitted October 23, 2026; it is awaiting review. This policy describes the intended process, not an operational signing
 service or Smart App Control certification.
 
 ## Responsibility and scope
 
-Repository ownership is `Krish-Verma/Flick`. Development/review responsibility
+Repository ownership is `Krish-Verma/Flick`. Maintainer and proposed signing approver: [Krish Verma](https://github.com/Krish-Verma). Provider roles and required MFA still need confirmation before activation. Development/review responsibility
 follows actual repository permissions and review records. Before activating
 provider enrollment, the owner must publish named signing approvers/roles,
 enable required MFA and configure protected release approval. No additional

@@ -24,15 +24,72 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  fetch-preserved-upgrade-fixture:
+    name: Fetch preserved upgrade fixture (same repository or owner only)
+    # GitHub requires push visibility for draft assets. This isolated job has
+    # no checkout and runs only a fixed GET/hash gate, never PR-supplied code.
+    # Fork PRs intentionally skip installer qualification and package output.
+    if: github.repository == 'Krish-Verma/Flick' && ((github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository) || (github.event_name == 'workflow_dispatch' && github.actor == github.repository_owner))
+    runs-on: windows-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - name: Fetch only the immutable baseline asset and verify its bytes
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $true
+          if ($PSVersionTable.PSVersion -lt [version]'7.4') { throw 'PowerShell 7.4 or newer is required for byte-preserving native redirection' }
+          $directory = Join-Path $env:RUNNER_TEMP 'flick-upgrade-fixture'
+          New-Item -ItemType Directory $directory -Force | Out-Null
+          $baseline = Join-Path $directory 'Flick-1.0.4-Setup.exe'
+          gh api repos/Krish-Verma/Flick/releases/assets/669859579 -H 'Accept: application/octet-stream' > $baseline
+          if (-not (Test-Path -LiteralPath $baseline -PathType Leaf) -or
+              (Get-Item -LiteralPath $baseline).Length -ne 241947803 -or
+              (Get-FileHash -LiteralPath $baseline -Algorithm SHA256).Hash -cne 'DA1A0BBFB6B1D5803FC0D54387682C24F43D6039BAE6A2C999822628E7828A5F') {
+            throw 'Preserved Flick 1.0.4 upgrade fixture is missing or its bytes changed'
+          }
+      - name: Transfer only the verified baseline installer to the read-only build job
+        uses: actions/upload-artifact@v4
+        with:
+          name: flick-baseline-1.0.4-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/flick-upgrade-fixture/Flick-1.0.4-Setup.exe
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
+
   setup-preview:
     name: Compile unsigned Flick Setup and portable ZIP
+    needs: fetch-preserved-upgrade-fixture
     runs-on: windows-latest
     timeout-minutes: 60
+    permissions:
+      contents: read
     env:
       DOTNET_CLI_TELEMETRY_OPTOUT: '1'
       DOTNET_NOLOGO: 'true'
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Download the verified baseline from this workflow's isolated fetch job
+        uses: actions/download-artifact@v4
+        with:
+          name: flick-baseline-1.0.4-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/flick-upgrade-fixture
+      - name: Recheck the installer upgrade fixture before toolchain or build work
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $baseline = Join-Path (Join-Path $env:RUNNER_TEMP 'flick-upgrade-fixture') 'Flick-1.0.4-Setup.exe'
+          if (-not (Test-Path -LiteralPath $baseline -PathType Leaf) -or
+              (Get-Item -LiteralPath $baseline).Length -ne 241947803 -or
+              (Get-FileHash -LiteralPath $baseline -Algorithm SHA256).Hash -cne 'DA1A0BBFB6B1D5803FC0D54387682C24F43D6039BAE6A2C999822628E7828A5F') {
+            throw 'Preserved Flick 1.0.4 upgrade fixture is missing or its bytes changed'
+          }
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.0.402'
@@ -94,20 +151,13 @@ jobs:
           Write-Host "Unsigned preview compiled; no hardware acceptance is asserted."
       - name: Verify per-user install, update wait, restart and data retention
         shell: pwsh
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
           $ErrorActionPreference = 'Stop'
-          $PSNativeCommandUseErrorActionPreference = $true
-          $baselineDirectory = Join-Path $env:RUNNER_TEMP 'flick-baseline-1.0.4'
-          New-Item -ItemType Directory $baselineDirectory -Force | Out-Null
-          # Authenticated read also works after the previous Release is hidden
-          # as a draft. Its immutable tag and installer hash remain the fixture.
-          gh release download v1.0.4-preview.1 --repo Krish-Verma/Flick --pattern Flick-Setup.exe --dir $baselineDirectory
-          $baseline = Join-Path $env:RUNNER_TEMP 'Flick-1.0.4-Setup.exe'
-          Move-Item (Join-Path $baselineDirectory 'Flick-Setup.exe') $baseline
-          if ((Get-FileHash $baseline -Algorithm SHA256).Hash -cne 'DA1A0BBFB6B1D5803FC0D54387682C24F43D6039BAE6A2C999822628E7828A5F') {
-            throw 'Public Flick 1.0.4 baseline installer hash mismatch.'
+          $baseline = Join-Path (Join-Path $env:RUNNER_TEMP 'flick-upgrade-fixture') 'Flick-1.0.4-Setup.exe'
+          if (-not (Test-Path -LiteralPath $baseline -PathType Leaf) -or
+              (Get-Item -LiteralPath $baseline).Length -ne 241947803 -or
+              (Get-FileHash -LiteralPath $baseline -Algorithm SHA256).Hash -cne 'DA1A0BBFB6B1D5803FC0D54387682C24F43D6039BAE6A2C999822628E7828A5F') {
+            throw 'Previously verified Flick 1.0.4 upgrade fixture changed before the installer test'
           }
           ./scripts/test_flick_installer_update.ps1 -BaselineSetupPath $baseline
       - name: Upload installer lifecycle evidence
