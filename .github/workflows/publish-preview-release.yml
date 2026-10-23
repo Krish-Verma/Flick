@@ -83,7 +83,7 @@ jobs:
           name: flick-preview-release-files
           path: |
             dist/Flick-Setup.exe
-            dist/Flick-v1.0.2-win-x64.zip
+            dist/Flick-v1.0.3-win-x64.zip
             dist/SHA256SUMS.txt
             release/PREVIEW-RELEASE-NOTES.md
           if-no-files-found: error

@@ -2,6 +2,8 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
+using System.Threading;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -10,6 +12,7 @@ using LocalClip.App.Services;
 using LocalClip.Core.Models;
 using LocalClip.Core.Rules;
 using LocalClip.Core.Sharing;
+using LocalClip.Core.Updates;
 
 namespace LocalClip.App.Views;
 
@@ -32,6 +35,14 @@ public partial class SettingsWindow : UserControl
     public event Action<bool>? ShortcutEditingChanged;
     private string _activeCategory = "Recording";
 
+    private CancellationTokenSource? _updateCancellation;
+    private AvailableUpdate? _availableUpdate;
+    private DownloadedUpdate? _downloadedUpdate;
+    private bool _installingUpdate;
+    private bool _installerStarted;
+    private CancellationTokenSource? _installationCancellation;
+    public event Func<DownloadedUpdate, CancellationToken, Task<string?>>? InstallUpdateRequested;
+
     public bool UninstallRequested { get; private set; }
 
     /// <summary>True only after a successful, deliberate Save.</summary>
@@ -46,6 +57,170 @@ public partial class SettingsWindow : UserControl
         _isCaptureActive = isCaptureActive ?? throw new ArgumentNullException(nameof(isCaptureActive));
         Populate(settings);
         SelectCategory("Recording");
+        TxtCurrentVersion.Text = "Current version: " + FlickUpdateService.CurrentVersion;
+        ChkPreviewUpdates.IsChecked = ReleaseVersion.TryParse(FlickUpdateService.CurrentVersion, out var currentVersion) && currentVersion.IsPrerelease;
+        TxtUpdateMode.Text = FlickUninstallLauncher.IsInstalled
+            ? "Updates keep your clips and saved preferences. Save settings before installing; pending changes on this page are not applied by an update."
+            : "Portable copy: open the release page for a new ZIP, then quit Flick and replace the extracted application folder. Your clips and preferences live separately.";
+        Unloaded += (_, _) => LeavePage();
+    }
+
+    /// <summary>Leaving Settings cancels network work and removes this page's staged installer.</summary>
+    public void LeavePage()
+    {
+        _updateCancellation?.Cancel();
+        _installationCancellation?.Cancel();
+        _updateCancellation = null;
+        DiscardDownloadedUpdate();
+        if (!_installingUpdate)
+        {
+            SetUpdateBusy(false);
+            TxtUpdateStatus.Text = "Check for updates when you're ready.";
+        }
+    }
+
+    /// <summary>The child setup process owns its downloaded executable until it has finished.</summary>
+    public void MarkUpdateInstallerStarted()
+    {
+        _installerStarted = true;
+        _downloadedUpdate = null; // Do not delete a setup file while its child process is starting.
+    }
+
+    private void DiscardDownloadedUpdate()
+    {
+        if (_downloadedUpdate != null)
+            FlickUpdateService.DiscardDownload(_downloadedUpdate);
+        _downloadedUpdate = null;
+    }
+
+    private void SetUpdateBusy(bool busy)
+    {
+        BtnCheckUpdates.IsEnabled = !busy;
+        ChkPreviewUpdates.IsEnabled = !busy;
+        BtnDownloadUpdate.Visibility = !busy && _availableUpdate != null && _downloadedUpdate == null
+            && FlickUninstallLauncher.IsInstalled ? Visibility.Visible : Visibility.Collapsed;
+        BtnInstallUpdate.Visibility = !busy && _downloadedUpdate != null ? Visibility.Visible : Visibility.Collapsed;
+        BtnCancelUpdate.Visibility = busy && !_installingUpdate ? Visibility.Visible : Visibility.Collapsed;
+        BtnCancelUpdate.IsEnabled = true;
+        UpdateProgress.Visibility = busy && !_installingUpdate ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private void PreviewUpdates_Changed(object sender, RoutedEventArgs e)
+    {
+        if (TxtUpdateStatus == null || _updateCancellation != null) return;
+        _availableUpdate = null;
+        DiscardDownloadedUpdate();
+        TxtUpdateStatus.Text = "Check for updates to use this release channel.";
+        SetUpdateBusy(false);
+    }
+
+    private async void CheckUpdates_Click(object sender, RoutedEventArgs e)
+    {
+        if (_updateCancellation != null || _installingUpdate) return;
+        DiscardDownloadedUpdate();
+        _availableUpdate = null;
+        using var cancellation = new CancellationTokenSource();
+        _updateCancellation = cancellation;
+        SetUpdateBusy(true);
+        UpdateProgress.IsIndeterminate = true;
+        TxtUpdateStatus.Text = "Checking GitHub Releases…";
+        try
+        {
+            var client = new UpdateClient();
+            var release = await client.CheckAsync(FlickUpdateService.CurrentVersion,
+                ChkPreviewUpdates.IsChecked == true, cancellation.Token);
+            if (!ReferenceEquals(_updateCancellation, cancellation)) return;
+            _availableUpdate = release;
+            TxtUpdateStatus.Text = release == null ? "You're up to date on this release channel."
+                : $"Flick {release.Version} is available." + (FlickUninstallLauncher.IsInstalled
+                    ? " Review the release notes, then download when you're ready."
+                    : " Open Release Notes to download the portable ZIP.");
+        }
+        catch (OperationCanceledException)
+        { if (ReferenceEquals(_updateCancellation, cancellation)) TxtUpdateStatus.Text = "Update check cancelled."; }
+        catch (Exception)
+        { if (ReferenceEquals(_updateCancellation, cancellation)) TxtUpdateStatus.Text = "Couldn't check for updates. Check your connection and try again, or open Release Notes."; }
+        finally
+        {
+            if (ReferenceEquals(_updateCancellation, cancellation))
+            { _updateCancellation = null; SetUpdateBusy(false); }
+        }
+    }
+
+    private async void DownloadUpdate_Click(object sender, RoutedEventArgs e)
+    {
+        if (_availableUpdate == null || _updateCancellation != null || _installingUpdate) return;
+        if (!FlickUninstallLauncher.IsInstalled)
+        { UpdateReleaseNotes_Click(sender, e); return; }
+        using var cancellation = new CancellationTokenSource();
+        _updateCancellation = cancellation;
+        SetUpdateBusy(true);
+        UpdateProgress.IsIndeterminate = false;
+        UpdateProgress.Value = 0;
+        TxtUpdateStatus.Text = "Downloading update…";
+        var progress = new Progress<double>(percent =>
+        {
+            if (ReferenceEquals(_updateCancellation, cancellation))
+                UpdateProgress.Value = Math.Clamp(percent * 100, 0, 100);
+        });
+        try
+        {
+            var client = new UpdateClient();
+            var download = await client.DownloadAsync(_availableUpdate,
+                FlickUpdateService.DownloadDirectory, progress, cancellation.Token);
+            if (!ReferenceEquals(_updateCancellation, cancellation))
+            { FlickUpdateService.DiscardDownload(download); return; }
+            _downloadedUpdate = download;
+            TxtUpdateStatus.Text = $"Flick {download.Release.Version} downloaded and checksum verified. Save settings, then choose Install and Restart when replay is off and other work has finished.";
+        }
+        catch (OperationCanceledException)
+        { if (ReferenceEquals(_updateCancellation, cancellation)) TxtUpdateStatus.Text = "Download cancelled. Your installed version is unchanged."; }
+        catch (Exception)
+        { if (ReferenceEquals(_updateCancellation, cancellation)) TxtUpdateStatus.Text = "The update couldn't be downloaded or verified. Try again, or open Release Notes."; }
+        finally
+        {
+            if (ReferenceEquals(_updateCancellation, cancellation))
+            { _updateCancellation = null; SetUpdateBusy(false); }
+        }
+    }
+
+    private void CancelUpdate_Click(object sender, RoutedEventArgs e)
+    {
+        _updateCancellation?.Cancel();
+        BtnCancelUpdate.IsEnabled = false;
+        TxtUpdateStatus.Text = "Cancelling…";
+    }
+
+    private async void InstallUpdate_Click(object sender, RoutedEventArgs e)
+    {
+        if (_downloadedUpdate == null || _installingUpdate || _updateCancellation != null ||
+            InstallUpdateRequested == null) return;
+        var download = _downloadedUpdate;
+        using var cancellation = new CancellationTokenSource();
+        _installationCancellation = cancellation;
+        _installingUpdate = true;
+        SetUpdateBusy(true);
+        TxtUpdateStatus.Text = "Checking installer and Windows signature…";
+        try
+        {
+            string? message = await InstallUpdateRequested.Invoke(download, cancellation.Token);
+            if (message != null) TxtUpdateStatus.Text = message;
+        }
+        catch (Exception)
+        { TxtUpdateStatus.Text = "Flick couldn't start the installer. Your installed version is unchanged."; }
+        finally
+        {
+            if (cancellation.IsCancellationRequested && !_installerStarted) FlickUpdateService.DiscardDownload(download);
+            _installationCancellation = null;
+            _installingUpdate = false;
+            SetUpdateBusy(false);
+        }
+    }
+
+    private void UpdateReleaseNotes_Click(object sender, RoutedEventArgs e)
+    {
+        try { FlickUpdateService.OpenReleasePage(_availableUpdate?.ReleaseUrl); }
+        catch (Exception) { TxtUpdateStatus.Text = "Couldn't open GitHub Releases. Visit github.com/Krish-Verma/Flick/releases."; }
     }
 
     private void SettingsCategory_Click(object sender, RoutedEventArgs e)

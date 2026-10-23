@@ -245,6 +245,31 @@
                                Style="{StaticResource Flick.Text.Muted}"
                                TextWrapping="Wrap" Margin="0,19,0,0"/>
                     <Separator Background="{DynamicResource Flick.Brush.Border}" Margin="0,23,0,21"/>
+                    <TextBlock Text="Software Updates" Style="{StaticResource Flick.Text.Section}" Margin="0,0,0,9"/>
+                    <TextBlock x:Name="TxtCurrentVersion" Style="{StaticResource Flick.Text.Caption}" Margin="0,0,0,10"/>
+                    <CheckBox x:Name="ChkPreviewUpdates" Content="Include preview releases"
+                              Style="{StaticResource Flick.Toggle}" Margin="0,0,0,12"
+                              Checked="PreviewUpdates_Changed" Unchecked="PreviewUpdates_Changed"/>
+                    <TextBlock x:Name="TxtUpdateStatus" Text="Check when you're ready. Flick never downloads or installs an update in the background."
+                               Style="{StaticResource Flick.Text.Muted}" TextWrapping="Wrap" Margin="0,0,0,12"
+                               AutomationProperties.LiveSetting="Polite"/>
+                    <ProgressBar x:Name="UpdateProgress" Minimum="0" Maximum="100" Height="5" Margin="0,0,0,12"
+                                 Visibility="Collapsed" Foreground="{DynamicResource Flick.Brush.Accent}"
+                                 AutomationProperties.Name="Update download progress"/>
+                    <WrapPanel>
+                        <Button x:Name="BtnCheckUpdates" Content="Check for Updates" Click="CheckUpdates_Click"
+                                Style="{StaticResource Flick.Button.Secondary}" Margin="0,0,12,8"/>
+                        <Button x:Name="BtnDownloadUpdate" Content="Download Update" Click="DownloadUpdate_Click" Visibility="Collapsed"
+                                Style="{StaticResource Flick.Button.Primary}" Margin="0,0,12,8"/>
+                        <Button x:Name="BtnInstallUpdate" Content="Install and Restart" Click="InstallUpdate_Click" Visibility="Collapsed"
+                                Style="{StaticResource Flick.Button.Primary}" Margin="0,0,12,8"/>
+                        <Button x:Name="BtnCancelUpdate" Content="Cancel" Click="CancelUpdate_Click" Visibility="Collapsed"
+                                Style="{StaticResource Flick.Button.Ghost}" Margin="0,0,12,8"/>
+                        <Button Content="Release Notes" Click="UpdateReleaseNotes_Click"
+                                Style="{StaticResource Flick.Button.Ghost}" Margin="0,0,0,8"/>
+                    </WrapPanel>
+                    <TextBlock x:Name="TxtUpdateMode" Style="{StaticResource Flick.Text.Muted}" TextWrapping="Wrap" Margin="0,3,0,0"/>
+                    <Separator Background="{DynamicResource Flick.Brush.Border}" Margin="0,23,0,21"/>
                     <TextBlock Text="App Management" Style="{StaticResource Flick.Text.Section}"
                                Margin="0,0,0,11"/>
                     <TextBlock Text="Use Windows Uninstall to remove the program. You can separately choose whether to remove Flick settings and cache. Original videos and exports are always kept."

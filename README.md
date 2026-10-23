@@ -1,10 +1,12 @@
-# Flick — lightweight, private gameplay clipping for Windows
+# Flick — lightweight gameplay clipping for Windows
 
-**Current download: [v1.0.2 Preview 2 — UNSIGNED TEST BUILD](https://github.com/Krish-Verma/Flick/releases/tag/v1.0.2-preview.2).** Windows Smart App Control may block this installer. **Do not disable Smart App Control to run Flick.** We're preparing a Windows-trusted, signed public release; see [Signing & Smart App Control](docs/WINDOWS-TRUST-AND-SMART-APP-CONTROL.md).
+**Latest preview: [v1.0.3 — Updates & Brand Preview](https://github.com/Krish-Verma/Flick/releases/tag/v1.0.3-preview.1).** See [software updates](docs/SOFTWARE-UPDATES.md) for the one-time upgrade from older builds.
+
+**Earlier download: [v1.0.2 Preview 2 — UNSIGNED TEST BUILD](https://github.com/Krish-Verma/Flick/releases/tag/v1.0.2-preview.2).** Windows Smart App Control may block this installer. **Do not disable Smart App Control to run Flick.** We're preparing a Windows-trusted, signed public release; see [Signing & Smart App Control](docs/WINDOWS-TRUST-AND-SMART-APP-CONTROL.md).
 
 Flick is a Windows-native game clipper for capturing the last 15–120 seconds, trimming a clip without altering its original file, and exporting an MP4 suitable for sharing. The product is designed to be free, offline-first and open source, without accounts, telemetry, forced uploads or a heavyweight permanent gaming overlay.
 
-**Status: unsigned developer preview, not a trusted public release.** This repository is currently private while the source and Windows installer pass final acceptance. The application is distributed under GPL-2.0-or-later for original Flick code, subject to third-party component terms. Public repository visibility and releases require explicit owner approval.
+**Status: unsigned developer preview, not a trusted public release.** The repository is public; Windows hardware acceptance and trusted signing remain separate release gates. The application is distributed under GPL-2.0-or-later for original Flick code, subject to third-party component terms. Unsigned prereleases are explicitly labelled; they are not stable, Windows-trusted releases.
 
 ## Features
 

@@ -86,6 +86,9 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
     public event Action<string>? ReplaySaveFailed;
 
     public AppSettings Settings => _settings;
+    private int _saveRequestOperations;
+    private int _replayIndexOperations;
+    public bool IsReplaySavePending => _saveRequestOperations > 0 || _replayIndexOperations > 0;
     public bool IsCaptureActive => CaptureActive;
     public bool CanEditClip => SelectedClip?.IsAvailable == true && !IsExporting;
     public bool CanStartExport => CanEditClip && !IsImporting;
@@ -500,6 +503,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
             return;
         }
 
+        _saveRequestOperations++;
         StatusDetails = "Snapshotting replay buffer to original MKV...";
         string saveId = "clip_" + DateTime.UtcNow.ToString("yyyyMMdd_HHmmss") + "_" + Guid.NewGuid().ToString("N");
         try
@@ -515,6 +519,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
             StatusDetails = "Replay save failed: " + ex.Message;
             ReplaySaveFailed?.Invoke(StatusDetails);
         }
+        finally { _saveRequestOperations--; }
     }
 
     private void OnHostStateChanged(string state)
@@ -543,29 +548,34 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
     {
         Application.Current?.Dispatcher.Invoke(async () =>
         {
-            StatusDetails = $"Saved original clip: {Path.GetFileName(filePath)}";
-            if (File.Exists(filePath))
+            _replayIndexOperations++;
+            try
             {
-                try
+                StatusDetails = $"Saved original clip: {Path.GetFileName(filePath)}";
+                if (File.Exists(filePath))
                 {
-                    string targetName = SelectedTarget?.DisplayName ?? "Screen";
-                    var clip = await _storage.RegisterNewOriginalAsync(filePath, targetName, trackNames);
-                    // Reloading an ObservableCollection can temporarily clear the
-                    // ListBox selection through its TwoWay binding. Snapshot the
-                    // edit context BEFORE rebuilding the gallery.
-                    var editing = SelectedClip;
-                    ReloadClips();
-                    SelectedClip = editing is null
-                        ? clip
-                        : FilteredClips.FirstOrDefault(c => c.Id == editing.Id) ?? editing;
-                    ClipSavedConfirmed?.Invoke(clip);
-                }
-                catch (Exception ex)
-                {
-                    StatusDetails = "Saved clip could not be indexed: " + ex.Message;
-                    ReplaySaveFailed?.Invoke(StatusDetails);
+                    try
+                    {
+                        string targetName = SelectedTarget?.DisplayName ?? "Screen";
+                        var clip = await _storage.RegisterNewOriginalAsync(filePath, targetName, trackNames);
+                        // Reloading an ObservableCollection can temporarily clear the
+                        // ListBox selection through its TwoWay binding. Snapshot the
+                        // edit context BEFORE rebuilding the gallery.
+                        var editing = SelectedClip;
+                        ReloadClips();
+                        SelectedClip = editing is null
+                            ? clip
+                            : FilteredClips.FirstOrDefault(c => c.Id == editing.Id) ?? editing;
+                        ClipSavedConfirmed?.Invoke(clip);
+                    }
+                    catch (Exception ex)
+                    {
+                        StatusDetails = "Saved clip could not be indexed: " + ex.Message;
+                        ReplaySaveFailed?.Invoke(StatusDetails);
+                    }
                 }
             }
+            finally { _replayIndexOperations--; }
         });
     }
 
