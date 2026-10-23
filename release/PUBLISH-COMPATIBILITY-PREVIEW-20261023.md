@@ -21,7 +21,11 @@ The title remains **Flick 1.0.5 — UNSIGNED COMPATIBILITY PREVIEW** and the sem
 
 After full public verification and another fresh catalogue/tag/asset check, only release **422126500** (`v1.0.4-preview.1`) changes to **draft**. Its source tag, release entry and three asset files are preserved for authenticated upgrade CI and reversible recovery. No release, asset or Git tag is deleted or moved.
 
-A separate dependent job has only `contents: read`. After the baseline is hidden, that job uses the same authenticated `gh release download` path as future upgrade CI and verifies the old Setup's exact size and SHA-256. If GitHub does not permit that read-only token to retrieve the draft fixture, the workflow fails; the lead must inspect the result and restore baseline visibility or provide another least-privilege fixture route before claiming the future upgrade gate works. The job cannot change release visibility itself.
+Publication run40002971793, publish job120583578175 completed successfully: new release422177395 is Latest, all three public downloads matched, and only old release422126500 was hidden. The complete receipt is artifact12522573119 with SHA256`484eb001d2d529fc482f78dd75ffc7d594a56979a110d00b468ced146cf68745`.
+
+The initial read-only follow-up check failed because GitHub requires write-capable repository access to retrieve draft assets; direct immutable-asset GET also returned 403. The corrected preview workflow confines that credential to a no-checkout fixed-GET-only fixture-fetch job, verifies asset669859579's exact size/hash, and uploads it for the separate read-only build/test job. That build rehashes the received artifact before installation. Fork pull requests do not receive the privileged fixture job and therefore do not qualify the installed-upgrade/package lane; ordinary source/native/media CI remains available. Owner-run manual workflows and same-repository pull requests can qualify it.
+
+The publisher's dependent fixture-verification job likewise has no checkout, accepts no repository script/input and performs only the fixed asset GET plus size/hash checks. Its token has the write capability required by GitHub for draft visibility; it does not modify the release. Successful follow-up workflow results are required before claiming the preserved upgrade fixture route works. The publisher itself is pinned to original head33ccc0168c7f7bff8339cd0ea5a083c2981435cd, so later fixes cannot republish or overwrite released assets.
 
 | Preserved baseline asset | Asset ID | Bytes | SHA-256 |
 | --- | --- | --- | --- |

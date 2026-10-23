@@ -26,7 +26,15 @@ Package artifact12523350391: `flick-unsigned-preview-bed13299446865444237dec2d31
 
 Hardware encoder negotiation and bounded CPU fallback; actual encoder/profile feedback; export fallback; complete pinned OBS runtime checks; packet-based replay readiness; target-loss checks; save identity and graceful quit; damaged-index preservation; imported display orientation; exact FFmpeg9.0.2 binaries/notices; consistent product/version resources; installed update handling and previous-version upgrade qualification. The approved purple design is retained.
 
-Publication is separately guarded by `.github/workflows/publish-approved-compatibility-preview.yml`: exact source, successful runs, full archive digest and reviewed Setup hash must match. All three unauthenticated public downloads must match before the older 1.0.4 Release is preserved as a hidden draft; its Git tag/assets remain intact. A separate read-only job must prove the old upgrade fixture is still available. The workflow's receipt is the authority for publication outcome; this document does not imply that an unexecuted workflow succeeded.
+## Publication
+
+[Publication40002971793](https://github.com/Krish-Verma/Flick/actions/runs/40002971793), publish job120583578175: PASS. [Release 1.0.5](https://github.com/Krish-Verma/Flick/releases/tag/v1.0.5-preview.1), ID422177395, is Latest. All three unauthenticated public downloads matched their exact expected bytes before release422126500 (1.0.4) was preserved as a hidden draft. Its source tag and assets remain intact.
+
+Receipt artifact12522573119 SHA256`484eb001d2d529fc482f78dd75ffc7d594a56979a110d00b468ced146cf68745` records `completed:true`, all three verified downloads and `baselineDrafted:true`. Release manifest SHA256`509A66C27123B5EAFE9D1880C90744D920549E4AA2D8AEA6884EAC7192FF15C1`.
+
+The first follow-up fixture check failed: GitHub's read-only token cannot access a draft release (tag lookup failed; direct asset GET returned 403). This is a CI archive-access issue, not a failed public download or installer-upgrade result. The repair isolates the necessary write-capable token in a no-checkout, fixed-GET-only fetch job, verifies the exact old asset, and transfers it as a workflow artifact to the read-only build/test job. No release mutation is performed by that fetch job. Its successful workflow run remains the qualification authority.
+
+The publisher is locked to its original approved head33ccc0168c7f7bff8339cd0ea5a083c2981435cd; later documentation/fixture fixes cannot republish or replace existing assets. Candidate source and released bytes remain frozen.
 
 ## External acceptance still required
 

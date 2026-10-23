@@ -295,16 +295,19 @@ jobs:
           retention-days: 90
 
   verify-preserved-upgrade-fixture:
+    name: Verify preserved fixture with GitHub-mandated draft visibility
     needs: publish
     if: always() && github.repository == 'Krish-Verma/Flick' && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'release/publish-compatibility-preview-20261023' && github.event.pull_request.base.ref == 'main'
     runs-on: windows-latest
     timeout-minutes: 10
     permissions:
-      contents: read
+      # GitHub returned403 to contents:read for this draft asset. This job
+      # has no checkout and performs only the fixed GET and byte verification.
+      contents: write
     env:
       GH_TOKEN: ${{ github.token }}
     steps:
-      - name: Verify a future read-only upgrade job can download the hidden baseline
+      - name: Verify the isolated draft-asset fetch route can read the preserved baseline
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
@@ -315,9 +318,9 @@ jobs:
           # Direct asset GET avoids gh release's draft tag lookup. Native
           # redirection preserves bytes on the explicitly checked pwsh version.
           gh api repos/Krish-Verma/Flick/releases/assets/669859579 -H 'Accept: application/octet-stream' > $path
-          if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw 'Read-only baseline fixture download did not produce the installer' }
+          if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw 'Isolated baseline fixture download did not produce the installer' }
           $hash = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash
           if ((Get-Item -LiteralPath $path).Length -ne 241947803 -or $hash -cne 'DA1A0BBFB6B1D5803FC0D54387682C24F43D6039BAE6A2C999822628E7828A5F') {
             throw 'Preserved baseline installer does not match the approved upgrade fixture'
           }
-          Write-Host "Read-only authenticated draft baseline fixture verified: $hash"
+          Write-Host "GitHub-mandated draft visibility verified the fixed baseline fixture: $hash"
