@@ -1,13 +1,13 @@
 ; Flick per-user Windows installer. Retain user files on uninstall.
 #define MyAppName "Flick"
-#define MyAppVersion "1.0.2"
+#define MyAppVersion "1.0.3"
 #define MyAppExeName "Flick.exe"
 
 [Setup]
 AppId={{F3C41F96-EF62-4CB1-A292-91EF3F6C18E8}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
-AppVerName=Flick 1.0.2 — Windows NVIDIA NVENC Preview 2
+AppVerName=Flick 1.0.3 — Windows NVIDIA NVENC Updater Preview 1
 AppPublisher=Flick Contributors
 AppPublisherURL=https://github.com/Krish-Verma/Flick
 AppSupportURL=https://github.com/Krish-Verma/Flick/issues
@@ -46,7 +46,7 @@ InfoBeforeFile=PREVIEW-SYSTEM-REQUIREMENTS.txt
 Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription: "Shortcuts:"; Flags: unchecked
 
 [Files]
-Source: "..\dist\Flick-v1.0.2-win-x64\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "..\dist\Flick-v1.0.3-win-x64\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
 Name: "{autoprograms}\Flick"; Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{app}"
@@ -54,12 +54,57 @@ Name: "{autoprograms}\Uninstall Flick"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\Flick"; Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{app}"; Tasks: desktopicon
 
 [Run]
-Filename: "{app}\{#MyAppExeName}"; Description: "Launch Flick"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\{#MyAppExeName}"; Description: "Launch Flick"; Flags: nowait postinstall skipifsilent; Check: IsNormalInstall
 
+Filename: "{app}\{#MyAppExeName}"; Flags: nowait; Check: IsFlickUpdate
 
 [Code]
 var
   RemoveFlickProfile: Boolean;
+
+// The updater never kills or closes capture processes. It launches Setup,
+// then Flick exits cleanly; Setup waits only for that exact parent PID.
+function OpenProcess(Access: LongWord; Inherit: Boolean; Pid: LongWord): THandle;
+  external 'OpenProcess@kernel32.dll stdcall';
+function WaitForSingleObject(Handle: THandle; Milliseconds: LongWord): LongWord;
+  external 'WaitForSingleObject@kernel32.dll stdcall';
+function CloseHandle(Handle: THandle): Boolean;
+  external 'CloseHandle@kernel32.dll stdcall';
+
+function IsFlickUpdate(): Boolean;
+begin
+  Result := ExpandConstant('{param:FLICKUPDATE|0}') = '1';
+end;
+
+function IsNormalInstall(): Boolean;
+begin
+  Result := not IsFlickUpdate();
+end;
+
+function InitializeSetup(): Boolean;
+var
+  ParentPid: Integer;
+  ParentHandle: THandle;
+  WaitResult: LongWord;
+begin
+  Result := True;
+  if not IsFlickUpdate() then Exit;
+  ParentPid := StrToIntDef(ExpandConstant('{param:FLICKWAITPID|0}'), 0);
+  if ParentPid <= 0 then begin
+    Result := False;
+    Exit;
+  end;
+  ParentHandle := OpenProcess($00100000, False, ParentPid);
+  if ParentHandle = 0 then Exit; // Already exited; AppMutex still protects files.
+  Log('Flick update: waiting for parent PID ' + IntToStr(ParentPid));
+  WaitResult := WaitForSingleObject(ParentHandle, 30000);
+  CloseHandle(ParentHandle);
+  if WaitResult <> 0 then begin
+    MsgBox('Flick is still closing. No update was installed. Try again after Flick has quit.', mbError, MB_OK);
+    Result := False;
+  end;
+  if Result then Log('Flick update: parent exited.');
+end;
 
 function InitializeUninstall(): Boolean;
 begin

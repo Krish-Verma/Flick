@@ -34,6 +34,9 @@ public class SettingsStagingTests
                 void Invoke(string method, object sender) => typeof(SettingsWindow)
                     .GetMethod(method, BindingFlags.NonPublic | BindingFlags.Instance)!
                     .Invoke(page, new[] { sender, new RoutedEventArgs() });
+                Assert.Equal(Visibility.Collapsed, Find<Button>("BtnInstallUpdate").Visibility);
+                Assert.True(Find<Button>("BtnCheckUpdates").IsEnabled);
+                Assert.True(Find<CheckBox>("ChkPreviewUpdates").IsChecked);
                 var toggle = Find<TextBox>("TxtToggleHotkey");
                 var save = Find<TextBox>("TxtSaveHotkey");
                 Assert.True(toggle.IsReadOnly);

@@ -86,6 +86,15 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
     public event Action<string>? ReplaySaveFailed;
 
     public AppSettings Settings => _settings;
+    private int _saveRequestOperations;
+    private int _replayIndexOperations;
+    private int _discordUploadOperations;
+    private int _libraryRescanOperations;
+    public bool IsReplaySavePending => _saveRequestOperations > 0 || _replayIndexOperations > 0;
+    // These operations outlive their initiating page. The updater also checks
+    // the separate capture/save/import/export flags before closing the app.
+    public bool IsBackgroundWorkActive => Volatile.Read(ref _discordUploadOperations) > 0
+        || Volatile.Read(ref _libraryRescanOperations) > 0;
     public bool IsCaptureActive => CaptureActive;
     public bool CanEditClip => SelectedClip?.IsAvailable == true && !IsExporting;
     public bool CanStartExport => CanEditClip && !IsImporting;
@@ -500,6 +509,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
             return;
         }
 
+        _saveRequestOperations++;
         StatusDetails = "Snapshotting replay buffer to original MKV...";
         string saveId = "clip_" + DateTime.UtcNow.ToString("yyyyMMdd_HHmmss") + "_" + Guid.NewGuid().ToString("N");
         try
@@ -515,6 +525,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
             StatusDetails = "Replay save failed: " + ex.Message;
             ReplaySaveFailed?.Invoke(StatusDetails);
         }
+        finally { _saveRequestOperations--; }
     }
 
     private void OnHostStateChanged(string state)
@@ -543,29 +554,34 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
     {
         Application.Current?.Dispatcher.Invoke(async () =>
         {
-            StatusDetails = $"Saved original clip: {Path.GetFileName(filePath)}";
-            if (File.Exists(filePath))
+            _replayIndexOperations++;
+            try
             {
-                try
+                StatusDetails = $"Saved original clip: {Path.GetFileName(filePath)}";
+                if (File.Exists(filePath))
                 {
-                    string targetName = SelectedTarget?.DisplayName ?? "Screen";
-                    var clip = await _storage.RegisterNewOriginalAsync(filePath, targetName, trackNames);
-                    // Reloading an ObservableCollection can temporarily clear the
-                    // ListBox selection through its TwoWay binding. Snapshot the
-                    // edit context BEFORE rebuilding the gallery.
-                    var editing = SelectedClip;
-                    ReloadClips();
-                    SelectedClip = editing is null
-                        ? clip
-                        : FilteredClips.FirstOrDefault(c => c.Id == editing.Id) ?? editing;
-                    ClipSavedConfirmed?.Invoke(clip);
-                }
-                catch (Exception ex)
-                {
-                    StatusDetails = "Saved clip could not be indexed: " + ex.Message;
-                    ReplaySaveFailed?.Invoke(StatusDetails);
+                    try
+                    {
+                        string targetName = SelectedTarget?.DisplayName ?? "Screen";
+                        var clip = await _storage.RegisterNewOriginalAsync(filePath, targetName, trackNames);
+                        // Reloading an ObservableCollection can temporarily clear the
+                        // ListBox selection through its TwoWay binding. Snapshot the
+                        // edit context BEFORE rebuilding the gallery.
+                        var editing = SelectedClip;
+                        ReloadClips();
+                        SelectedClip = editing is null
+                            ? clip
+                            : FilteredClips.FirstOrDefault(c => c.Id == editing.Id) ?? editing;
+                        ClipSavedConfirmed?.Invoke(clip);
+                    }
+                    catch (Exception ex)
+                    {
+                        StatusDetails = "Saved clip could not be indexed: " + ex.Message;
+                        ReplaySaveFailed?.Invoke(StatusDetails);
+                    }
                 }
             }
+            finally { _replayIndexOperations--; }
         });
     }
 
@@ -709,14 +725,16 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
             StatusDetails = "Finish replay or export before a full library rescan.";
             return;
         }
-        if (IsImporting)
+        if (IsImporting || Volatile.Read(ref _libraryRescanOperations) > 0)
         {
             StatusDetails = "A library scan is already running.";
             return;
         }
 
+        Interlocked.Increment(ref _libraryRescanOperations);
         try
         {
+            OnPropertyChanged(nameof(IsBackgroundWorkActive));
             await _storage.RescanMediaFolderAsync(_settings.OriginalsFolder);
             foreach (var folder in _storage.GetConnectedFolders())
             {
@@ -733,7 +751,15 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
         {
             StatusDetails = "Couldn't refresh the library: " + ex.Message;
         }
-        finally { ReloadClips(); }
+        finally
+        {
+            try { ReloadClips(); }
+            finally
+            {
+                Interlocked.Decrement(ref _libraryRescanOperations);
+                OnPropertyChanged(nameof(IsBackgroundWorkActive));
+            }
+        }
     }
 
     public void OpenOriginalFolder()
@@ -1124,19 +1150,29 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
         var r = LocalClip.App.Services.FlickDialog.Show($"Send this clip ({Path.GetFileName(ReadyExportFilePath)}) to channel '{_settings.DiscordWebhookChannelName}'?", "Confirm Send to Discord", MessageBoxButton.YesNo, MessageBoxImage.Question);
         if (r != MessageBoxResult.Yes) return;
 
-        ExportStatusMessage = "Posting clip to Discord webhook...";
-        var client = new DiscordWebhookClient();
-        var res = await client.PostClipAsync(secretUrl, safeFile, message);
+        Interlocked.Increment(ref _discordUploadOperations);
+        try
+        {
+            OnPropertyChanged(nameof(IsBackgroundWorkActive));
+            ExportStatusMessage = "Posting clip to Discord webhook...";
+            var client = new DiscordWebhookClient();
+            var res = await client.PostClipAsync(secretUrl, safeFile, message);
 
-        if (res.Success)
-        {
-            ExportStatusMessage = "Successfully posted to Discord!";
-            LocalClip.App.Services.FlickDialog.Show("Clip posted successfully!", "Discord Webhook", MessageBoxButton.OK, MessageBoxImage.Information);
+            if (res.Success)
+            {
+                ExportStatusMessage = "Successfully posted to Discord!";
+                LocalClip.App.Services.FlickDialog.Show("Clip posted successfully!", "Discord Webhook", MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+            else
+            {
+                ExportStatusMessage = "Post failed: " + res.ErrorMessage;
+                LocalClip.App.Services.FlickDialog.Show(res.ErrorMessage, "Discord Webhook Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
         }
-        else
+        finally
         {
-            ExportStatusMessage = "Post failed: " + res.ErrorMessage;
-            LocalClip.App.Services.FlickDialog.Show(res.ErrorMessage, "Discord Webhook Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            Interlocked.Decrement(ref _discordUploadOperations);
+            OnPropertyChanged(nameof(IsBackgroundWorkActive));
         }
     }
 

@@ -42,11 +42,31 @@
     <Style x:Key="Flick.Text.Muted" TargetType="{x:Type TextBlock}" BasedOn="{StaticResource Flick.Text.Caption}">
         <Setter Property="Foreground" Value="{DynamicResource Flick.Brush.TextMuted}"/>
     </Style>
-    <!-- One circle-clipped original PNG, not an extra decorative badge.
-         38-DIP logo geometry is shared by nav, Settings and toast to prevent
-         optical drift in fractional scaling and to keep original branding. -->
+    <!-- Preserve the original PNG and its sunset colors. Its visible artwork
+         sits about 3 source pixels above/left of the optical center. Shift the
+         drawing by 1 DIP inside a fixed 38-DIP viewport; moving the Image itself
+         would also move its circular clip and leave the badge off-center.
+         Nav, Settings and toast all share this one corrected source. -->
+    <DrawingImage x:Key="Flick.Image.BrandMark.Source">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <DrawingGroup.ClipGeometry>
+                    <EllipseGeometry Center="19,19" RadiusX="19" RadiusY="19"/>
+                </DrawingGroup.ClipGeometry>
+                <!-- Match the original canvas under the shifted bitmap. This
+                     also fixes the viewport bounds at exactly 38 x 38 DIPs. -->
+                <GeometryDrawing Brush="#FF06030D">
+                    <GeometryDrawing.Geometry>
+                        <RectangleGeometry Rect="0,0,38,38"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <ImageDrawing ImageSource="pack://application:,,,/Flick;component/Assets/Brand/FlickLogo.png"
+                              Rect="1,1,38,38"/>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
     <Style x:Key="Flick.Image.BrandMark" TargetType="{x:Type Image}">
-        <Setter Property="Source" Value="pack://application:,,,/Flick;component/Assets/Brand/FlickLogo.png"/>
+        <Setter Property="Source" Value="{StaticResource Flick.Image.BrandMark.Source}"/>
         <Setter Property="Width" Value="{StaticResource Flick.Size.ToastLogo}"/>
         <Setter Property="Height" Value="{StaticResource Flick.Size.ToastLogo}"/>
         <Setter Property="Stretch" Value="Uniform"/>

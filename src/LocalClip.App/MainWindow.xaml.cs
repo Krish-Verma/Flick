@@ -15,9 +15,11 @@ using LocalClip.App.ViewModels;
 using LocalClip.App.Views;
 using LocalClip.App.Services;
 using System.Runtime.InteropServices;
+using System.Security.Cryptography;
 using LocalClip.Core.Models;
 using LocalClip.Core.Rules;
 using LocalClip.Core.Media;
+using LocalClip.Core.Updates;
 using LocalClip.App.Views.Components;
 using System.Threading;
 
@@ -60,6 +62,7 @@ public partial class MainWindow : Window
     internal ContentControl DialogHost => DialogContentHost;
     private bool _posterCacheDetached;
     private Button? _activeEditorTool;
+    private bool _updateInstallInProgress;
 
     public MainWindow()
     {
@@ -72,8 +75,10 @@ public partial class MainWindow : Window
         _vm.ReplaySaveFailed += OnReplaySaveFailed;
 
         _hotkeyManager = new HotkeyManager();
-        _hotkeyManager.OnCaptureToggleHotkeyPressed += async () => await _vm.ToggleCaptureAsync();
-        _hotkeyManager.OnSaveReplayHotkeyPressed += async () => await _vm.SaveReplayAsync();
+        _hotkeyManager.OnCaptureToggleHotkeyPressed += async () =>
+        { if (!_updateInstallInProgress) await _vm.ToggleCaptureAsync(); };
+        _hotkeyManager.OnSaveReplayHotkeyPressed += async () =>
+        { if (!_updateInstallInProgress) await _vm.SaveReplayAsync(); };
 
         _playerTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(200) };
         _playerTimer.Tick += PlayerTimer_Tick;
@@ -186,26 +191,45 @@ public partial class MainWindow : Window
 
     private System.Drawing.Icon CreateTrayIcon()
     {
+        try { return CreateTrayIconCore(); }
+        catch { return System.Drawing.SystemIcons.Application; }
+    }
+
+    private System.Drawing.Icon CreateTrayIconCore()
+    {
+        var asset = System.Windows.Application.GetResourceStream(
+            new Uri("pack://application:,,,/Flick;component/Assets/Brand/FlickLogo.png"));
+        if (asset == null) throw new IOException("The embedded Flick brand artwork was not found.");
+        using var stream = asset.Stream;
+        using var source = new System.Drawing.Bitmap(stream);
+        // Match the WPF brand source and packaged ICO: keep a fixed dark
+        // circle, and move only its original artwork by 1/38 of the canvas.
+        const int size = 128;
+        using var bitmap = new System.Drawing.Bitmap(size, size,
+            System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+        using (var graphics = System.Drawing.Graphics.FromImage(bitmap))
+        using (var clip = new System.Drawing.Drawing2D.GraphicsPath())
+        using (var canvas = new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(255, 6, 3, 13)))
+        {
+            graphics.Clear(System.Drawing.Color.Transparent);
+            graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+            graphics.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
+            graphics.PixelOffsetMode = System.Drawing.Drawing2D.PixelOffsetMode.HighQuality;
+            var viewport = new System.Drawing.RectangleF(0, 0, size, size);
+            graphics.FillEllipse(canvas, viewport);
+            clip.AddEllipse(viewport);
+            graphics.SetClip(clip);
+            float offset = size / 38f;
+            graphics.DrawImage(source, new System.Drawing.RectangleF(offset, offset, size, size));
+        }
+        IntPtr native = bitmap.GetHicon();
         try
         {
-            var asset = System.Windows.Application.GetResourceStream(
-                new Uri("pack://application:,,,/Assets/Brand/FlickLogo.png"));
-            if (asset == null) return System.Drawing.SystemIcons.Application;
-            using var stream = asset.Stream;
-            using var bitmap = new System.Drawing.Bitmap(stream);
-            IntPtr native = bitmap.GetHicon();
-            try
-            {
-                var copy = (System.Drawing.Icon)System.Drawing.Icon.FromHandle(native).Clone();
-                _ownsTrayBrandIcon = true;
-                return copy;
-            }
-            finally { _ = DestroyIcon(native); }
+            var copy = (System.Drawing.Icon)System.Drawing.Icon.FromHandle(native).Clone();
+            _ownsTrayBrandIcon = true;
+            return copy;
         }
-        catch
-        {
-            return System.Drawing.SystemIcons.Application;
-        }
+        finally { _ = DestroyIcon(native); }
     }
 
     private void SetupSystemTray()
@@ -225,7 +249,7 @@ public partial class MainWindow : Window
 
         _trayReplayItem = new System.Windows.Forms.ToolStripMenuItem("Start Replay");
         _trayReplayItem.Click += (sender, args) =>
-            _ = Dispatcher.BeginInvoke(new Action(async () => await _vm.ToggleCaptureAsync()));
+            _ = Dispatcher.BeginInvoke(new Action(async () => { if (!_updateInstallInProgress) await _vm.ToggleCaptureAsync(); }));
         menu.Items.Add(_trayReplayItem);
 
         _traySaveItem = new System.Windows.Forms.ToolStripMenuItem("Save Last 30 Seconds")
@@ -233,7 +257,7 @@ public partial class MainWindow : Window
             Enabled = false
         };
         _traySaveItem.Click += (sender, args) =>
-            _ = Dispatcher.BeginInvoke(new Action(async () => await _vm.SaveReplayAsync()));
+            _ = Dispatcher.BeginInvoke(new Action(async () => { if (!_updateInstallInProgress) await _vm.SaveReplayAsync(); }));
         menu.Items.Add(_traySaveItem);
         menu.Items.Add(new System.Windows.Forms.ToolStripSeparator());
 
@@ -378,6 +402,7 @@ public partial class MainWindow : Window
 
         if (_foldersPage != null) _foldersPage.LeavePage();
         _foldersPage = null;
+        _settingsPage?.LeavePage();
         _settingsPage = null;
         WorkspacePageHost.Content = null;
         _playerTimer.Stop();
@@ -472,6 +497,8 @@ public partial class MainWindow : Window
         if (_settingsPage != null)
         {
             _settingsPage.CloseRequested -= CloseSettingsPage;
+            _settingsPage.InstallUpdateRequested -= InstallUpdateAsync;
+            _settingsPage.LeavePage();
             _settingsPage = null; // Unsaved staged settings are discarded.
         }
         WorkspacePageHost.Content = null; // Do not retain invisible page UI.
@@ -595,11 +622,13 @@ public partial class MainWindow : Window
     // Top Bar Handlers
     private async void BtnToggleCapture_Click(object sender, RoutedEventArgs e)
     {
+        if (_updateInstallInProgress) return;
         await _vm.ToggleCaptureAsync();
     }
 
     private async void BtnSaveReplay_Click(object sender, RoutedEventArgs e)
     {
+        if (_updateInstallInProgress) return;
         await _vm.SaveReplayAsync();
     }
 
@@ -612,7 +641,7 @@ public partial class MainWindow : Window
 
     private void OpenSettings()
     {
-        if (FlickDialog.IsOpen) return;
+        if (FlickDialog.IsOpen || _updateInstallInProgress) return;
         if (_foldersPage != null) CloseConnectedFolders();
         if (_settingsPage != null)
         {
@@ -623,6 +652,7 @@ public partial class MainWindow : Window
         var settings = new SettingsWindow(_vm.Settings,
             () => _vm.CaptureStatus is "Starting" or "Armed" or "Buffering");
         settings.CloseRequested += CloseSettingsPage;
+        settings.InstallUpdateRequested += InstallUpdateAsync;
         settings.ShortcutEditingChanged += editing => _hotkeyManager.IsShortcutEditing = editing;
         settings.ManageFoldersRequested += (_, _) => OpenConnectedFolders();
         settings.PreviewNotificationRequested += (show, sound, tone, path) =>
@@ -631,6 +661,73 @@ public partial class MainWindow : Window
         };
         _settingsPage = settings;
         ShowWorkspacePage(settings);
+    }
+
+    private bool UpdateRequiresFinishingWork() =>
+        _vm.IsCaptureActive || _vm.IsReplaySavePending || _vm.IsImporting || _vm.IsExporting ||
+        _vm.IsBackgroundWorkActive;
+
+    private async System.Threading.Tasks.Task<string?> InstallUpdateAsync(DownloadedUpdate download, CancellationToken cancellationToken)
+    {
+        var originatingSettings = _settingsPage;
+        if (cancellationToken.IsCancellationRequested || originatingSettings == null ||
+            !ReferenceEquals(WorkspacePageHost.Content, originatingSettings))
+            return "Open Software Updates again to install the update.";
+        if (_updateInstallInProgress) return "An update installation is already being prepared.";
+        if (!FlickUninstallLauncher.IsInstalled)
+            return "This copy is portable. Open Release Notes for a new ZIP, then quit Flick and replace its extracted application folder.";
+        if (UpdateRequiresFinishingWork())
+            return "Save any replay you want to keep, stop replay yourself, and wait for clip saving, imports, library scans, exports and uploads to finish before installing. Flick will not stop or discard your work for an update.";
+
+        _updateInstallInProgress = true;
+        bool wasEnabled = MainInteractionSurface.IsEnabled;
+        bool wasEditingShortcut = _hotkeyManager.IsShortcutEditing;
+        MainInteractionSurface.IsEnabled = false;
+        _hotkeyManager.IsShortcutEditing = true;
+        try
+        {
+            // Native trust verification may contact Windows' revocation service;
+            // keep it off the dispatcher and do not let hotkeys start capture meanwhile.
+            using var prepared = await FlickUpdateService.PrepareInstallationAsync(download, cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+            if (_isRealClosing || Dispatcher.HasShutdownStarted) return null;
+            if (!ReferenceEquals(_settingsPage, originatingSettings) ||
+                !ReferenceEquals(WorkspacePageHost.Content, originatingSettings))
+                return "Open Software Updates again to install the update.";
+            string warning = prepared.IsUnsignedPreview
+                ? $"Install Flick {download.Release.Version}? This preview installer is unsigned. Its download checksum matches this GitHub release, but Windows has not verified its publisher. Smart App Control may block it. Continue only if you trust this release; Flick will not disable or bypass Windows protections. Flick will close and restart after installation. Pending Settings edits are not saved."
+                : $"Install Flick {download.Release.Version} and restart? Windows verified the installer's signature. Flick will close while the update is installed. Saved clips and preferences are kept; pending Settings edits are not saved.";
+            if (FlickDialog.Show(warning, prepared.IsUnsignedPreview ? "Install Unsigned Preview" : "Install Flick Update",
+                MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No) != MessageBoxResult.Yes)
+                return "Installation cancelled. The downloaded update is ready when you are.";
+
+            // The consent UI pumps dispatcher messages. Recheck live work, the
+            // page and installation immediately before launching; never stop capture.
+            cancellationToken.ThrowIfCancellationRequested();
+            if (_isRealClosing || Dispatcher.HasShutdownStarted) return null;
+            if (UpdateRequiresFinishingWork())
+                return "New work started while preparing the update. Stop replay and wait for clip saving, imports, library scans, exports and uploads to finish, then try again.";
+            if (!ReferenceEquals(_settingsPage, originatingSettings) ||
+                !ReferenceEquals(WorkspacePageHost.Content, originatingSettings))
+                return "Open Software Updates again to install the update.";
+            cancellationToken.ThrowIfCancellationRequested();
+            FlickUpdateService.LaunchInstaller(prepared);
+            originatingSettings.MarkUpdateInstallerStarted();
+            RealQuit(); // Normal tray cleanup and App.OnExit release the single-instance mutex.
+            return null;
+        }
+        catch (OperationCanceledException) { return "Update preparation cancelled."; }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException or InvalidOperationException
+            or System.ComponentModel.Win32Exception or CryptographicException)
+        {
+            return "The update was not started. " + error.Message;
+        }
+        finally
+        {
+            _updateInstallInProgress = false;
+            MainInteractionSurface.IsEnabled = wasEnabled;
+            _hotkeyManager.IsShortcutEditing = wasEditingShortcut;
+        }
     }
 
     private void CloseSettingsPage(bool saved)
