@@ -32,6 +32,6 @@
 
 ## Deferred to later PRs
 
-R2 handles themed title chrome, scrollbars, menus and circular optical logo; R3/R4 video-first workspace and contextual edit controls; R5 Share/Discord; R6 shortcut recording UX; R7 all remaining app-owned confirmation overlays and final performance qualification; **R8** minimalist Clip Saved toast (no ID/number/title/duration) and safely bounded custom sound choice.
+R2 handles themed title chrome, scrollbars, menus and circular optical logo; R3/R4 video-first workspace and contextual edit controls; R5 Share/Discord; R6 shortcut recording UX; R7 all remaining app-owned confirmation overlays and final performance qualification; **R8** minimalist Clip Saved toast (actual duration only; no ID/number/title) and safely bounded custom sound choice.
 
 **No new installer/release created.** The separate trusted-signing and Smart App Control blocker remains unchanged.

@@ -254,16 +254,17 @@ public partial class MainWindow : Window
         try
         {
             _notificationService.NotifySaved(
-                clip.Title, clip.DurationSeconds,
+                clip.DurationSeconds,
                 _vm.Settings.ShowClipSavedOverlay,
-                _vm.Settings.PlayClipSavedSound);
+                _vm.Settings.PlayClipSavedSound,
+                _vm.Settings.ClipSavedSoundTone, _vm.Settings.ClipSavedSoundPath);
         }
         catch (Exception)
         {
             // Nonessential overlays must never break capture or file persistence.
             if (_vm.Settings.ShowClipSavedOverlay)
                 _notifyIcon?.ShowBalloonTip(1800, "Flick · Clip Saved",
-                    System.IO.Path.GetFileName(clip.OriginalFilePath),
+                    NotificationWaveRules.DurationText(clip.DurationSeconds),
                     System.Windows.Forms.ToolTipIcon.Info);
         }
     }
@@ -624,9 +625,9 @@ public partial class MainWindow : Window
         settings.CloseRequested += CloseSettingsPage;
         settings.ShortcutEditingChanged += editing => _hotkeyManager.IsShortcutEditing = editing;
         settings.ManageFoldersRequested += (_, _) => OpenConnectedFolders();
-        settings.PreviewNotificationRequested += (show, sound) =>
+        settings.PreviewNotificationRequested += (show, sound, tone, path) =>
         {
-            try { _notificationService.Preview(sound); } catch { }
+            try { _notificationService.Preview(sound, tone, path); } catch { }
         };
         _settingsPage = settings;
         ShowWorkspacePage(settings);
@@ -646,6 +647,7 @@ public partial class MainWindow : Window
             return;
         }
         if (!saved) return;
+        _notificationService.StopSound();
 
         RegisterHotkeys();
         _vm.RefreshExportPreferences();

@@ -24,6 +24,7 @@ public partial class SettingsWindow : UserControl
     // The recording bar remains interactive while Settings is open; query
     // live capture status at Save time instead of using a stale snapshot.
     private readonly Func<bool> _isCaptureActive;
+    private string _customSoundPath = "";
     private bool _loading;
     private TextBox? _editingShortcut;
     private string _shortcutCandidate = "";
@@ -35,7 +36,7 @@ public partial class SettingsWindow : UserControl
 
     /// <summary>True only after a successful, deliberate Save.</summary>
     public event Action<bool>? CloseRequested;
-    public event Action<bool, bool>? PreviewNotificationRequested;
+    public event Action<bool, bool, string, string>? PreviewNotificationRequested;
     public event EventHandler? ManageFoldersRequested;
 
     public SettingsWindow(AppSettings settings, Func<bool> isCaptureActive)
@@ -99,6 +100,9 @@ public partial class SettingsWindow : UserControl
             ChkStartMinimized.IsChecked = settings.StartMinimizedToTray;
             ChkClipSavedOverlay.IsChecked = settings.ShowClipSavedOverlay;
             ChkClipSavedSound.IsChecked = settings.PlayClipSavedSound;
+            CmbNotificationTone.SelectedIndex = settings.ClipSavedSoundTone switch { "Quiet" => 1, "Custom" => 2, _ => 0 };
+            _customSoundPath = settings.ClipSavedSoundPath;
+            CustomSoundName.Text = string.IsNullOrWhiteSpace(_customSoundPath) ? "No custom sound selected" : Path.GetFileName(_customSoundPath);
             ChkEnableWebhook.IsChecked = settings.EnableDiscordWebhook;
             TxtWebhookChannel.Text = settings.DiscordWebhookChannelName;
             TxtWebhookUrl.Password = DiscordWebhookClient.UnprotectSecret(settings.MaskedWebhookUrl);
@@ -274,7 +278,30 @@ public partial class SettingsWindow : UserControl
         ManageFoldersRequested?.Invoke(this, EventArgs.Empty);
 
     private void PreviewNotification_Click(object sender, RoutedEventArgs e) =>
-        PreviewNotificationRequested?.Invoke(true, ChkClipSavedSound.IsChecked == true);
+        PreviewNotificationRequested?.Invoke(true, ChkClipSavedSound.IsChecked == true, NotificationTone(), _customSoundPath);
+
+    private string NotificationTone() => CmbNotificationTone.SelectedIndex switch { 1 => "Quiet", 2 => "Custom", _ => "Chime" };
+
+    private void ChooseSound_Click(object sender, RoutedEventArgs e)
+    {
+        var picker = new Microsoft.Win32.OpenFileDialog { Filter = "PCM WAV audio (*.wav)|*.wav", CheckFileExists = true, Multiselect = false };
+        if (picker.ShowDialog(Window.GetWindow(this)) != true) return;
+        try
+        {
+            _ = NotificationSoundFile.Read(picker.FileName);
+            _customSoundPath = picker.FileName;
+            CustomSoundName.Text = Path.GetFileName(_customSoundPath);
+            CmbNotificationTone.SelectedIndex = 2;
+        }
+        catch (Exception ex) { FlickDialog.Show(ex.Message, "Choose a Short WAV Sound"); }
+    }
+
+    private void ResetSound_Click(object sender, RoutedEventArgs e)
+    {
+        _customSoundPath = "";
+        CustomSoundName.Text = "No custom sound selected";
+        CmbNotificationTone.SelectedIndex = 0;
+    }
 
     private void Save_Click(object sender, RoutedEventArgs e)
     {
@@ -361,6 +388,8 @@ public partial class SettingsWindow : UserControl
             staged.StartMinimizedToTray = ChkStartMinimized.IsChecked == true;
             staged.ShowClipSavedOverlay = ChkClipSavedOverlay.IsChecked == true;
             staged.PlayClipSavedSound = ChkClipSavedSound.IsChecked == true;
+            staged.ClipSavedSoundTone = NotificationTone();
+            staged.ClipSavedSoundPath = _customSoundPath;
             staged.DiscordTargetSizeMb = cap;
             RecordingProfiles.TryApply(Preset(), staged);
             staged.DiscordWebhookChannelName = TxtWebhookChannel.Text.Trim();
@@ -395,6 +424,8 @@ public partial class SettingsWindow : UserControl
             _settings.StartMinimizedToTray = staged.StartMinimizedToTray;
             _settings.ShowClipSavedOverlay = staged.ShowClipSavedOverlay;
             _settings.PlayClipSavedSound = staged.PlayClipSavedSound;
+            _settings.ClipSavedSoundTone = staged.ClipSavedSoundTone;
+            _settings.ClipSavedSoundPath = staged.ClipSavedSoundPath;
             _settings.DiscordTargetSizeMb = staged.DiscordTargetSizeMb;
             _settings.DiscordWebhookChannelName = staged.DiscordWebhookChannelName;
             _settings.MaskedWebhookUrl = staged.MaskedWebhookUrl;

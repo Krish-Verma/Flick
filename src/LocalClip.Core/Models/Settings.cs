@@ -61,6 +61,8 @@ public class AppSettings
     // resident until a confirmed saved clip or a user-initiated preview.
     public bool ShowClipSavedOverlay { get; set; } = true;
     public bool PlayClipSavedSound { get; set; } = true;
+    public string ClipSavedSoundTone { get; set; } = "Chime";
+    public string ClipSavedSoundPath { get; set; } = "";
     // Nonpersistent diagnostic: unreadable/invalid settings are not deleted or
     // silently overwritten. Display the warning after app initialization.
     [JsonIgnore]

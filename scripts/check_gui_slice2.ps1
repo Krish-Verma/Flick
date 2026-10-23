@@ -59,3 +59,6 @@ foreach ($name in @("ChkClipSavedOverlay", "ChkClipSavedSound")) {
     Require $settingsView ('x:Name="' + $name + '"') "Missing Settings toggle: $name"
 }
 Write-Host "Flick GUI Slice 2 structural invariants PASS (hardware/runtime acceptance still pending)." -ForegroundColor Green
+
+Require $service 'NotificationWaveRules.DurationText\(durationSeconds\)' "Save detail must be actual duration only"
+if ($service -match 'clipTitle|Last Round Clutch') { throw "Save notification must not accept clip titles" }
