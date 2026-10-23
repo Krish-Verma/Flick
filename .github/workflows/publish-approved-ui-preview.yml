@@ -1,0 +1,69 @@
+name: Publish owner-approved unsigned UI refresh preview
+on:
+  pull_request:
+    paths:
+      - 'release/UI-REFRESH-PREVIEW-20261023.md'
+      - '.github/workflows/publish-approved-ui-preview.yml'
+permissions:
+  contents: read
+concurrency:
+  group: flick-approved-ui-preview-20261023
+  cancel-in-progress: false
+jobs:
+  publish:
+    if: github.repository == 'Krish-Verma/Flick' && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'release/ui-refresh-preview-20261023'
+    runs-on: windows-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      actions: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify private repository and exact reviewed source/build provenance
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $repo = gh api repos/Krish-Verma/Flick | ConvertFrom-Json
+          if (-not $repo.private) { throw 'Only the explicitly approved PRIVATE prerelease is authorized' }
+          foreach ($id in @(39977197033, 39977197114)) {
+            $run = gh api "repos/Krish-Verma/Flick/actions/runs/$id" | ConvertFrom-Json
+            if ($run.conclusion -ne 'success' -or $run.head_sha -ne '79204f67ca9318526873730946d82556eee9ce9c') { throw 'Candidate source/build mismatch' }
+          }
+          $artifact = gh api repos/Krish-Verma/Flick/actions/artifacts/12512875238 | ConvertFrom-Json
+          if ($artifact.expired -or $artifact.workflow_run.id -ne 39977197114 -or $artifact.digest -ne 'sha256:20b7517f059c642c5118ad2eb62b732b227f838ef617ee5aa9e2fc2b55c60aba') { throw 'Artifact provenance mismatch' }
+      - name: Download immutable private test artifact
+        uses: actions/download-artifact@v4
+        with:
+          artifact-ids: '12512875238'
+          run-id: '39977197114'
+          github-token: ${{ github.token }}
+          path: release-files
+          merge-multiple: true
+      - name: Verify bytes and publish exactly one clearly labelled private prerelease
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $tag = 'ui-refresh-preview-20261023'
+          $existing = gh api 'repos/Krish-Verma/Flick/releases?per_page=100' | ConvertFrom-Json
+          if ($existing | Where-Object { $_.tag_name -eq $tag }) { throw 'Release already exists; refuse to overwrite any published asset' }
+          $files = Get-ChildItem release-files -Recurse -File
+          $paths = @{}
+          foreach ($name in @('Flick-Setup.exe', 'Flick-v1.0.2-win-x64.zip', 'SHA256SUMS.txt')) {
+            $found = @($files | Where-Object Name -eq $name)
+            if ($found.Count -ne 1) { throw "Missing or ambiguous asset: $name" }
+            $paths[$name] = $found[0].FullName
+          }
+          $manifest = Get-Content -LiteralPath $paths['SHA256SUMS.txt'] -Raw
+          foreach ($name in @('Flick-Setup.exe', 'Flick-v1.0.2-win-x64.zip')) {
+            $actual = (Get-FileHash -LiteralPath $paths[$name] -Algorithm SHA256).Hash
+            $pattern = '(?mi)^' + $actual + '\s+' + [regex]::Escape($name) + '\s*$'
+            if ($manifest -notmatch $pattern) { throw "Checksum mismatch: $name" }
+          }
+          if ((Get-FileHash -LiteralPath $paths['Flick-Setup.exe'] -Algorithm SHA256).Hash -ne 'E09BEC570628D664AEC3FBDD5A53B2CF363D8C35A28B1E1205573C46CB1EF411') { throw 'Reviewed Setup digest mismatch' }
+          gh release create $tag $paths['Flick-Setup.exe'] $paths['Flick-v1.0.2-win-x64.zip'] $paths['SHA256SUMS.txt'] --repo Krish-Verma/Flick --target 79204f67ca9318526873730946d82556eee9ce9c --prerelease --title 'Flick UI Refresh — October 23 Preview (UNSIGNED)' --notes-file release/UI-REFRESH-PREVIEW-20261023.md
+          if ($LASTEXITCODE -ne 0) { throw 'Release publication failed; inspect outcome before retrying' }
+          $published = gh release view $tag --repo Krish-Verma/Flick --json url,isDraft,isPrerelease,assets | ConvertFrom-Json
+          if ($published.isDraft -or -not $published.isPrerelease -or $published.assets.Count -ne 3) { throw 'Published preview metadata is unexpected' }
+          Write-Host "Published private UNSIGNED preview: $($published.url)"
