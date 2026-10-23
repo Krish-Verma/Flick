@@ -284,7 +284,7 @@
                         </UniformGrid><Border x:Name="EditorContextLayer" Grid.Row="1" Panel.ZIndex="5" VerticalAlignment="Bottom" Margin="12" Padding="12" Background="{DynamicResource Flick.Brush.Surface}" BorderBrush="{DynamicResource Flick.Brush.Border}" BorderThickness="1" CornerRadius="{StaticResource Flick.Corner.Panel}" Visibility="Collapsed" KeyboardNavigation.TabNavigation="Cycle"><DockPanel><Button DockPanel.Dock="Top" x:Name="CloseEditorTool" Content="Close" Click="CloseEditorTool_Click" HorizontalAlignment="Right" Style="{StaticResource Flick.Button.Ghost}" Margin="0,0,0,4"/><ScrollViewer x:Name="EditorContextScroll" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Focusable="False"><StackPanel x:Name="EditorContextHost"><Border IsEnabled="{Binding CanEditClip}" Background="Transparent" BorderThickness="0" Padding="12" Margin="0,8,0,0" x:Name="TrimPanel" Visibility="Collapsed">
                             <components:TrimRangeControl x:Name="TrimTimeline" RangeCommitted="TrimTimeline_RangeCommitted"/>
                         </Border><Border Background="Transparent" BorderThickness="0" Padding="6,3" x:Name="AudioPanel" Visibility="Collapsed" Margin="0,8,0,0">
-                            <Expander x:Name="AudioExpander" IsEnabled="{Binding CanEditClip}" Header="Export Audio" IsExpanded="False" Foreground="{DynamicResource Flick.Brush.TextPrimary}" Background="Transparent" Padding="4">
+                            <Expander x:Name="AudioExpander" Style="{StaticResource Flick.Expander.Disclosure}" IsEnabled="{Binding CanEditClip}" Header="Export Audio" IsExpanded="False" Foreground="{DynamicResource Flick.Brush.TextPrimary}" Background="Transparent" Padding="4">
                                 <StackPanel Margin="5,8,5,8">
                                     <TextBlock Text="Export Mix · Original Recording Is Never Modified" Style="{StaticResource Flick.Text.Caption}" Margin="0,0,0,8" TextWrapping="Wrap"/>
                                     <ItemsControl ItemsSource="{Binding SelectedClip.AudioTracks}">
@@ -373,7 +373,7 @@
                             </Grid>
                         </Border>
 
-                        <Expander x:Name="AdvancedShareExpander" IsExpanded="False" Header="Discord: Optional Direct Posting" Margin="0,7,0,0" Foreground="{DynamicResource Flick.Brush.TextSecondary}" Background="Transparent">
+                        <Expander x:Name="AdvancedShareExpander" Style="{StaticResource Flick.Expander.Disclosure}" IsExpanded="False" Header="Discord: Optional Direct Posting" Margin="0,7,0,0" Foreground="{DynamicResource Flick.Brush.TextSecondary}" Background="Transparent">
                             <Grid Margin="10,7,0,3">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*" MinWidth="120"/>

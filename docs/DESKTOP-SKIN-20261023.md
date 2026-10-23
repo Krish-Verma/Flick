@@ -14,6 +14,7 @@ The original Flick artwork and its optical alignment remain. The sunset spectrum
 - Compact six-DIP control corners, flatter grouping, neutral selected rows and a contiguous source segment reduce outlined capsules. Editing actions retain their evenly spaced four-column arrangement, visible labels and 52-DIP hit targets.
 - Settings retain the same categories and fields with a readable content width, aligned insets and fewer nested borders. Trim grips and transport chrome are neutral; the active focus indicator stays visible.
 - The real Windows caption reads colors from the same named palette. Standard resize, Snap and window controls remain native.
+- Dropdown selections stay on one line with an ellipsis at compact widths. Advanced sections use the same small disclosure chevron, with hover, keyboard focus and two-way expansion behavior preserved.
 
 ## Impeccable guidance
 

@@ -105,6 +105,9 @@ internal static class Program
         RenderNativeTrayIcon(main, output);
         Invoke("ReturnToClipWorkspace");
         Invoke("CloseEditorContext");
+        // Navigation restores the synthetic thumbnail as a poster. Keep the
+        // same honest empty preview fixture across all viewport captures.
+        Find<Image>("PlayerPoster").Visibility = Visibility.Collapsed;
         Render("11-workspace-wide.png", 1440, 900);
         // Exercise the existing compact library/editor branches without showing
         // a Window or synthesizing new layout rules in this renderer.

@@ -37,6 +37,22 @@ public class SettingsStagingTests
                 Assert.Equal(Visibility.Collapsed, Find<Button>("BtnInstallUpdate").Visibility);
                 Assert.True(Find<Button>("BtnCheckUpdates").IsEnabled);
                 Assert.True(Find<CheckBox>("ChkPreviewUpdates").IsChecked);
+                // Exercise the actual disclosure template: its keyboard-focusable
+                // toggle must update the Expander and reveal/hide its content.
+                var disclosure = Find<Expander>("WebhookExpander");
+                disclosure.ApplyTemplate();
+                var header = Assert.IsType<System.Windows.Controls.Primitives.ToggleButton>(
+                    disclosure.Template.FindName("HeaderSite", disclosure));
+                var disclosureContent = Assert.IsType<ContentPresenter>(
+                    disclosure.Template.FindName("ExpandSite", disclosure));
+                header.IsChecked = true;
+                page.Dispatcher.Invoke(() => { }, System.Windows.Threading.DispatcherPriority.DataBind);
+                Assert.True(disclosure.IsExpanded);
+                Assert.Equal(Visibility.Visible, disclosureContent.Visibility);
+                header.IsChecked = false;
+                page.Dispatcher.Invoke(() => { }, System.Windows.Threading.DispatcherPriority.DataBind);
+                Assert.False(disclosure.IsExpanded);
+                Assert.Equal(Visibility.Collapsed, disclosureContent.Visibility);
                 var toggle = Find<TextBox>("TxtToggleHotkey");
                 var save = Find<TextBox>("TxtSaveHotkey");
                 Assert.True(toggle.IsReadOnly);
