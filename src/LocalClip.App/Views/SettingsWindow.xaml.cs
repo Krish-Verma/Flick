@@ -287,14 +287,14 @@ public partial class SettingsWindow : UserControl
             duration < 15 || duration > 120)
         {
             SelectCategory("Recording");
-            MessageBox.Show("Replay Duration Must Be Between 15 and 120 Seconds.", "Invalid Duration");
+            LocalClip.App.Services.FlickDialog.Show("Replay Duration Must Be Between 15 and 120 Seconds.", "Invalid Duration");
             return;
         }
         int cap = GetShareCap();
         if (!ShareExportTargets.IsValid(cap))
         {
             SelectCategory("Sharing");
-            MessageBox.Show("Select a File Limit Between 1 and 250 MB.", "Invalid Export Limit");
+            LocalClip.App.Services.FlickDialog.Show("Select a File Limit Between 1 and 250 MB.", "Invalid Export Limit");
             return;
         }
         string toggle = TxtToggleHotkey.Text.Trim();
@@ -303,7 +303,7 @@ public partial class SettingsWindow : UserControl
             HotkeyManager.AreEquivalentHotkeys(toggle, save))
         {
             SelectCategory("Shortcuts");
-            MessageBox.Show("Choose Two Different Valid Hotkeys.", "Invalid Shortcuts");
+            LocalClip.App.Services.FlickDialog.Show("Choose Two Different Valid Hotkeys.", "Invalid Shortcuts");
             return;
         }
         string originals, exports;
@@ -323,7 +323,7 @@ public partial class SettingsWindow : UserControl
         catch (Exception ex)
         {
             SelectCategory("Storage");
-            MessageBox.Show("Invalid Storage Paths: " + ex.Message, "Storage Settings");
+            LocalClip.App.Services.FlickDialog.Show("Invalid Storage Paths: " + ex.Message, "Storage Settings");
             return;
         }
 
@@ -333,12 +333,12 @@ public partial class SettingsWindow : UserControl
             !DiscordWebhookClient.ValidateWebhookUrl(webhook, out _)))
         {
             SelectCategory("Sharing");
-            MessageBox.Show("A valid Discord webhook is required to enable optional direct posting.",
+            LocalClip.App.Services.FlickDialog.Show("A valid Discord webhook is required to enable optional direct posting.",
                 "Invalid Webhook");
             return;
         }
         if (_isCaptureActive() && _settings.EnableMicrophone && ChkMicrophone.IsChecked != true &&
-            MessageBox.Show("Turning off an active microphone will stop the replay buffer and discard unsaved footage. Continue?",
+            LocalClip.App.Services.FlickDialog.Show("Turning off an active microphone will stop the replay buffer and discard unsaved footage. Continue?",
                 "Disable Microphone", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes)
             return;
 
@@ -408,7 +408,7 @@ public partial class SettingsWindow : UserControl
                 try { WindowsStartupRegistration.Apply(originalStartup, originalMinimized); }
                 catch { /* Warn: the original registry entry may need manual review. */ }
             }
-            MessageBox.Show("Settings Couldn't Be Saved: " + ex.Message, "Flick Settings");
+            LocalClip.App.Services.FlickDialog.Show("Settings Couldn't Be Saved: " + ex.Message, "Flick Settings");
         }
     }
 
@@ -416,12 +416,12 @@ public partial class SettingsWindow : UserControl
     {
         if (!FlickUninstallLauncher.IsInstalled)
         {
-            MessageBox.Show(Window.GetWindow(this),
+            LocalClip.App.Services.FlickDialog.Show(Window.GetWindow(this),
                 "This is a portable copy or Flick was not installed normally. Quit Flick through the tray and delete the extracted application folder. Your videos and settings live separately.",
                 "Portable Flick", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
-        if (MessageBox.Show(Window.GetWindow(this),
+        if (LocalClip.App.Services.FlickDialog.Show(Window.GetWindow(this),
                 "Uninstall Flick now? Any active replay buffer will be stopped. The uninstaller will ask separately whether to remove Flick settings and caches. Original recordings and exported videos are kept.",
                 "Uninstall Flick", MessageBoxButton.YesNo,
                 MessageBoxImage.Warning, MessageBoxResult.No) != MessageBoxResult.Yes)
@@ -452,7 +452,7 @@ public partial class SettingsWindow : UserControl
 
     private void RestoreDefaults_Click(object sender, RoutedEventArgs e)
     {
-        if (MessageBox.Show("Restore the default settings? Existing clips and exported files will not be deleted.",
+        if (LocalClip.App.Services.FlickDialog.Show("Restore the default settings? Existing clips and exported files will not be deleted.",
             "Restore Flick Defaults", MessageBoxButton.YesNo, MessageBoxImage.Question) ==
             MessageBoxResult.Yes)
             Populate(AppSettings.CreateDefault()); // Still staged; Save applies it.

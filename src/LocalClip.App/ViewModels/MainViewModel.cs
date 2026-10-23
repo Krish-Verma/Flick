@@ -1070,7 +1070,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
         string question = imported
             ? $"Remove '{SelectedClip.Title}' from Flick? The original video and any export will NOT be deleted. It will stay excluded from rescans until you unlink and reconnect its folder."
             : $"Delete '{SelectedClip.Title}'? The original video will be sent to the Recycle Bin.";
-        var answer = MessageBox.Show(question,
+        var answer = LocalClip.App.Services.FlickDialog.Show(question,
             imported ? "Remove From Library" : "Delete Original Video",
             MessageBoxButton.YesNo, MessageBoxImage.Question);
         if (answer != MessageBoxResult.Yes) return;
@@ -1117,11 +1117,11 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
         string secretUrl = DiscordWebhookClient.UnprotectSecret(_settings.MaskedWebhookUrl);
         if (string.IsNullOrEmpty(secretUrl))
         {
-            MessageBox.Show("No Discord Webhook URL is configured. Open Settings to set one up.", "Webhook Not Configured", MessageBoxButton.OK, MessageBoxImage.Information);
+            LocalClip.App.Services.FlickDialog.Show("No Discord Webhook URL is configured. Open Settings to set one up.", "Webhook Not Configured", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
 
-        var r = MessageBox.Show($"Send this clip ({Path.GetFileName(ReadyExportFilePath)}) to channel '{_settings.DiscordWebhookChannelName}'?", "Confirm Send to Discord", MessageBoxButton.YesNo, MessageBoxImage.Question);
+        var r = LocalClip.App.Services.FlickDialog.Show($"Send this clip ({Path.GetFileName(ReadyExportFilePath)}) to channel '{_settings.DiscordWebhookChannelName}'?", "Confirm Send to Discord", MessageBoxButton.YesNo, MessageBoxImage.Question);
         if (r != MessageBoxResult.Yes) return;
 
         ExportStatusMessage = "Posting clip to Discord webhook...";
@@ -1131,12 +1131,12 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
         if (res.Success)
         {
             ExportStatusMessage = "Successfully posted to Discord!";
-            MessageBox.Show("Clip posted successfully!", "Discord Webhook", MessageBoxButton.OK, MessageBoxImage.Information);
+            LocalClip.App.Services.FlickDialog.Show("Clip posted successfully!", "Discord Webhook", MessageBoxButton.OK, MessageBoxImage.Information);
         }
         else
         {
             ExportStatusMessage = "Post failed: " + res.ErrorMessage;
-            MessageBox.Show(res.ErrorMessage, "Discord Webhook Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            LocalClip.App.Services.FlickDialog.Show(res.ErrorMessage, "Discord Webhook Error", MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
 

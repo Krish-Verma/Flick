@@ -11,6 +11,7 @@
     </Window.Resources>
 
     <Grid>
+    <Grid x:Name="MainInteractionSurface">
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="{StaticResource Flick.GridLength.NavRail}"/>
             <ColumnDefinition Width="*"/>
@@ -370,5 +371,9 @@
                 <TextBlock Grid.Column="1" x:Name="TxtResourceStats" Text="{Binding ResourceStatsText}" ToolTip="{Binding ResourceStatsText}" Foreground="{DynamicResource Flick.Brush.TextMuted}" FontSize="11" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" HorizontalAlignment="Right"/>
             </Grid>
         </Border>
+    </Grid>
+    <Border x:Name="DialogLayer" Visibility="Collapsed" Panel.ZIndex="100" Background="{DynamicResource Flick.Brush.Frosted}" Padding="24" KeyboardNavigation.TabNavigation="Cycle">
+        <ContentControl x:Name="DialogContentHost" HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="520"/>
+    </Border>
     </Grid>
 </Window>
