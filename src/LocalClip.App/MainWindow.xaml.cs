@@ -35,6 +35,11 @@ public partial class MainWindow : Window
     private readonly FlickNotificationService _notificationService;
     private bool _trayHintShown;
     private readonly DispatcherTimer _playerTimer;
+    private SettingsWindow? _settingsPage;
+    private ConnectedFoldersWindow? _foldersPage;
+    private bool _foldersReturnToSettings;
+    private bool _settingsCaptureWasActive;
+    private bool _settingsMicrophoneWasEnabled;
     private bool _isDraggingSlider = false;
     private bool _isRealClosing = false;
     private System.Windows.Point? _shareDragStart;
@@ -358,6 +363,10 @@ public partial class MainWindow : Window
             return;
         }
 
+        if (_foldersPage != null) _foldersPage.LeavePage();
+        _foldersPage = null;
+        _settingsPage = null;
+        WorkspacePageHost.Content = null;
         _playerTimer.Stop();
         CancelPendingPreview();
         _vm.ConfirmTargetReset = null;
@@ -410,18 +419,84 @@ public partial class MainWindow : Window
     }
 
     private void BtnImportFolder_Click(object sender, RoutedEventArgs e) =>
-        OpenConnectedFolders(this);
+        OpenConnectedFolders();
 
-    private void OpenConnectedFolders(Window owner)
+    private void ShowWorkspacePage(UserControl page)
     {
-        var dialog = new ConnectedFoldersWindow(_vm) { Owner = owner };
-        dialog.ShowDialog();
+        // The editor may be hidden, but the independent capture host continues.
+        SuspendPlayback(clearSource: true);
+        ReleasePosterWhileHidden();
+        WorkspaceContentGrid.Visibility = Visibility.Collapsed;
+        WorkspacePageHost.Content = page;
+        WorkspacePageLayer.Visibility = Visibility.Visible;
+        UpdateWorkspaceNavigation();
+    }
+
+    private void UpdateWorkspaceNavigation()
+    {
+        bool isClips = WorkspacePageLayer.Visibility != Visibility.Visible;
+        BtnNavClips.Background = isClips
+            ? (Brush)FindResource("Flick.Brush.Raised") : Brushes.Transparent;
+        BtnNavSettings.Background = _settingsPage != null && _foldersPage == null
+            ? (Brush)FindResource("Flick.Brush.Raised") : Brushes.Transparent;
+    }
+
+    private void ReturnToClipWorkspace()
+    {
+        if (_foldersPage != null)
+        {
+            _foldersPage.CloseRequested -= CloseConnectedFolders;
+            _foldersPage.LeavePage(); // Cancel only the current import scan.
+            _foldersPage = null;
+            _vm.ReloadClips();
+            _vm.RefreshConnectedFolders();
+        }
+        if (_settingsPage != null)
+        {
+            _settingsPage.CloseRequested -= CloseSettingsPage;
+            _settingsPage = null; // Unsaved staged settings are discarded.
+        }
+        WorkspacePageHost.Content = null; // Do not retain invisible page UI.
+        WorkspacePageLayer.Visibility = Visibility.Collapsed;
+        WorkspaceContentGrid.Visibility = Visibility.Visible;
+        RestorePosterAfterShow();
+        UpdateWorkspaceNavigation();
+        RefreshWorkspaceForSize();
+    }
+
+    private void OpenConnectedFolders()
+    {
+        if (_foldersPage != null)
+        {
+            ShowWorkspacePage(_foldersPage);
+            return;
+        }
+        _foldersReturnToSettings = _settingsPage != null;
+        var folders = new ConnectedFoldersWindow(_vm);
+        folders.CloseRequested += CloseConnectedFolders;
+        _foldersPage = folders;
+        ShowWorkspacePage(folders);
+    }
+
+    private void CloseConnectedFolders()
+    {
+        if (_foldersPage == null) return;
+        _foldersPage.CloseRequested -= CloseConnectedFolders;
+        _foldersPage.LeavePage();
+        _foldersPage = null;
         _vm.ReloadClips();
         _vm.RefreshConnectedFolders();
+        if (_foldersReturnToSettings && _settingsPage != null)
+        {
+            ShowWorkspacePage(_settingsPage); // Keep unsaved Settings edits.
+            return;
+        }
+        ReturnToClipWorkspace();
     }
 
     private void BtnNavClips_Click(object sender, RoutedEventArgs e)
     {
+        ReturnToClipWorkspace();
         if (_layoutMode == WorkspaceLayoutMode.Compact)
             ShowCompactLibrary();
         TxtClipSearch.Focus();
@@ -518,17 +593,31 @@ public partial class MainWindow : Window
 
     private void OpenSettings()
     {
-        bool isCapturing = _vm.CaptureStatus == "Armed" ||
-                           _vm.CaptureStatus == "Buffering";
-        bool oldMic = _vm.Settings.EnableMicrophone;
-        var dialog = new SettingsWindow(_vm.Settings, isCapturing) { Owner = this };
-        dialog.ManageFoldersRequested += (sender, args) => OpenConnectedFolders(dialog);
-        dialog.PreviewNotificationRequested += (show, sound) =>
+        if (_foldersPage != null) CloseConnectedFolders();
+        if (_settingsPage != null)
+        {
+            ShowWorkspacePage(_settingsPage);
+            return;
+        }
+        _settingsCaptureWasActive = _vm.CaptureStatus == "Armed" ||
+                                    _vm.CaptureStatus == "Buffering";
+        _settingsMicrophoneWasEnabled = _vm.Settings.EnableMicrophone;
+        var settings = new SettingsWindow(_vm.Settings, _settingsCaptureWasActive);
+        settings.CloseRequested += CloseSettingsPage;
+        settings.ManageFoldersRequested += (_, _) => OpenConnectedFolders();
+        settings.PreviewNotificationRequested += (show, sound) =>
         {
             try { _notificationService.Preview(sound); } catch { }
         };
-        bool? saved = dialog.ShowDialog();
-        if (dialog.UninstallRequested)
+        _settingsPage = settings;
+        ShowWorkspacePage(settings);
+    }
+
+    private void CloseSettingsPage(bool saved)
+    {
+        bool uninstall = _settingsPage?.UninstallRequested == true;
+        ReturnToClipWorkspace();
+        if (uninstall)
         {
             if (FlickUninstallLauncher.TryLaunch(out string error))
                 RealQuit();
@@ -537,19 +626,19 @@ public partial class MainWindow : Window
                     MessageBoxButton.OK, MessageBoxImage.Error);
             return;
         }
-        if (saved != true) return;
+        if (!saved) return;
 
         RegisterHotkeys();
         _vm.RefreshExportPreferences();
         UpdateSharePresetSelection();
         UpdateStatusBadgeColor();
-        // Mic opt-out must release the device instead of leaving it open.
-        if (isCapturing && oldMic && !_vm.Settings.EnableMicrophone)
+        if (_settingsCaptureWasActive && _settingsMicrophoneWasEnabled &&
+            !_vm.Settings.EnableMicrophone)
         {
             _ = StopCaptureForMicPrivacyAsync();
             return;
         }
-        _vm.StatusDetails = isCapturing
+        _vm.StatusDetails = _settingsCaptureWasActive
             ? "Preferences saved. New capture profile takes effect on the next manual replay start."
             : "Preferences saved. Replay remains off until manually started.";
     }
