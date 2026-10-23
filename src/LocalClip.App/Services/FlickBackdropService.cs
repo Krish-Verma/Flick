@@ -41,9 +41,9 @@ public static class FlickBackdropService
         try
         {
             int darkMode = 1;
-            int bg = ColorRef(21, 22, 34);       // Flick.Surface #151622
-            int fg = ColorRef(242, 239, 249);    // Flick.TextPrimary #F2EFF9
-            int edge = ColorRef(69, 64, 82);     // Flick.Border #454052
+            int bg = ResourceColorRef(window, "Flick.Color.Surface", 28, 28, 31);
+            int fg = ResourceColorRef(window, "Flick.Color.TextPrimary", 245, 245, 247);
+            int edge = ResourceColorRef(window, "Flick.Color.Border", 59, 59, 66);
             bool dark = DwmSetWindowAttribute(
                 hwnd, DwmwaUseImmersiveDarkMode, ref darkMode, sizeof(int)) >= 0;
             bool caption = DwmSetWindowAttribute(
@@ -60,6 +60,10 @@ public static class FlickBackdropService
 
     private static int ColorRef(byte r, byte g, byte b) =>
         r | (g << 8) | (b << 16);
+
+    private static int ResourceColorRef(Window window, string key, byte r, byte g, byte b) =>
+        window.TryFindResource(key) is System.Windows.Media.Color color
+            ? ColorRef(color.R, color.G, color.B) : ColorRef(r, g, b);
 
     public static bool TryApplyMica(Window window)
     {

@@ -32,7 +32,7 @@
     <Style x:Key="Flick.Text.Control" TargetType="{x:Type TextBlock}" BasedOn="{StaticResource Flick.Text.Base}">
         <Setter Property="FontSize" Value="{StaticResource Flick.Font.Control}"/>
         <Setter Property="LineHeight" Value="18"/>
-        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="FontWeight" Value="Normal"/>
     </Style>
     <Style x:Key="Flick.Text.Caption" TargetType="{x:Type TextBlock}" BasedOn="{StaticResource Flick.Text.Base}">
         <Setter Property="FontSize" Value="{StaticResource Flick.Font.Caption}"/>
@@ -83,7 +83,7 @@
     </Style>
     <Style x:Key="Flick.Icon.Line" TargetType="{x:Type Path}">
         <Setter Property="Stroke" Value="{DynamicResource Flick.Brush.TextSecondary}"/>
-        <Setter Property="StrokeThickness" Value="1.75"/>
+        <Setter Property="StrokeThickness" Value="1.5"/>
         <Setter Property="StrokeLineJoin" Value="Round"/>
         <Setter Property="StrokeStartLineCap" Value="Round"/>
         <Setter Property="StrokeEndLineCap" Value="Round"/>

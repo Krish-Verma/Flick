@@ -9,6 +9,7 @@ using LocalClip.App;
 using LocalClip.App.ViewModels;
 using LocalClip.App.Views.Components;
 using LocalClip.Core.Models;
+using LocalClip.Core.Rules;
 using LocalClip.Core.Storage;
 
 namespace Flick.UiRender;
@@ -36,7 +37,7 @@ internal static class Program
         settings.SaveToFile(profile);
 
         var app = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
-        foreach (string dictionary in new[] { "Colors", "Metrics", "Typography", "Controls", "Chrome" })
+        foreach (string dictionary in new[] { "Colors", "Metrics", "Typography", "Icons", "Controls", "Chrome" })
             app.Resources.MergedDictionaries.Add(new ResourceDictionary {
                 Source = new Uri($"/Flick;component/Resources/Theme/Flick.{dictionary}.xaml", UriKind.Relative)
             });
@@ -102,6 +103,17 @@ internal static class Program
         RenderBrandScaleSamples(app, output);
         RenderSavedToast(output);
         RenderNativeTrayIcon(main, output);
+        Invoke("ReturnToClipWorkspace");
+        Invoke("CloseEditorContext");
+        Render("11-workspace-wide.png", 1440, 900);
+        // Exercise the existing compact library/editor branches without showing
+        // a Window or synthesizing new layout rules in this renderer.
+        typeof(MainWindow).GetField("_layoutMode", Private)!.SetValue(main, WorkspaceLayoutMode.Compact);
+        Invoke("ShowCompactLibrary");
+        Invoke("UpdateStatusBadgeColor");
+        Render("12-library-compact.png", 800, 600);
+        Invoke("ShowCompactEditor");
+        Render("13-editor-compact.png", 800, 600);
         string applicationVersion = typeof(MainWindow).Assembly
             .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? "unknown";
         File.WriteAllText(Path.Combine(output, "PROVENANCE.txt"),
@@ -109,6 +121,7 @@ internal static class Program
             "Application informational version: " + applicationVersion + "\n" +
             "Application and renderer commit: " + Environment.GetEnvironmentVariable("GITHUB_SHA") + "\n" +
             "Workspace/settings: 1240x720 DIPs, 96 DPI. Synthetic clip names/thumbnails/monitor only.\n" +
+            "Additional views: 1440x900 workspace; existing 800x600 compact library and editor branches.\n" +
             "Brand samples: actual shared Image style rasterized by WPF at 96/120/144/192 DPI; not a physical per-monitor DPI session.\n" +
             "No gameplay, media decoder, OS titlebar, real recording, updater network request, or full UI acceptance claimed.\n");
         vm.Dispose();
@@ -196,10 +209,13 @@ internal static class Program
         var drawing = new DrawingVisual();
         using (var context = drawing.RenderOpen())
         {
-            context.DrawRectangle(new SolidColorBrush(Color.FromRgb(36, 36, 54)), null, new Rect(0, 0, 256, 144));
-            var pen = new Pen(new SolidColorBrush(Color.FromRgb(198, 155, 255)), 3);
-            context.DrawRectangle(null, pen, new Rect(103, 52, 50, 40));
-            for (int i = 0; i < 4; i++) context.DrawLine(pen, new Point(103 + i * 16, 52), new Point(103 + i * 16, 92));
+            context.DrawRectangle((Brush)Application.Current.FindResource("Flick.Brush.Raised"), null, new Rect(0, 0, 256, 144));
+            var pen = new Pen((Brush)Application.Current.FindResource("Flick.Brush.TextMuted"), 1.5);
+            context.PushTransform(new TranslateTransform(108, 52));
+            context.PushTransform(new ScaleTransform(2, 2));
+            context.DrawGeometry(null, pen, (Geometry)Application.Current.FindResource("Flick.Icon.Geometry.Original"));
+            context.Pop();
+            context.Pop();
         }
         var bitmap = new RenderTargetBitmap(256, 144, 96, 96, PixelFormats.Pbgra32);
         bitmap.Render(drawing);

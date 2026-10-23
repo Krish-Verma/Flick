@@ -29,11 +29,11 @@
                 SizeChanged="RangeCanvas_SizeChanged" ClipToBounds="False"
                 Margin="7,0,7,0">
             <Border x:Name="TrackBackground" Canvas.Top="10" Height="11"
-                    CornerRadius="5" Background="{DynamicResource Flick.Brush.Raised}"
+                    CornerRadius="3" Background="{DynamicResource Flick.Brush.Raised}"
                     BorderBrush="{DynamicResource Flick.Brush.Border}" BorderThickness="1"/>
             <Border x:Name="SelectedTrack" Canvas.Top="10" Height="11"
-                    CornerRadius="4" Background="{DynamicResource Flick.Brush.Frosted}"
-                    BorderBrush="{DynamicResource Flick.Brush.Accent}" BorderThickness="1.5"/>
+                    CornerRadius="3" Background="{DynamicResource Flick.Brush.Raised}"
+                    BorderBrush="{DynamicResource Flick.Brush.BorderStrong}" BorderThickness="1"/>
             <primitives:Thumb x:Name="StartHandle" Width="12" Height="28"
                               Focusable="True" IsTabStop="True"
                               Cursor="SizeWE" DragDelta="StartHandle_DragDelta"
@@ -46,14 +46,16 @@
                               AutomationProperties.Name="Trim Start Handle">
                 <primitives:Thumb.Template>
                     <ControlTemplate TargetType="{x:Type primitives:Thumb}">
-                        <Border x:Name="Grip" Background="{DynamicResource Flick.Brush.Accent}"
-                                BorderBrush="{DynamicResource Flick.Brush.Focus}"
-                                BorderThickness="1" CornerRadius="4"/>
+                        <Border x:Name="Grip" Background="{DynamicResource Flick.Brush.TextSecondary}"
+                                BorderBrush="{DynamicResource Flick.Brush.BorderStrong}"
+                                BorderThickness="1" CornerRadius="3"/>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsKeyboardFocused" Value="True">
                                 <Setter TargetName="Grip" Property="BorderThickness" Value="2"/>
+                                <Setter TargetName="Grip" Property="BorderBrush"
+                                        Value="{DynamicResource Flick.Brush.Focus}"/>
                                 <Setter TargetName="Grip" Property="Background"
-                                        Value="{DynamicResource Flick.Brush.AccentHover}"/>
+                                        Value="{DynamicResource Flick.Brush.TextPrimary}"/>
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
                                 <Setter TargetName="Grip" Property="Opacity" Value=".45"/>
@@ -74,14 +76,16 @@
                               AutomationProperties.Name="Trim End Handle">
                 <primitives:Thumb.Template>
                     <ControlTemplate TargetType="{x:Type primitives:Thumb}">
-                        <Border x:Name="Grip" Background="{DynamicResource Flick.Brush.Accent}"
-                                BorderBrush="{DynamicResource Flick.Brush.Focus}"
-                                BorderThickness="1" CornerRadius="4"/>
+                        <Border x:Name="Grip" Background="{DynamicResource Flick.Brush.TextSecondary}"
+                                BorderBrush="{DynamicResource Flick.Brush.BorderStrong}"
+                                BorderThickness="1" CornerRadius="3"/>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsKeyboardFocused" Value="True">
                                 <Setter TargetName="Grip" Property="BorderThickness" Value="2"/>
+                                <Setter TargetName="Grip" Property="BorderBrush"
+                                        Value="{DynamicResource Flick.Brush.Focus}"/>
                                 <Setter TargetName="Grip" Property="Background"
-                                        Value="{DynamicResource Flick.Brush.AccentHover}"/>
+                                        Value="{DynamicResource Flick.Brush.TextPrimary}"/>
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
                                 <Setter TargetName="Grip" Property="Opacity" Value=".45"/>

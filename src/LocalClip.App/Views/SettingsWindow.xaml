@@ -9,22 +9,22 @@
         KeyDown="Settings_KeyDown">
     <Grid>
         <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="162"/>
+            <ColumnDefinition Width="174"/>
             <ColumnDefinition Width="*"/>
         </Grid.ColumnDefinitions>
         <Grid.RowDefinitions>
             <RowDefinition Height="*"/>
-            <RowDefinition Height="66"/>
+            <RowDefinition Height="60"/>
         </Grid.RowDefinitions>
 
         <!-- One small, stable category rail; no nested wizard or extra windows. -->
         <Border Grid.Column="0" Grid.RowSpan="2"
                 Background="{DynamicResource Flick.Brush.Surface}"
                 BorderBrush="{DynamicResource Flick.Brush.Border}"
-                BorderThickness="0,0,1,0" Padding="14,18">
+                BorderThickness="0,0,1,0" Padding="16,22">
             <DockPanel>
                 <StackPanel DockPanel.Dock="Top">
-                    <StackPanel Orientation="Horizontal" Margin="0,0,0,22">
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,26">
                         <Image Width="38" Height="38"
                                Style="{StaticResource Flick.Image.BrandMark}"
                                Margin="0,0,10,0"/>
@@ -36,27 +36,27 @@
                     <Button x:Name="NavRecording" Content="Recording" Tag="Recording"
                             Click="SettingsCategory_Click"
                             Style="{StaticResource Flick.Button.Ghost}"
-                            HorizontalContentAlignment="Left" Margin="0,0,0,4"/>
+                            HorizontalContentAlignment="Left" MinHeight="34" Padding="10,6" Margin="0,0,0,2"/>
                     <Button x:Name="NavAudio" Content="Audio" Tag="Audio"
                             Click="SettingsCategory_Click"
                             Style="{StaticResource Flick.Button.Ghost}"
-                            HorizontalContentAlignment="Left" Margin="0,0,0,4"/>
+                            HorizontalContentAlignment="Left" MinHeight="34" Padding="10,6" Margin="0,0,0,2"/>
                     <Button x:Name="NavShortcuts" Content="Shortcuts" Tag="Shortcuts"
                             Click="SettingsCategory_Click"
                             Style="{StaticResource Flick.Button.Ghost}"
-                            HorizontalContentAlignment="Left" Margin="0,0,0,4"/>
+                            HorizontalContentAlignment="Left" MinHeight="34" Padding="10,6" Margin="0,0,0,2"/>
                     <Button x:Name="NavStorage" Content="Storage" Tag="Storage"
                             Click="SettingsCategory_Click"
                             Style="{StaticResource Flick.Button.Ghost}"
-                            HorizontalContentAlignment="Left" Margin="0,0,0,4"/>
+                            HorizontalContentAlignment="Left" MinHeight="34" Padding="10,6" Margin="0,0,0,2"/>
                     <Button x:Name="NavGeneral" Content="General" Tag="General"
                             Click="SettingsCategory_Click"
                             Style="{StaticResource Flick.Button.Ghost}"
-                            HorizontalContentAlignment="Left" Margin="0,0,0,4"/>
+                            HorizontalContentAlignment="Left" MinHeight="34" Padding="10,6" Margin="0,0,0,2"/>
                     <Button x:Name="NavSharing" Content="Sharing" Tag="Sharing"
                             Click="SettingsCategory_Click"
                             Style="{StaticResource Flick.Button.Ghost}"
-                            HorizontalContentAlignment="Left" Margin="0,0,0,4"/>
+                            HorizontalContentAlignment="Left" MinHeight="34" Padding="10,6" Margin="0,0,0,2"/>
                 </StackPanel>
                 <TextBlock DockPanel.Dock="Bottom"
                            Text="Flick · Settings"
@@ -70,7 +70,7 @@
                       VerticalScrollBarVisibility="Auto"
                       HorizontalScrollBarVisibility="Disabled"
                       Focusable="False">
-            <Grid Margin="26,24,30,18">
+            <Grid Margin="32,28,36,24" MaxWidth="720" HorizontalAlignment="Left">
                 <!-- Recording -->
                 <StackPanel x:Name="PanelRecording" Visibility="Visible">
                     <TextBlock Text="Recording" Style="{StaticResource Flick.Text.PageTitle}"/>
@@ -96,7 +96,7 @@
                         <ComboBoxItem Content="Balanced · 1080p / 30 FPS" Tag="Balanced"/>
                         <ComboBoxItem Content="Smooth · 1080p / 60 FPS" Tag="Smooth"/>
                     </ComboBox>
-                    <Border Style="{StaticResource Flick.Surface.Frosted}" Margin="0,20,0,0">
+                    <Border Margin="0,18,0,0" Padding="0">
                         <TextBlock x:Name="TxtBufferWarning"
                                    Style="{StaticResource Flick.Text.Caption}"
                                    TextWrapping="Wrap"/>
@@ -111,7 +111,7 @@
                     <TextBlock Text="Audio" Style="{StaticResource Flick.Text.PageTitle}"/>
                     <TextBlock Text="Capture only what you choose."
                                Style="{StaticResource Flick.Text.Caption}" Margin="0,5,0,24"/>
-                    <Border Style="{StaticResource Flick.Surface.Panel}" Margin="0,0,0,15">
+                    <Border Margin="0,0,0,24" Padding="0">
                         <StackPanel>
                             <TextBlock Text="System Audio" Style="{StaticResource Flick.Text.Section}"/>
                             <TextBlock Text="Current Windows default output · System loopback fallback"
@@ -229,7 +229,7 @@
                               Style="{StaticResource Flick.Toggle}"
                               Content="Play Confirmation Sound"
                               Margin="0,0,0,12"/>
-                    <ComboBox x:Name="CmbNotificationTone" Style="{StaticResource Flick.Input.Combo}" SelectedIndex="0" Margin="0,0,0,10" AutomationProperties.Name="Confirmation Sound">
+                    <ComboBox x:Name="CmbNotificationTone" Style="{StaticResource Flick.Input.Combo}" Width="280" HorizontalAlignment="Left" SelectedIndex="0" Margin="0,0,0,10" AutomationProperties.Name="Confirmation Sound">
                         <ComboBoxItem Content="Minimal Chime"/><ComboBoxItem Content="Quiet Tone"/><ComboBoxItem Content="Local WAV File"/>
                     </ComboBox>
                     <TextBlock x:Name="CustomSoundName" Text="No custom sound selected" TextTrimming="CharacterEllipsis" Style="{StaticResource Flick.Text.Muted}" Margin="0,0,0,8"/>
@@ -337,7 +337,7 @@
                                          Background="{DynamicResource Flick.Brush.Raised}"
                                          Foreground="{DynamicResource Flick.Brush.TextPrimary}"
                                          BorderBrush="{DynamicResource Flick.Brush.Border}"
-                                         BorderThickness="1" Padding="12,9"
+                                         BorderThickness="1" Padding="10,7"
                                          FontSize="13" MinHeight="36"/>
                             <TextBlock Text="Stored using Windows DPAPI. No upload happens without pressing Send to Channel and confirming each time."
                                        Style="{StaticResource Flick.Text.Muted}"
@@ -350,8 +350,8 @@
 
         <Border Grid.Column="1" Grid.Row="1"
                 BorderBrush="{DynamicResource Flick.Brush.Border}"
-                BorderThickness="0,1,0,0" Padding="25,10,28,10"
-                Background="{DynamicResource Flick.Brush.Surface}">
+                BorderThickness="0,1,0,0" Padding="32,9,32,9"
+                Background="{DynamicResource Flick.Brush.Canvas}">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
@@ -361,7 +361,6 @@
                 </Grid.ColumnDefinitions>
                 <Button Grid.Column="0" Content="Restore Defaults"
                         Style="{StaticResource Flick.Button.Ghost}"
-                        Foreground="{DynamicResource Flick.Brush.Danger}"
                         HorizontalAlignment="Left" Click="RestoreDefaults_Click"/>
                 <Button Grid.Column="1" Content="Cancel"
                         Style="{StaticResource Flick.Button.Secondary}"

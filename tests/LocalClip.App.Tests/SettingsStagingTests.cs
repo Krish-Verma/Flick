@@ -24,7 +24,7 @@ public class SettingsStagingTests
                 var app = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
                 // Testhost owns Application.ResourceAssembly. Load the actual
                 // production dictionaries by assembly-qualified pack URI.
-                foreach (string dictionary in new[] { "Colors", "Metrics", "Typography", "Controls", "Chrome" })
+                foreach (string dictionary in new[] { "Colors", "Metrics", "Typography", "Icons", "Controls", "Chrome" })
                     app.Resources.MergedDictionaries.Add(new ResourceDictionary {
                         Source = new Uri($"/Flick;component/Resources/Theme/Flick.{dictionary}.xaml", UriKind.Relative)
                     });

@@ -7,7 +7,7 @@
         FontFamily="{StaticResource Flick.Font.UI}"
         UseLayoutRounding="True" SnapsToDevicePixels="True"
         PreviewKeyDown="Folders_PreviewKeyDown">
-    <Grid Margin="20">
+    <Grid Margin="32,28,32,24">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
@@ -16,14 +16,14 @@
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <StackPanel Grid.Row="0" Margin="0,0,0,14">
+        <StackPanel Grid.Row="0" Margin="0,0,0,24">
             <TextBlock Text="Connected Clip Folders" Style="{StaticResource Flick.Text.PageTitle}"/>
             <TextBlock Margin="0,6,0,0" TextWrapping="Wrap"
                        Style="{StaticResource Flick.Text.Caption}"
                        Text="Link existing recordings from SteelSeries, OBS, NVIDIA or any local folder. Flick indexes MP4/MKV files in place, without moving or copying originals."/>
         </StackPanel>
 
-        <Grid Grid.Row="1" Margin="0,0,0,12">
+        <Grid Grid.Row="1" Margin="0,0,0,18">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="Auto"/>
@@ -36,7 +36,8 @@
                     Click="AddFolder_Click"/>
         </Grid>
 
-        <Border Grid.Row="2" Style="{StaticResource Flick.Surface.Panel}" Padding="7">
+        <Border Grid.Row="2" BorderBrush="{DynamicResource Flick.Brush.Border}"
+                BorderThickness="0,1,0,1" Padding="0,4">
             <ListBox x:Name="FolderList" ItemsSource="{Binding ConnectedFolders}"
                      BorderThickness="0" Background="Transparent"
                      ScrollViewer.CanContentScroll="True"
@@ -44,7 +45,7 @@
                      VirtualizingStackPanel.VirtualizationMode="Recycling">
                 <ListBox.ItemTemplate>
                     <DataTemplate>
-                        <Grid Margin="6,7" MinHeight="56">
+                        <Grid Margin="10,10" MinHeight="52">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="Auto"/>
@@ -67,7 +68,7 @@
             </ListBox>
         </Border>
 
-        <StackPanel Grid.Row="3" Margin="0,12,0,12">
+        <StackPanel Grid.Row="3" Margin="0,16,0,24">
             <TextBlock Text="{Binding ImportStatusText}"
                        Style="{StaticResource Flick.Text.Caption}"
                        TextTrimming="CharacterEllipsis" TextWrapping="NoWrap"
@@ -88,13 +89,13 @@
                     Style="{StaticResource Flick.Button.Secondary}"
                     Click="RescanFolder_Click" Margin="0,0,8,0"/>
             <Button Grid.Column="1" Content="Unlink Folder"
-                    Style="{StaticResource Flick.Button.Danger}"
+                    Style="{StaticResource Flick.Button.Ghost}"
                     Click="RemoveFolder_Click"/>
             <Button Grid.Column="3" Content="Cancel Scan"
                     Style="{StaticResource Flick.Button.Secondary}"
                     Click="CancelScan_Click" Margin="0,0,8,0"/>
             <Button Grid.Column="4" Content="Close"
-                    Style="{StaticResource Flick.Button.Primary}"
+                    Style="{StaticResource Flick.Button.Secondary}"
                     Click="Close_Click"/>
         </Grid>
     </Grid>
