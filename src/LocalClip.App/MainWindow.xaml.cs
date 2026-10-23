@@ -441,9 +441,11 @@ public partial class MainWindow : Window
     {
         bool isClips = WorkspacePageLayer.Visibility != Visibility.Visible;
         BtnNavClips.Background = isClips
-            ? (Brush)FindResource("Flick.Brush.Raised") : Brushes.Transparent;
+            ? (System.Windows.Media.Brush)FindResource("Flick.Brush.Raised")
+            : System.Windows.Media.Brushes.Transparent;
         BtnNavSettings.Background = _settingsPage != null && _foldersPage == null
-            ? (Brush)FindResource("Flick.Brush.Raised") : Brushes.Transparent;
+            ? (System.Windows.Media.Brush)FindResource("Flick.Brush.Raised")
+            : System.Windows.Media.Brushes.Transparent;
     }
 
     private void ReturnToClipWorkspace()
