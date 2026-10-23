@@ -6,6 +6,7 @@ $themeNames = @(
     "Flick.Colors.xaml",
     "Flick.Metrics.xaml",
     "Flick.Typography.xaml",
+    "Flick.Icons.xaml",
     "Flick.Controls.xaml",
     "Flick.Chrome.xaml"
 )

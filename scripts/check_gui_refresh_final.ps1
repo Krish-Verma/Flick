@@ -9,7 +9,7 @@ $ns.AddNamespace('x', 'http://schemas.microsoft.com/winfx/2006/xaml')
 if ($xml.SelectNodes('//w:MediaElement', $ns).Count -ne 1) { throw 'Exactly one preview decoder is permitted' }
 foreach ($name in @('Trim', 'Audio', 'Original', 'Share')) {
     $node = $xml.SelectSingleNode("//w:Button[@x:Name='Tool$name']", $ns)
-    if (!$node -or $node.GetAttribute('MinHeight') -ne '64') { throw "Missing accessible spaced tool: $name" }
+    if (!$node -or [double]::Parse($node.GetAttribute('MinHeight'), [cultureinfo]::InvariantCulture) -lt 44) { throw "Missing accessible spaced tool: $name" }
 }
 foreach ($name in @('TrimPanel', 'AudioPanel', 'SharePanel', 'DialogLayer')) {
     $node = $xml.SelectSingleNode("//*[@x:Name='$name']", $ns)

@@ -840,7 +840,7 @@ public partial class MainWindow : Window
         }
         catch (Exception) { /* Safe display-only teardown. */ }
         _playerIsPlaying = false;
-        if (BtnPlayPause != null) BtnPlayPause.Content = "▶ Play";
+        if (BtnPlayPause != null) BtnPlayPause.Content = "Play";
     }
 
     private void ReleasePosterWhileHidden()
@@ -892,10 +892,10 @@ public partial class MainWindow : Window
         PlayerPoster.Visibility = Visibility.Collapsed;
         PlayerPosterHint.Visibility = Visibility.Collapsed;
         PlayerSlider.Value = 0;
-        BtnPlayPause.Content = "▶ Play";
+        BtnPlayPause.Content = "Play";
         _playerView = PlayerView.Original;
         _previewWasReencoded = false;
-        BtnPreviewMode.Content = "Original ▾";
+        BtnPreviewMode.Content = "Original";
 
         var clip = _vm.SelectedClip;
         TrimTimeline.SetRange(clip?.DurationSeconds ?? 0,
@@ -940,17 +940,17 @@ public partial class MainWindow : Window
         _playerView = mode;
         BtnPreviewMode.Content = mode switch
         {
-            PlayerView.Exported => "Export Preview ▾",
-            PlayerView.LocalCopy => "Local Preview ▾",
-            _ => "Original ▾"
+            PlayerView.Exported => "Export Preview",
+            PlayerView.LocalCopy => "Local Preview",
+            _ => "Original"
         };
-        BtnPlayPause.Content = "▶ Play";
+        BtnPlayPause.Content = "Play";
         PreviewFallbackPanel.Visibility = Visibility.Collapsed;
         if (startPlaying)
         {
             VideoPlayer.Play();
             _playerIsPlaying = true;
-            BtnPlayPause.Content = "⏸ Pause";
+            BtnPlayPause.Content = "Pause";
             _playerTimer.Start();
         }
     }
@@ -988,7 +988,7 @@ public partial class MainWindow : Window
         _playerIsPlaying = false;
         VideoPlayer.Stop();
         PlayerSlider.Value = 0;
-        BtnPlayPause.Content = "▶ Play";
+        BtnPlayPause.Content = "Play";
     }
 
     private void BtnPlayPause_Click(object sender, RoutedEventArgs e)
@@ -999,7 +999,7 @@ public partial class MainWindow : Window
             VideoPlayer.Pause();
             _playerIsPlaying = false;
             _playerTimer.Stop();
-            BtnPlayPause.Content = "▶ Play";
+            BtnPlayPause.Content = "Play";
             return;
         }
         if (PreviewFallbackPanel.Visibility == Visibility.Visible) return;
@@ -1009,7 +1009,7 @@ public partial class MainWindow : Window
         VideoPlayer.Play();
         _playerIsPlaying = true;
         _playerTimer.Start();
-        BtnPlayPause.Content = "⏸ Pause";
+        BtnPlayPause.Content = "Pause";
     }
 
     private void CloseEditorTool_Click(object sender, RoutedEventArgs e) => CloseEditorContext();
@@ -1132,7 +1132,7 @@ public partial class MainWindow : Window
     {
         _playerTimer.Stop();
         _playerIsPlaying = false;
-        BtnPlayPause.Content = "▶ Play";
+        BtnPlayPause.Content = "Play";
         PreviewFallbackPanel.Visibility = Visibility.Visible;
         BtnBuildPreview.Visibility = _playerView == PlayerView.Original ||
             _playerView == PlayerView.LocalCopy && !_previewWasReencoded

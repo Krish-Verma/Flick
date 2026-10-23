@@ -11,21 +11,21 @@
     <sys:Double x:Key="Flick.Space.8">32</sys:Double>
 
     <Thickness x:Key="Flick.Inset.Compact">8,4</Thickness>
-    <Thickness x:Key="Flick.Inset.Control">12,8</Thickness>
+    <Thickness x:Key="Flick.Inset.Control">12,6</Thickness>
     <Thickness x:Key="Flick.Inset.Panel">16</Thickness>
     <Thickness x:Key="Flick.Inset.Toast">10,8</Thickness>
     <Thickness x:Key="Flick.Gap.Row">0,0,0,8</Thickness>
     <Thickness x:Key="Flick.Gap.Section">0,0,0,16</Thickness>
     <Thickness x:Key="Flick.Gap.Group">0,0,0,24</Thickness>
 
-    <CornerRadius x:Key="Flick.Corner.Control">8</CornerRadius>
-    <CornerRadius x:Key="Flick.Corner.Panel">12</CornerRadius>
-    <CornerRadius x:Key="Flick.Corner.Popover">12</CornerRadius>
+    <CornerRadius x:Key="Flick.Corner.Control">6</CornerRadius>
+    <CornerRadius x:Key="Flick.Corner.Panel">8</CornerRadius>
+    <CornerRadius x:Key="Flick.Corner.Popover">10</CornerRadius>
     <CornerRadius x:Key="Flick.Corner.Logo">10</CornerRadius>
     <CornerRadius x:Key="Flick.Corner.Pill">999</CornerRadius>
 
-    <sys:Double x:Key="Flick.Size.Control">36</sys:Double>
-    <sys:Double x:Key="Flick.Size.PrimaryButton">40</sys:Double>
+    <sys:Double x:Key="Flick.Size.Control">32</sys:Double>
+    <sys:Double x:Key="Flick.Size.PrimaryButton">36</sys:Double>
     <sys:Double x:Key="Flick.Size.IconButton">36</sys:Double>
     <sys:Double x:Key="Flick.Size.NavRail">60</sys:Double>
     <sys:Double x:Key="Flick.Size.CaptureBar">64</sys:Double>
@@ -38,7 +38,7 @@
     <sys:Double x:Key="Flick.Font.Caption">12</sys:Double>
     <sys:Double x:Key="Flick.Font.Control">13</sys:Double>
     <sys:Double x:Key="Flick.Font.Body">14</sys:Double>
-    <sys:Double x:Key="Flick.Font.Section">16</sys:Double>
+    <sys:Double x:Key="Flick.Font.Section">15</sys:Double>
     <sys:Double x:Key="Flick.Font.ClipTitle">18</sys:Double>
     <sys:Double x:Key="Flick.Font.PageTitle">20</sys:Double>
 </ResourceDictionary>
