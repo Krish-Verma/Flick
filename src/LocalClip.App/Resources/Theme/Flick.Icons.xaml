@@ -31,6 +31,25 @@
         <Setter Property="VerticalAlignment" Value="Center"/>
     </Style>
 
+    <!-- Keep the family neutral at rest. A small brand stroke marks intent
+         and the existing open-tool state; no new interaction state is owned. -->
+    <Style x:Key="Flick.Icon.Tool" TargetType="{x:Type Path}" BasedOn="{StaticResource Flick.Icon.Symbol}">
+        <Style.Triggers>
+            <DataTrigger Binding="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType={x:Type Button}}}" Value="True">
+                <Setter Property="Stroke" Value="{DynamicResource Flick.Brush.BrandAccent}"/>
+            </DataTrigger>
+            <DataTrigger Binding="{Binding IsKeyboardFocused, RelativeSource={RelativeSource AncestorType={x:Type Button}}}" Value="True">
+                <Setter Property="Stroke" Value="{DynamicResource Flick.Brush.BrandAccent}"/>
+            </DataTrigger>
+            <DataTrigger Binding="{Binding Path=(AutomationProperties.HelpText), RelativeSource={RelativeSource AncestorType={x:Type Button}}}" Value="Open">
+                <Setter Property="Stroke" Value="{DynamicResource Flick.Brush.BrandAccent}"/>
+            </DataTrigger>
+            <DataTrigger Binding="{Binding IsEnabled, RelativeSource={RelativeSource AncestorType={x:Type Button}}}" Value="False">
+                <Setter Property="Stroke" Value="{DynamicResource Flick.Brush.TextMuted}"/>
+            </DataTrigger>
+        </Style.Triggers>
+    </Style>
+
     <DataTemplate x:Key="Flick.IconText.Playback">
         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
             <Path x:Name="PlaybackSymbol" Style="{StaticResource Flick.Icon.Symbol}" Data="{StaticResource Flick.Icon.Geometry.Play}" Width="13" Height="13" Margin="0,0,7,0"

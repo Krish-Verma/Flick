@@ -14,6 +14,8 @@
     <Color x:Key="Flick.Color.TextMuted">#FF9C97AD</Color>
     <Color x:Key="Flick.Color.Accent">#FFC69BFF</Color>
     <Color x:Key="Flick.Color.AccentHover">#FFD9BCFF</Color>
+    <Color x:Key="Flick.Color.PrimaryWarm">#FFD8A5E9</Color>
+    <Color x:Key="Flick.Color.PrimaryWarmHover">#FFE4B9F0</Color>
     <Color x:Key="Flick.Color.OnAccent">#FF251333</Color>
     <Color x:Key="Flick.Color.Border">#FF3A3349</Color>
     <Color x:Key="Flick.Color.Divider">#FF252332</Color>
@@ -47,6 +49,24 @@
     <SolidColorBrush x:Key="Flick.Brush.Success" Color="{StaticResource Flick.Color.Success}"/>
     <SolidColorBrush x:Key="Flick.Brush.Warning" Color="{StaticResource Flick.Color.Warning}"/>
     <SolidColorBrush x:Key="Flick.Brush.Danger" Color="{StaticResource Flick.Color.Danger}"/>
+
+    <!-- Small brand marks borrow the logo's warm edge without its dark tail.
+         Application surfaces, divider lines and text remain solid colors. -->
+    <LinearGradientBrush x:Key="Flick.Brush.BrandAccent" StartPoint="0,0" EndPoint="1,1">
+        <GradientStop Color="{StaticResource Flick.Color.Sunset}" Offset="0"/>
+        <GradientStop Color="{StaticResource Flick.Color.Coral}" Offset=".45"/>
+        <GradientStop Color="{StaticResource Flick.Color.Accent}" Offset="1"/>
+    </LinearGradientBrush>
+    <!-- Primary actions stay predominantly violet with a restrained warm tint.
+         Every stop maintains readable dark OnAccent labels. -->
+    <LinearGradientBrush x:Key="Flick.Brush.PrimaryGradient" StartPoint="0,0" EndPoint="1,1">
+        <GradientStop Color="{StaticResource Flick.Color.PrimaryWarm}" Offset="0"/>
+        <GradientStop Color="{StaticResource Flick.Color.Accent}" Offset="1"/>
+    </LinearGradientBrush>
+    <LinearGradientBrush x:Key="Flick.Brush.PrimaryGradientHover" StartPoint="0,0" EndPoint="1,1">
+        <GradientStop Color="{StaticResource Flick.Color.PrimaryWarmHover}" Offset="0"/>
+        <GradientStop Color="{StaticResource Flick.Color.AccentHover}" Offset="1"/>
+    </LinearGradientBrush>
 
     <LinearGradientBrush x:Key="Flick.Brush.BrandGradient" StartPoint="0,0" EndPoint="1,1">
         <GradientStop Color="{StaticResource Flick.Color.Sunset}" Offset="0"/>

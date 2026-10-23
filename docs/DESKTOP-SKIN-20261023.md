@@ -6,11 +6,14 @@ The owner likes Flick's current architecture, workflows and purple theme. This p
 
 The original Flick artwork, optical alignment, violet-tinted surfaces and bright lavender accents remain. No Apple-owned font or SF Symbols assets are redistributed.
 
+The logo's gradient identity appears in small functional details: the selected Clips navigation symbol, the active/hovered/focused editing symbol and a restrained violet gradient on primary actions. Large surfaces and dividing lines stay quiet. Replay state colors keep their existing meanings.
+
 ## Visual decisions
 
 - Preserve the original purple canvas, sidebar, raised controls, translucent surface colors and accent palette. A separate subtle divider color blends structural boundaries into the adjacent surfaces without weakening keyboard focus.
 - Regular 13-DIP control text, clear section weights and tabular transport numerals reduce the previous blanket semibold treatment. Windows' installed Segoe UI Variable remains the native typeface.
 - Authored vector symbols use a consistent rounded 1.5-DIP stroke, with balanced 20-DIP toolbar boxes. Share uses an arrow rising from a square. Play, pause, back, refresh, more and dropdown indicators no longer depend on Unicode icon substitutes.
+- The small symbol gradient uses the logo's sunset and coral colors with a bright lavender endpoint for legibility. Primary-action gradients stay within a narrow pink-violet/lavender range. Windows high-contrast mode replaces these gradients and the new divider brush with system colors.
 - Compact six-DIP control corners, flatter grouping, violet selected rows and a contiguous source segment reduce outlined capsules. Editing actions retain their evenly spaced four-column arrangement, visible labels and 52-DIP hit targets.
 - Settings retain the same categories and fields with a readable content width, aligned insets and fewer nested borders. Trim grips and transport chrome are neutral; the active focus indicator stays visible.
 - The rail, header, library, preview and footer boundaries use the softer divider shade. The four-DIP library resize target is transparent until hovered or keyboard-focused. The real Windows caption reads colors from the same named palette. Standard resize, Snap and window controls remain native.

@@ -28,7 +28,17 @@
             <DockPanel LastChildFill="False">
                 <Image DockPanel.Dock="Top" Style="{StaticResource Flick.Image.BrandMark}" Width="38" Height="38" Margin="0,0,0,21" ToolTip="Flick — Your Clips"/>
                 <Button DockPanel.Dock="Top" x:Name="BtnNavClips" Style="{StaticResource Flick.Button.Icon}" Click="BtnNavClips_Click" AutomationProperties.Name="Your Clips" Background="{DynamicResource Flick.Brush.Raised}" BorderBrush="Transparent" ToolTip="Your Clips">
-                    <Path Style="{StaticResource Flick.Icon.Symbol}" Data="{StaticResource Flick.Icon.Geometry.Library}"/>
+                    <Path Data="{StaticResource Flick.Icon.Geometry.Library}">
+                        <Path.Style>
+                            <Style TargetType="{x:Type Path}" BasedOn="{StaticResource Flick.Icon.Symbol}">
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding Visibility, ElementName=WorkspacePageLayer}" Value="Collapsed">
+                                        <Setter Property="Stroke" Value="{DynamicResource Flick.Brush.BrandAccent}"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Path.Style>
+                    </Path>
                 </Button>
                 <Button DockPanel.Dock="Bottom" x:Name="BtnNavSettings" Style="{StaticResource Flick.Button.Icon}" Click="BtnSettings_Click" AutomationProperties.Name="Settings" ToolTip="Settings">
                     <Path Style="{StaticResource Flick.Icon.Symbol}" Data="{StaticResource Flick.Icon.Geometry.Settings}"/>
@@ -269,25 +279,35 @@
                         </Grid><UniformGrid x:Name="EditorToolBar" Grid.Row="3" Columns="4" Margin="0,4,0,0">
                             <Button x:Name="ToolTrim" Tag="Trim" Click="EditorTool_Click" Style="{StaticResource Flick.Button.Ghost}" MinHeight="52" Padding="8,4" Margin="6,0" ToolTip="Trim" AutomationProperties.Name="Trim" IsEnabled="{Binding CanEditClip}">
                                 <StackPanel>
-                                    <Path Style="{StaticResource Flick.Icon.Symbol}" Data="{StaticResource Flick.Icon.Geometry.Trim}" Width="20" Height="20"/>
+                                    <Path Style="{StaticResource Flick.Icon.Tool}" Data="{StaticResource Flick.Icon.Geometry.Trim}" Width="20" Height="20"/>
                                     <TextBlock Text="Trim" Style="{StaticResource Flick.Text.Caption}" HorizontalAlignment="Center" Margin="0,5,0,0"/>
                                 </StackPanel>
                             </Button>
                             <Button x:Name="ToolAudio" Tag="Audio" Click="EditorTool_Click" Style="{StaticResource Flick.Button.Ghost}" MinHeight="52" Padding="8,4" Margin="6,0" ToolTip="Audio" AutomationProperties.Name="Audio" IsEnabled="{Binding CanEditClip}">
                                 <StackPanel>
-                                    <Path Style="{StaticResource Flick.Icon.Symbol}" Data="{StaticResource Flick.Icon.Geometry.Audio}" Width="20" Height="20"/>
+                                    <Path Style="{StaticResource Flick.Icon.Tool}" Data="{StaticResource Flick.Icon.Geometry.Audio}" Width="20" Height="20"/>
                                     <TextBlock Text="Audio" Style="{StaticResource Flick.Text.Caption}" HorizontalAlignment="Center" Margin="0,5,0,0"/>
                                 </StackPanel>
                             </Button>
                             <Button x:Name="ToolOriginal" Tag="Original" Click="EditorTool_Click" Style="{StaticResource Flick.Button.Ghost}" MinHeight="52" Padding="8,4" Margin="6,0" ToolTip="Original" AutomationProperties.Name="Original" IsEnabled="{Binding CanEditClip}">
                                 <StackPanel>
-                                    <Path Style="{StaticResource Flick.Icon.Symbol}" Data="{StaticResource Flick.Icon.Geometry.Original}" Width="20" Height="20"/>
+                                    <Path Data="{StaticResource Flick.Icon.Geometry.Original}" Width="20" Height="20">
+                                        <Path.Style>
+                                            <Style TargetType="{x:Type Path}" BasedOn="{StaticResource Flick.Icon.Tool}">
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding ContextMenu.IsOpen, ElementName=BtnPreviewMode}" Value="True">
+                                                        <Setter Property="Stroke" Value="{DynamicResource Flick.Brush.BrandAccent}"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Path.Style>
+                                    </Path>
                                     <TextBlock Text="Original" Style="{StaticResource Flick.Text.Caption}" HorizontalAlignment="Center" Margin="0,5,0,0"/>
                                 </StackPanel>
                             </Button>
                             <Button x:Name="ToolShare" Tag="Share" Click="EditorTool_Click" Style="{StaticResource Flick.Button.Ghost}" MinHeight="52" Padding="8,4" Margin="6,0" ToolTip="Share: export an MP4, copy or drag the file" AutomationProperties.Name="Share" IsEnabled="True">
                                 <StackPanel>
-                                    <Path Style="{StaticResource Flick.Icon.Symbol}" Data="{StaticResource Flick.Icon.Geometry.Share}" Width="20" Height="20"/>
+                                    <Path Style="{StaticResource Flick.Icon.Tool}" Data="{StaticResource Flick.Icon.Geometry.Share}" Width="20" Height="20"/>
                                     <TextBlock Text="Share" Style="{StaticResource Flick.Text.Caption}" HorizontalAlignment="Center" Margin="0,5,0,0"/>
                                 </StackPanel>
                             </Button>
