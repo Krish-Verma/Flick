@@ -1,0 +1,83 @@
+[
+  {
+    "id": 422041115,
+    "tag_name": "v1.0.3-preview.1",
+    "name": "Flick 1.0.3 Preview 1 — UI Refresh & Software Updates (UNSIGNED)",
+    "target_commitish": "7123509de13dc302a632bda5ac3cc986a38d9d22",
+    "published_at": "2026-10-23T16:04:16Z",
+    "assets": [
+      {
+        "id": 669640973,
+        "name": "Flick-Setup.exe",
+        "size": 241917465,
+        "digest": "sha256:b19e97e454b9a9636cf1f12f60599b1b2d7949af110796f615a3d0f55673bd38"
+      },
+      {
+        "id": 669640969,
+        "name": "Flick-v1.0.3-win-x64.zip",
+        "size": 353050871,
+        "digest": "sha256:5aed5b95509b0beba75a55e546d271f52d2610fd067e8ab30545ed8e86a87644"
+      },
+      {
+        "id": 669640975,
+        "name": "SHA256SUMS.txt",
+        "size": 415,
+        "digest": "sha256:d2b85c12025105fc939128906f3fa5b14bef6e7b41a704c91d222c7e346bccd8"
+      }
+    ]
+  },
+  {
+    "id": 422012105,
+    "tag_name": "ui-refresh-preview-20261023",
+    "name": "Flick UI Refresh — October 23 Preview (UNSIGNED)",
+    "target_commitish": "79204f67ca9318526873730946d82556eee9ce9c",
+    "published_at": "2026-10-23T15:34:52Z",
+    "assets": [
+      {
+        "id": 669560136,
+        "name": "Flick-Setup.exe",
+        "size": 241884908,
+        "digest": "sha256:e09bec570628d664aec3fbdd5a53b2cf363d8c35a28b1e1205573c46cb1ef411"
+      },
+      {
+        "id": 669560137,
+        "name": "Flick-v1.0.2-win-x64.zip",
+        "size": 352989419,
+        "digest": "sha256:09811cae44ba403facf9dae0f26544d682491228689b441fada954a7ccb07616"
+      },
+      {
+        "id": 669560133,
+        "name": "SHA256SUMS.txt",
+        "size": 415,
+        "digest": "sha256:929b22b59029697136e39530952b93aa9112ad7b04f8b9af95b46116f0e54620"
+      }
+    ]
+  },
+  {
+    "id": 421239224,
+    "tag_name": "v1.0.2-preview.2",
+    "name": "Flick v1.0.2 — Windows NVIDIA NVENC Preview 2",
+    "target_commitish": "346eca07170f4b4d561044a3898bf789bdf4fc3b",
+    "published_at": "2026-10-22T21:51:35Z",
+    "assets": [
+      {
+        "id": 667190613,
+        "name": "Flick-Setup.exe",
+        "size": 241834279,
+        "digest": "sha256:9582623cc417dcd48e99fb99b4b56fbff6b781675d4a19c699cf3e8e08148c0b"
+      },
+      {
+        "id": 667190610,
+        "name": "Flick-v1.0.2-win-x64.zip",
+        "size": 352947412,
+        "digest": "sha256:e2c5cd3b7687efd19e117d6189e7897236b01c5edbbe35c2c99c301428c1c036"
+      },
+      {
+        "id": 667190612,
+        "name": "SHA256SUMS.txt",
+        "size": 415,
+        "digest": "sha256:4c2a3702ad20957dda1bd69cd3b21358b4f30d3d73538b63df75db5b8bf64529"
+      }
+    ]
+  }
+]

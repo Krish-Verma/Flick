@@ -1,5 +1,17 @@
 # Flick Windows Downloads and GitHub Release Management
 
+## Current owner-approved delivery — October 23
+
+The repository is public. The owner approved the final design and requested **v1.0.4-preview.1 — UNSIGNED Design Preview** as the single Latest download in GitHub Releases, with superseded Release entries removed after verification. [Current Setup download](https://github.com/Krish-Verma/Flick/releases/latest/download/Flick-Setup.exe).
+
+Build the versioned source with successful Windows CI, real WPF rendering and installer lifecycle checks. The dedicated owner-approved publication workflow pins the exact source tree, run IDs, artifact digest and asset hashes; it uploads all three assets to a draft and verifies them before publication. It then verifies the Latest entry before deleting only the old Release IDs recorded in `release/archived-releases-20261023.json`. Keep source tags/history.
+
+GitHub requires `prerelease=false` for its Latest catalogue badge. The semantic `-preview` version, visible UNSIGNED title, release notes and explicit installation consent remain authoritative preview warnings. The badge does not confer signing trust or stable hardware qualification. Flick's updater retains semantic preview-channel opt-in regardless of GitHub's catalogue flag.
+
+The legacy unsigned auto-publisher remains disabled. Trusted signing and physical hardware acceptance remain requirements before claiming a signed/trusted stable release. The material below records earlier release policy and incidents; it does not revoke the October 23 publication approval.
+
+## Historical release process
+
 ## The simple user experience
 
 **Preferred download:** [Flick-Setup.exe](https://github.com/Krish-Verma/Flick/releases/download/v1.0.2-preview.2/Flick-Setup.exe) from [Flick v1.0.2 — Windows NVIDIA Preview](https://github.com/Krish-Verma/Flick/releases/tag/v1.0.2-preview.2). A single EXE runs a standard Windows per-user setup wizard and installs Flick.exe with its runtime dependencies. The Start Menu entry, optional desktop icon and Installed Apps uninstall entry work like those for ordinary Windows software.

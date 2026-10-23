@@ -28,7 +28,8 @@ foreach ($relative in @(
     "src/LocalClip.App/Views/Components/FlickClipToast.xaml",
     "src/LocalClip.App/Views/Components/TrimRangeControl.xaml",
     "src/LocalClip.App/Resources/Theme/Flick.Colors.xaml",
-    "src/LocalClip.App/Resources/Theme/Flick.Controls.xaml"
+    "src/LocalClip.App/Resources/Theme/Flick.Controls.xaml",
+    "src/LocalClip.App/Resources/Theme/Flick.Chrome.xaml"
 )) {
     [xml]$parsed = ReadSource $relative
     if (-not $parsed.DocumentElement) { throw "XAML XML parsing FAILED: $relative" }

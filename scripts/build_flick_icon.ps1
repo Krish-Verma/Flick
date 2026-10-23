@@ -17,17 +17,30 @@ try {
     foreach ($size in @(16, 24, 32, 48, 64, 128, 256)) {
         $bmp = [Drawing.Bitmap]::new($size, $size, [Drawing.Imaging.PixelFormat]::Format32bppArgb)
         $graphics = [Drawing.Graphics]::FromImage($bmp)
+        $clip = [Drawing.Drawing2D.GraphicsPath]::new()
+        $canvas = [Drawing.SolidBrush]::new([Drawing.Color]::FromArgb(255, 6, 3, 13))
         try {
             $graphics.Clear([Drawing.Color]::Transparent)
+            $graphics.SmoothingMode = [Drawing.Drawing2D.SmoothingMode]::AntiAlias
             $graphics.InterpolationMode = [Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
             $graphics.PixelOffsetMode = [Drawing.Drawing2D.PixelOffsetMode]::HighQuality
-            $graphics.DrawImage($source, [Drawing.Rectangle]::new(0, 0, $size, $size))
+            # Match Flick.Image.BrandMark: a fixed dark circular viewport with
+            # the original bitmap shifted by 1 DIP in its 38-DIP design space.
+            # Never move the circle or alter the original asset's pixels.
+            $viewport = [Drawing.RectangleF]::new(0, 0, $size, $size)
+            $graphics.FillEllipse($canvas, $viewport)
+            $clip.AddEllipse($viewport)
+            $graphics.SetClip($clip)
+            $offset = [single]($size / 38.0)
+            $graphics.DrawImage($source, [Drawing.RectangleF]::new($offset, $offset, $size, $size))
             $buffer = [IO.MemoryStream]::new()
             try {
                 $bmp.Save($buffer, [Drawing.Imaging.ImageFormat]::Png)
                 $images.Add([pscustomobject]@{ Size = $size; Bytes = $buffer.ToArray() })
             } finally { $buffer.Dispose() }
         } finally {
+            $canvas.Dispose()
+            $clip.Dispose()
             $graphics.Dispose()
             $bmp.Dispose()
         }

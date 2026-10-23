@@ -1,4 +1,4 @@
-name: Flick Private Windows Setup Preview
+name: Flick Unsigned Windows Setup Preview
 
 on:
   pull_request:
@@ -18,7 +18,7 @@ concurrency:
 
 jobs:
   setup-preview:
-    name: Compile private unsigned Flick Setup and portable ZIP
+    name: Compile unsigned Flick Setup and portable ZIP
     runs-on: windows-latest
     timeout-minutes: 60
     env:
@@ -67,30 +67,41 @@ jobs:
       - name: Build portable ZIP and conventional per-user Setup EXE
         shell: pwsh
         run: ./scripts/build_installer.ps1 -SkipNativeBuild
-      - name: Check private preview hashes and included tools
+      - name: Check preview hashes and included tools
         shell: pwsh
         run: |
           $checksums = 'dist/SHA256SUMS.txt'
           $setup = 'dist/Flick-Setup.exe'
-          $portable = 'dist/Flick-v1.0.2-win-x64.zip'
+          $portable = 'dist/Flick-v1.0.4-win-x64.zip'
           foreach ($path in @($checksums, $setup, $portable)) {
             if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw "Missing $path" }
           }
           $manifest = Get-Content -LiteralPath $checksums -Raw
-          foreach ($name in @('Flick.exe', 'Flick-v1.0.2-win-x64.zip',
+          foreach ($name in @('Flick.exe', 'Flick-v1.0.4-win-x64.zip',
                               'Flick-Setup.exe', 'LocalClip.CaptureHost.exe')) {
             if (-not $manifest.Contains($name)) { throw "Missing hash entry: $name" }
           }
-          Write-Host "Private preview compiled; no hardware acceptance is asserted."
-      - name: Upload PRIVATE preview files for authorized tester
+          Write-Host "Unsigned preview compiled; no hardware acceptance is asserted."
+      - name: Verify per-user install, update wait, restart and data retention
+        shell: pwsh
+        run: ./scripts/test_flick_installer_update.ps1
+      - name: Upload installer lifecycle evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: flick-installer-evidence-${{ github.sha }}
+          path: dist/installer-smoke/**
+          if-no-files-found: warn
+          retention-days: 14
+      - name: Upload unsigned preview files
         uses: actions/upload-artifact@v4
         with:
           name: flick-unsigned-preview-${{ github.sha }}
           path: |
             dist/Flick-Setup.exe
-            dist/Flick-v1.0.2-win-x64.zip
+            dist/Flick-v1.0.4-win-x64.zip
             dist/SHA256SUMS.txt
           if-no-files-found: error
           retention-days: 7
 
-# Private PR build only; never a public Release and never hardware QA.
+# PR artifact build only; GitHub Release publication is a separate reviewed workflow.

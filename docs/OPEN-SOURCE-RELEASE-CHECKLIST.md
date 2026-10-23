@@ -1,6 +1,8 @@
 # Flick — Open-source Release Checklist (owner sign-off required)
 
-**Current state:** private GitHub development repository, stacked draft GUI PR #7 and release-foundation draft PR #8. No public version tag or release is authorized. Pass/fail below must be filled with exact commit hashes and durable raw evidence by Windows QA.
+**October 23 status:** The owner made the repository public and authorized clearly labelled unsigned previews. The approved v1.0.4 design preview is the single Latest download, with older Release entries removed after verification. GitHub's catalogue flag is separate from the semantic preview version and unsigned-install consent. Windows CI and installer lifecycle evidence do not qualify trusted signing, physical Windows/NVIDIA acceptance, legal readiness, or a stable release. See [Software Updates](SOFTWARE-UPDATES.md) for current delivery behavior. The checklist below retains the earlier QA baseline and pending acceptance criteria.
+
+**Historical baseline (before October 23 owner approval):** private GitHub development repository, stacked draft GUI PR #7 and release-foundation draft PR #8. No public version tag or release is authorized. Pass/fail below must be filled with exact commit hashes and durable raw evidence by Windows QA.
 
 | Gate | Status before AntiGravity | Objective acceptance |
 |---|---|---|

@@ -6,7 +6,9 @@ $themeNames = @(
     "Flick.Colors.xaml",
     "Flick.Metrics.xaml",
     "Flick.Typography.xaml",
-    "Flick.Controls.xaml"
+    "Flick.Icons.xaml",
+    "Flick.Controls.xaml",
+    "Flick.Chrome.xaml"
 )
 $keys = @{}
 $duplicateKeys = @()
@@ -38,7 +40,9 @@ $required = @(
     "Flick.Button.Primary", "Flick.Button.Secondary",
     "Flick.Button.Ghost", "Flick.Button.Icon", "Flick.Button.Busy",
     "Flick.Input.Text", "Flick.Input.Combo", "Flick.Toggle",
-    "Flick.Input.Slider", "Flick.Surface.Frosted", "Flick.Surface.Toast"
+    "Flick.Input.Slider", "Flick.Surface.Frosted", "Flick.Surface.Toast",
+    "Flick.Scrollbar.Thumb", "Flick.Scrollbar.Thumb.Vertical",
+    "Flick.Scrollbar.Thumb.Horizontal", "Flick.Scrollbar.PageButton"
 )
 foreach ($key in $required) {
     if (-not $keys.ContainsKey($key)) { throw "Missing mandatory WPF token: $key" }

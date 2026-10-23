@@ -23,7 +23,8 @@ public partial class App : System.Windows.Application
 
         if (!createdNew)
         {
-            MessageBox.Show("Flick is already running. Check your system tray.", "Flick", MessageBoxButton.OK, MessageBoxImage.Information);
+            // The existing instance remains available in its tray; do not
+            // create a second application-owned bootstrap dialog.
             Shutdown();
             return;
         }

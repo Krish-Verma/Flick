@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
-    <!-- Flick GUI v3.2: mostly graphite; the sunset spectrum belongs to the brand. -->
+    <!-- Preserve Flick's purple/synthwave palette. Structural dividers are
+         quieter than input outlines; keyboard focus remains explicit. -->
     <Color x:Key="Flick.Color.Canvas">#FF0B0B14</Color>
     <Color x:Key="Flick.Color.Surface">#FF151622</Color>
     <Color x:Key="Flick.Color.Raised">#FF242436</Color>
@@ -13,8 +14,11 @@
     <Color x:Key="Flick.Color.TextMuted">#FF9C97AD</Color>
     <Color x:Key="Flick.Color.Accent">#FFC69BFF</Color>
     <Color x:Key="Flick.Color.AccentHover">#FFD9BCFF</Color>
+    <Color x:Key="Flick.Color.PrimaryWarm">#FFD8A5E9</Color>
+    <Color x:Key="Flick.Color.PrimaryWarmHover">#FFE4B9F0</Color>
     <Color x:Key="Flick.Color.OnAccent">#FF251333</Color>
-    <Color x:Key="Flick.Color.Border">#FF454052</Color>
+    <Color x:Key="Flick.Color.Border">#FF3A3349</Color>
+    <Color x:Key="Flick.Color.Divider">#FF252332</Color>
     <Color x:Key="Flick.Color.BorderStrong">#FF795E89</Color>
     <Color x:Key="Flick.Color.Focus">#FFE1C8FF</Color>
     <Color x:Key="Flick.Color.Success">#FF8FD4B0</Color>
@@ -39,11 +43,30 @@
     <SolidColorBrush x:Key="Flick.Brush.AccentHover" Color="{StaticResource Flick.Color.AccentHover}"/>
     <SolidColorBrush x:Key="Flick.Brush.OnAccent" Color="{StaticResource Flick.Color.OnAccent}"/>
     <SolidColorBrush x:Key="Flick.Brush.Border" Color="{StaticResource Flick.Color.Border}"/>
+    <SolidColorBrush x:Key="Flick.Brush.Divider" Color="{StaticResource Flick.Color.Divider}"/>
     <SolidColorBrush x:Key="Flick.Brush.BorderStrong" Color="{StaticResource Flick.Color.BorderStrong}"/>
     <SolidColorBrush x:Key="Flick.Brush.Focus" Color="{StaticResource Flick.Color.Focus}"/>
     <SolidColorBrush x:Key="Flick.Brush.Success" Color="{StaticResource Flick.Color.Success}"/>
     <SolidColorBrush x:Key="Flick.Brush.Warning" Color="{StaticResource Flick.Color.Warning}"/>
     <SolidColorBrush x:Key="Flick.Brush.Danger" Color="{StaticResource Flick.Color.Danger}"/>
+
+    <!-- Small brand marks borrow the logo's warm edge without its dark tail.
+         Application surfaces, divider lines and text remain solid colors. -->
+    <LinearGradientBrush x:Key="Flick.Brush.BrandAccent" StartPoint="0,0" EndPoint="1,1">
+        <GradientStop Color="{StaticResource Flick.Color.Sunset}" Offset="0"/>
+        <GradientStop Color="{StaticResource Flick.Color.Coral}" Offset=".45"/>
+        <GradientStop Color="{StaticResource Flick.Color.Accent}" Offset="1"/>
+    </LinearGradientBrush>
+    <!-- Primary actions stay predominantly violet with a restrained warm tint.
+         Every stop maintains readable dark OnAccent labels. -->
+    <LinearGradientBrush x:Key="Flick.Brush.PrimaryGradient" StartPoint="0,0" EndPoint="1,1">
+        <GradientStop Color="{StaticResource Flick.Color.PrimaryWarm}" Offset="0"/>
+        <GradientStop Color="{StaticResource Flick.Color.Accent}" Offset="1"/>
+    </LinearGradientBrush>
+    <LinearGradientBrush x:Key="Flick.Brush.PrimaryGradientHover" StartPoint="0,0" EndPoint="1,1">
+        <GradientStop Color="{StaticResource Flick.Color.PrimaryWarmHover}" Offset="0"/>
+        <GradientStop Color="{StaticResource Flick.Color.AccentHover}" Offset="1"/>
+    </LinearGradientBrush>
 
     <LinearGradientBrush x:Key="Flick.Brush.BrandGradient" StartPoint="0,0" EndPoint="1,1">
         <GradientStop Color="{StaticResource Flick.Color.Sunset}" Offset="0"/>

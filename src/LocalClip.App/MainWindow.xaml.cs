@@ -15,9 +15,11 @@ using LocalClip.App.ViewModels;
 using LocalClip.App.Views;
 using LocalClip.App.Services;
 using System.Runtime.InteropServices;
+using System.Security.Cryptography;
 using LocalClip.Core.Models;
 using LocalClip.Core.Rules;
 using LocalClip.Core.Media;
+using LocalClip.Core.Updates;
 using LocalClip.App.Views.Components;
 using System.Threading;
 
@@ -35,6 +37,10 @@ public partial class MainWindow : Window
     private readonly FlickNotificationService _notificationService;
     private bool _trayHintShown;
     private readonly DispatcherTimer _playerTimer;
+    private SettingsWindow? _settingsPage;
+    private ConnectedFoldersWindow? _foldersPage;
+    private bool _foldersReturnToSettings;
+    private bool _settingsMicrophoneWasEnabled;
     private bool _isDraggingSlider = false;
     private bool _isRealClosing = false;
     private System.Windows.Point? _shareDragStart;
@@ -51,7 +57,12 @@ public partial class MainWindow : Window
     private bool _initialLayoutApplied;
     // Only the currently selected small poster is unloaded while hidden; the
     // clip library and editing model are preserved for instant tray restoration.
+    internal FrameworkElement InteractionSurface => MainInteractionSurface;
+    internal Border ModalLayer => DialogLayer;
+    internal ContentControl DialogHost => DialogContentHost;
     private bool _posterCacheDetached;
+    private Button? _activeEditorTool;
+    private bool _updateInstallInProgress;
 
     public MainWindow()
     {
@@ -64,8 +75,10 @@ public partial class MainWindow : Window
         _vm.ReplaySaveFailed += OnReplaySaveFailed;
 
         _hotkeyManager = new HotkeyManager();
-        _hotkeyManager.OnCaptureToggleHotkeyPressed += async () => await _vm.ToggleCaptureAsync();
-        _hotkeyManager.OnSaveReplayHotkeyPressed += async () => await _vm.SaveReplayAsync();
+        _hotkeyManager.OnCaptureToggleHotkeyPressed += async () =>
+        { if (!_updateInstallInProgress) await _vm.ToggleCaptureAsync(); };
+        _hotkeyManager.OnSaveReplayHotkeyPressed += async () =>
+        { if (!_updateInstallInProgress) await _vm.SaveReplayAsync(); };
 
         _playerTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(200) };
         _playerTimer.Tick += PlayerTimer_Tick;
@@ -80,9 +93,16 @@ public partial class MainWindow : Window
                 SuspendPlayback(clearSource: true);
                 ReleasePosterWhileHidden();
             }
-            else RestorePosterAfterShow();
+            else if (WorkspacePageLayer.Visibility != Visibility.Visible)
+                RestorePosterAfterShow();
         };
-        SourceInitialized += (_, _) => _ = FlickBackdropService.TryApplyMica(this);
+        SourceInitialized += (_, _) =>
+        {
+            // Native Windows caption stays dark without custom chrome or
+            // sacrificing minimize/maximize/Win+Arrow/Snap/resize handling.
+            _ = FlickBackdropService.TryApplyDarkTitleBar(this);
+            _ = FlickBackdropService.TryApplyMica(this);
+        };
     }
 
     private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
@@ -153,7 +173,7 @@ public partial class MainWindow : Window
         if (!_hotkeyManager.TryConfigure(_vm.Settings.CaptureToggleHotkey,
                 _vm.Settings.SaveReplayHotkey, out string error))
         {
-            MessageBox.Show(error + " The previous shortcuts were restored if possible.",
+            LocalClip.App.Services.FlickDialog.Show(error + " The previous shortcuts were restored if possible.",
                 "Flick hotkey conflict", MessageBoxButton.OK, MessageBoxImage.Warning);
             if (oldToggle != null && oldSave != null)
             {
@@ -171,26 +191,45 @@ public partial class MainWindow : Window
 
     private System.Drawing.Icon CreateTrayIcon()
     {
+        try { return CreateTrayIconCore(); }
+        catch { return System.Drawing.SystemIcons.Application; }
+    }
+
+    private System.Drawing.Icon CreateTrayIconCore()
+    {
+        var asset = System.Windows.Application.GetResourceStream(
+            new Uri("pack://application:,,,/Flick;component/Assets/Brand/FlickLogo.png"));
+        if (asset == null) throw new IOException("The embedded Flick brand artwork was not found.");
+        using var stream = asset.Stream;
+        using var source = new System.Drawing.Bitmap(stream);
+        // Match the WPF brand source and packaged ICO: keep a fixed dark
+        // circle, and move only its original artwork by 1/38 of the canvas.
+        const int size = 128;
+        using var bitmap = new System.Drawing.Bitmap(size, size,
+            System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+        using (var graphics = System.Drawing.Graphics.FromImage(bitmap))
+        using (var clip = new System.Drawing.Drawing2D.GraphicsPath())
+        using (var canvas = new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(255, 6, 3, 13)))
+        {
+            graphics.Clear(System.Drawing.Color.Transparent);
+            graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+            graphics.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
+            graphics.PixelOffsetMode = System.Drawing.Drawing2D.PixelOffsetMode.HighQuality;
+            var viewport = new System.Drawing.RectangleF(0, 0, size, size);
+            graphics.FillEllipse(canvas, viewport);
+            clip.AddEllipse(viewport);
+            graphics.SetClip(clip);
+            float offset = size / 38f;
+            graphics.DrawImage(source, new System.Drawing.RectangleF(offset, offset, size, size));
+        }
+        IntPtr native = bitmap.GetHicon();
         try
         {
-            var asset = System.Windows.Application.GetResourceStream(
-                new Uri("pack://application:,,,/Assets/Brand/FlickLogo.png"));
-            if (asset == null) return System.Drawing.SystemIcons.Application;
-            using var stream = asset.Stream;
-            using var bitmap = new System.Drawing.Bitmap(stream);
-            IntPtr native = bitmap.GetHicon();
-            try
-            {
-                var copy = (System.Drawing.Icon)System.Drawing.Icon.FromHandle(native).Clone();
-                _ownsTrayBrandIcon = true;
-                return copy;
-            }
-            finally { _ = DestroyIcon(native); }
+            var copy = (System.Drawing.Icon)System.Drawing.Icon.FromHandle(native).Clone();
+            _ownsTrayBrandIcon = true;
+            return copy;
         }
-        catch
-        {
-            return System.Drawing.SystemIcons.Application;
-        }
+        finally { _ = DestroyIcon(native); }
     }
 
     private void SetupSystemTray()
@@ -210,7 +249,7 @@ public partial class MainWindow : Window
 
         _trayReplayItem = new System.Windows.Forms.ToolStripMenuItem("Start Replay");
         _trayReplayItem.Click += (sender, args) =>
-            _ = Dispatcher.BeginInvoke(new Action(async () => await _vm.ToggleCaptureAsync()));
+            _ = Dispatcher.BeginInvoke(new Action(async () => { if (!_updateInstallInProgress) await _vm.ToggleCaptureAsync(); }));
         menu.Items.Add(_trayReplayItem);
 
         _traySaveItem = new System.Windows.Forms.ToolStripMenuItem("Save Last 30 Seconds")
@@ -218,7 +257,7 @@ public partial class MainWindow : Window
             Enabled = false
         };
         _traySaveItem.Click += (sender, args) =>
-            _ = Dispatcher.BeginInvoke(new Action(async () => await _vm.SaveReplayAsync()));
+            _ = Dispatcher.BeginInvoke(new Action(async () => { if (!_updateInstallInProgress) await _vm.SaveReplayAsync(); }));
         menu.Items.Add(_traySaveItem);
         menu.Items.Add(new System.Windows.Forms.ToolStripSeparator());
 
@@ -239,16 +278,17 @@ public partial class MainWindow : Window
         try
         {
             _notificationService.NotifySaved(
-                clip.Title, clip.DurationSeconds,
+                clip.DurationSeconds,
                 _vm.Settings.ShowClipSavedOverlay,
-                _vm.Settings.PlayClipSavedSound);
+                _vm.Settings.PlayClipSavedSound,
+                _vm.Settings.ClipSavedSoundTone, _vm.Settings.ClipSavedSoundPath);
         }
         catch (Exception)
         {
             // Nonessential overlays must never break capture or file persistence.
             if (_vm.Settings.ShowClipSavedOverlay)
-                _notifyIcon?.ShowBalloonTip(1800, "Flick · Clip Saved",
-                    System.IO.Path.GetFileName(clip.OriginalFilePath),
+                _notifyIcon?.ShowBalloonTip(1800, "Clip Saved",
+                    NotificationWaveRules.DurationText(clip.DurationSeconds),
                     System.Windows.Forms.ToolTipIcon.Info);
         }
     }
@@ -331,7 +371,9 @@ public partial class MainWindow : Window
         WindowState = WindowState.Normal;
         RestorePosterAfterShow();
         Activate();
-        if (VideoPlayer.Source is null) ResetPlayerForSelection();
+        if (WorkspacePageLayer.Visibility != Visibility.Visible &&
+            VideoPlayer.Source is null)
+            ResetPlayerForSelection();
     }
 
     private void RealQuit()
@@ -358,6 +400,11 @@ public partial class MainWindow : Window
             return;
         }
 
+        if (_foldersPage != null) _foldersPage.LeavePage();
+        _foldersPage = null;
+        _settingsPage?.LeavePage();
+        _settingsPage = null;
+        WorkspacePageHost.Content = null;
         _playerTimer.Stop();
         CancelPendingPreview();
         _vm.ConfirmTargetReset = null;
@@ -379,7 +426,7 @@ public partial class MainWindow : Window
 
     private bool ConfirmSourceReset()
     {
-        return MessageBox.Show(
+        return LocalClip.App.Services.FlickDialog.Show(
             "Changing the capture source will stop replay and clear the current unsaved buffer. Continue?",
             "Change Capture Source", MessageBoxButton.YesNo, MessageBoxImage.Warning)
             == MessageBoxResult.Yes;
@@ -410,18 +457,92 @@ public partial class MainWindow : Window
     }
 
     private void BtnImportFolder_Click(object sender, RoutedEventArgs e) =>
-        OpenConnectedFolders(this);
+        OpenConnectedFolders();
 
-    private void OpenConnectedFolders(Window owner)
+    private void ShowWorkspacePage(UserControl page)
     {
-        var dialog = new ConnectedFoldersWindow(_vm) { Owner = owner };
-        dialog.ShowDialog();
+        // The editor may be hidden, but the independent capture host continues.
+        // Abandon a pending FFmpeg local preview before leaving the editor.
+        CancelPendingPreview();
+        SuspendPlayback(clearSource: true);
+        ReleasePosterWhileHidden();
+        WorkspaceContentGrid.Visibility = Visibility.Collapsed;
+        WorkspacePageHost.Content = page;
+        WorkspacePageLayer.Visibility = Visibility.Visible;
+        UpdateWorkspaceNavigation();
+    }
+
+    private void UpdateWorkspaceNavigation()
+    {
+        bool isClips = WorkspacePageLayer.Visibility != Visibility.Visible;
+        BtnNavClips.Background = isClips
+            ? (System.Windows.Media.Brush)FindResource("Flick.Brush.Raised")
+            : System.Windows.Media.Brushes.Transparent;
+        BtnNavSettings.Background = _settingsPage != null && _foldersPage == null
+            ? (System.Windows.Media.Brush)FindResource("Flick.Brush.Raised")
+            : System.Windows.Media.Brushes.Transparent;
+    }
+
+    private void ReturnToClipWorkspace()
+    {
+        _hotkeyManager.IsShortcutEditing = false;
+        if (_foldersPage != null)
+        {
+            _foldersPage.CloseRequested -= CloseConnectedFolders;
+            _foldersPage.LeavePage(); // Cancel only the current import scan.
+            _foldersPage = null;
+            _vm.ReloadClips();
+            _vm.RefreshConnectedFolders();
+        }
+        if (_settingsPage != null)
+        {
+            _settingsPage.CloseRequested -= CloseSettingsPage;
+            _settingsPage.InstallUpdateRequested -= InstallUpdateAsync;
+            _settingsPage.LeavePage();
+            _settingsPage = null; // Unsaved staged settings are discarded.
+        }
+        WorkspacePageHost.Content = null; // Do not retain invisible page UI.
+        WorkspacePageLayer.Visibility = Visibility.Collapsed;
+        WorkspaceContentGrid.Visibility = Visibility.Visible;
+        RestorePosterAfterShow();
+        UpdateWorkspaceNavigation();
+        RefreshWorkspaceForSize();
+    }
+
+    private void OpenConnectedFolders()
+    {
+        if (FlickDialog.IsOpen) return;
+        if (_foldersPage != null)
+        {
+            ShowWorkspacePage(_foldersPage);
+            return;
+        }
+        _foldersReturnToSettings = _settingsPage != null;
+        var folders = new ConnectedFoldersWindow(_vm);
+        folders.CloseRequested += CloseConnectedFolders;
+        _foldersPage = folders;
+        ShowWorkspacePage(folders);
+    }
+
+    private void CloseConnectedFolders()
+    {
+        if (_foldersPage == null) return;
+        _foldersPage.CloseRequested -= CloseConnectedFolders;
+        _foldersPage.LeavePage();
+        _foldersPage = null;
         _vm.ReloadClips();
         _vm.RefreshConnectedFolders();
+        if (_foldersReturnToSettings && _settingsPage != null)
+        {
+            ShowWorkspacePage(_settingsPage); // Keep unsaved Settings edits.
+            return;
+        }
+        ReturnToClipWorkspace();
     }
 
     private void BtnNavClips_Click(object sender, RoutedEventArgs e)
     {
+        ReturnToClipWorkspace();
         if (_layoutMode == WorkspaceLayoutMode.Compact)
             ShowCompactLibrary();
         TxtClipSearch.Focus();
@@ -501,11 +622,13 @@ public partial class MainWindow : Window
     // Top Bar Handlers
     private async void BtnToggleCapture_Click(object sender, RoutedEventArgs e)
     {
+        if (_updateInstallInProgress) return;
         await _vm.ToggleCaptureAsync();
     }
 
     private async void BtnSaveReplay_Click(object sender, RoutedEventArgs e)
     {
+        if (_updateInstallInProgress) return;
         await _vm.SaveReplayAsync();
     }
 
@@ -518,38 +641,123 @@ public partial class MainWindow : Window
 
     private void OpenSettings()
     {
-        bool isCapturing = _vm.CaptureStatus == "Armed" ||
-                           _vm.CaptureStatus == "Buffering";
-        bool oldMic = _vm.Settings.EnableMicrophone;
-        var dialog = new SettingsWindow(_vm.Settings, isCapturing) { Owner = this };
-        dialog.ManageFoldersRequested += (sender, args) => OpenConnectedFolders(dialog);
-        dialog.PreviewNotificationRequested += (show, sound) =>
+        if (FlickDialog.IsOpen || _updateInstallInProgress) return;
+        if (_foldersPage != null) CloseConnectedFolders();
+        if (_settingsPage != null)
         {
-            try { _notificationService.Preview(sound); } catch { }
+            ShowWorkspacePage(_settingsPage);
+            return;
+        }
+        _settingsMicrophoneWasEnabled = _vm.Settings.EnableMicrophone;
+        var settings = new SettingsWindow(_vm.Settings,
+            () => _vm.CaptureStatus is "Starting" or "Armed" or "Buffering");
+        settings.CloseRequested += CloseSettingsPage;
+        settings.InstallUpdateRequested += InstallUpdateAsync;
+        settings.ShortcutEditingChanged += editing => _hotkeyManager.IsShortcutEditing = editing;
+        settings.ManageFoldersRequested += (_, _) => OpenConnectedFolders();
+        settings.PreviewNotificationRequested += (show, sound, tone, path) =>
+        {
+            try { _notificationService.Preview(sound, tone, path); } catch { }
         };
-        bool? saved = dialog.ShowDialog();
-        if (dialog.UninstallRequested)
+        _settingsPage = settings;
+        ShowWorkspacePage(settings);
+    }
+
+    private bool UpdateRequiresFinishingWork() =>
+        _vm.IsCaptureActive || _vm.IsReplaySavePending || _vm.IsImporting || _vm.IsExporting ||
+        _vm.IsBackgroundWorkActive;
+
+    private async System.Threading.Tasks.Task<string?> InstallUpdateAsync(DownloadedUpdate download, CancellationToken cancellationToken)
+    {
+        var originatingSettings = _settingsPage;
+        if (cancellationToken.IsCancellationRequested || originatingSettings == null ||
+            !ReferenceEquals(WorkspacePageHost.Content, originatingSettings))
+            return "Open Software Updates again to install the update.";
+        if (_updateInstallInProgress) return "An update installation is already being prepared.";
+        if (!FlickUninstallLauncher.IsInstalled)
+            return "This copy is portable. Open Release Notes for a new ZIP, then quit Flick and replace its extracted application folder.";
+        if (UpdateRequiresFinishingWork())
+            return "Save any replay you want to keep, stop replay yourself, and wait for clip saving, imports, library scans, exports and uploads to finish before installing. Flick will not stop or discard your work for an update.";
+
+        _updateInstallInProgress = true;
+        bool wasEnabled = MainInteractionSurface.IsEnabled;
+        bool wasEditingShortcut = _hotkeyManager.IsShortcutEditing;
+        MainInteractionSurface.IsEnabled = false;
+        _hotkeyManager.IsShortcutEditing = true;
+        try
+        {
+            // Native trust verification may contact Windows' revocation service;
+            // keep it off the dispatcher and do not let hotkeys start capture meanwhile.
+            using var prepared = await FlickUpdateService.PrepareInstallationAsync(download, cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+            if (_isRealClosing || Dispatcher.HasShutdownStarted) return null;
+            if (!ReferenceEquals(_settingsPage, originatingSettings) ||
+                !ReferenceEquals(WorkspacePageHost.Content, originatingSettings))
+                return "Open Software Updates again to install the update.";
+            string warning = prepared.IsUnsignedPreview
+                ? $"Install Flick {download.Release.Version}? This preview installer is unsigned. Its download checksum matches this GitHub release, but Windows has not verified its publisher. Smart App Control may block it. Continue only if you trust this release; Flick will not disable or bypass Windows protections. Flick will close and restart after installation. Pending Settings edits are not saved."
+                : $"Install Flick {download.Release.Version} and restart? Windows verified the installer's signature. Flick will close while the update is installed. Saved clips and preferences are kept; pending Settings edits are not saved.";
+            if (FlickDialog.Show(warning, prepared.IsUnsignedPreview ? "Install Unsigned Preview" : "Install Flick Update",
+                MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No) != MessageBoxResult.Yes)
+                return "Installation cancelled. The downloaded update is ready when you are.";
+
+            // The consent UI pumps dispatcher messages. Recheck live work, the
+            // page and installation immediately before launching; never stop capture.
+            cancellationToken.ThrowIfCancellationRequested();
+            if (_isRealClosing || Dispatcher.HasShutdownStarted) return null;
+            if (UpdateRequiresFinishingWork())
+                return "New work started while preparing the update. Stop replay and wait for clip saving, imports, library scans, exports and uploads to finish, then try again.";
+            if (!ReferenceEquals(_settingsPage, originatingSettings) ||
+                !ReferenceEquals(WorkspacePageHost.Content, originatingSettings))
+                return "Open Software Updates again to install the update.";
+            cancellationToken.ThrowIfCancellationRequested();
+            FlickUpdateService.LaunchInstaller(prepared);
+            originatingSettings.MarkUpdateInstallerStarted();
+            RealQuit(); // Normal tray cleanup and App.OnExit release the single-instance mutex.
+            return null;
+        }
+        catch (OperationCanceledException) { return "Update preparation cancelled."; }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException or InvalidOperationException
+            or System.ComponentModel.Win32Exception or CryptographicException)
+        {
+            return "The update was not started. " + error.Message;
+        }
+        finally
+        {
+            _updateInstallInProgress = false;
+            MainInteractionSurface.IsEnabled = wasEnabled;
+            _hotkeyManager.IsShortcutEditing = wasEditingShortcut;
+        }
+    }
+
+    private void CloseSettingsPage(bool saved)
+    {
+        bool uninstall = _settingsPage?.UninstallRequested == true;
+        ReturnToClipWorkspace();
+        if (uninstall)
         {
             if (FlickUninstallLauncher.TryLaunch(out string error))
                 RealQuit();
             else
-                MessageBox.Show(this, error, "Flick Uninstall",
+                LocalClip.App.Services.FlickDialog.Show(this, error, "Flick Uninstall",
                     MessageBoxButton.OK, MessageBoxImage.Error);
             return;
         }
-        if (saved != true) return;
+        if (!saved) return;
+        _notificationService.StopSound();
 
         RegisterHotkeys();
         _vm.RefreshExportPreferences();
         UpdateSharePresetSelection();
         UpdateStatusBadgeColor();
-        // Mic opt-out must release the device instead of leaving it open.
-        if (isCapturing && oldMic && !_vm.Settings.EnableMicrophone)
+        bool captureActive = _vm.CaptureStatus is "Starting" or "Armed" or "Buffering";
+        if (captureActive && _settingsMicrophoneWasEnabled &&
+            !_vm.Settings.EnableMicrophone)
         {
             _ = StopCaptureForMicPrivacyAsync();
             return;
         }
-        _vm.StatusDetails = isCapturing
+        _vm.StatusDetails = captureActive
             ? "Preferences saved. New capture profile takes effect on the next manual replay start."
             : "Preferences saved. Replay remains off until manually started.";
     }
@@ -583,29 +791,8 @@ public partial class MainWindow : Window
     {
         if (_vm.SelectedClip == null) return;
         string current = _vm.SelectedClip.Title;
-        // Simple input prompt dialog
-        var w = new Window
-        {
-            Title = "Rename Clip",
-            Width = 360,
-            Height = 160,
-            WindowStartupLocation = WindowStartupLocation.CenterOwner,
-            Owner = this,
-            Background = new SolidColorBrush(Color.FromRgb(24, 24, 27)),
-            Foreground = new SolidColorBrush(Color.FromRgb(250, 250, 250))
-        };
-        var sp = new StackPanel { Margin = new Thickness(16) };
-        var txt = new TextBox { Text = current, Margin = new Thickness(0, 8, 0, 16), Padding = new Thickness(6, 4, 6, 4) };
-        var btn = new Button { Content = "Save", Padding = new Thickness(12, 6, 12, 6), HorizontalAlignment = HorizontalAlignment.Right, Background = new SolidColorBrush(Color.FromRgb(37, 99, 235)) };
-        btn.Click += (s, ev) => { w.DialogResult = true; w.Close(); };
-        sp.Children.Add(new TextBlock { Text = "Enter new clip title:" });
-        sp.Children.Add(txt);
-        sp.Children.Add(btn);
-        w.Content = sp;
-        if (w.ShowDialog() == true)
-        {
-            _vm.RenameSelectedClip(txt.Text);
-        }
+        string? title = FlickDialog.Prompt("Rename Clip", "Enter a clip title:", current);
+        if (title != null) _vm.RenameSelectedClip(title);
     }
 
     private void BtnDelete_Click(object sender, RoutedEventArgs e)
@@ -615,6 +802,13 @@ public partial class MainWindow : Window
 
     private void MainWindow_PreviewKeyDown(object sender, KeyEventArgs e)
     {
+        if (FlickDialog.IsOpen || WorkspacePageLayer.Visibility == Visibility.Visible) return;
+        if (e.Key == Key.Escape && EditorContextLayer.Visibility == Visibility.Visible)
+        {
+            CloseEditorContext();
+            e.Handled = true;
+            return;
+        }
         if (e.Key != Key.Space || Keyboard.Modifiers != ModifierKeys.None) return;
         // Space is a preview shortcut only when the user is pointing at the
         // player, never while typing in trim boxes or operating source controls.
@@ -646,7 +840,7 @@ public partial class MainWindow : Window
         }
         catch (Exception) { /* Safe display-only teardown. */ }
         _playerIsPlaying = false;
-        if (BtnPlayPause != null) BtnPlayPause.Content = "▶ Play";
+        if (BtnPlayPause != null) BtnPlayPause.Content = "Play";
     }
 
     private void ReleasePosterWhileHidden()
@@ -688,6 +882,7 @@ public partial class MainWindow : Window
 
     private void ResetPlayerForSelection()
     {
+        CloseEditorContext();
         CancelPendingPreview();
 
         _playerTimer.Stop();
@@ -697,10 +892,10 @@ public partial class MainWindow : Window
         PlayerPoster.Visibility = Visibility.Collapsed;
         PlayerPosterHint.Visibility = Visibility.Collapsed;
         PlayerSlider.Value = 0;
-        BtnPlayPause.Content = "▶ Play";
+        BtnPlayPause.Content = "Play";
         _playerView = PlayerView.Original;
         _previewWasReencoded = false;
-        BtnPreviewMode.Content = "Original ▾";
+        BtnPreviewMode.Content = "Original";
 
         var clip = _vm.SelectedClip;
         TrimTimeline.SetRange(clip?.DurationSeconds ?? 0,
@@ -745,17 +940,17 @@ public partial class MainWindow : Window
         _playerView = mode;
         BtnPreviewMode.Content = mode switch
         {
-            PlayerView.Exported => "Export Preview ▾",
-            PlayerView.LocalCopy => "Local Preview ▾",
-            _ => "Original ▾"
+            PlayerView.Exported => "Export Preview",
+            PlayerView.LocalCopy => "Local Preview",
+            _ => "Original"
         };
-        BtnPlayPause.Content = "▶ Play";
+        BtnPlayPause.Content = "Play";
         PreviewFallbackPanel.Visibility = Visibility.Collapsed;
         if (startPlaying)
         {
             VideoPlayer.Play();
             _playerIsPlaying = true;
-            BtnPlayPause.Content = "⏸ Pause";
+            BtnPlayPause.Content = "Pause";
             _playerTimer.Start();
         }
     }
@@ -793,7 +988,7 @@ public partial class MainWindow : Window
         _playerIsPlaying = false;
         VideoPlayer.Stop();
         PlayerSlider.Value = 0;
-        BtnPlayPause.Content = "▶ Play";
+        BtnPlayPause.Content = "Play";
     }
 
     private void BtnPlayPause_Click(object sender, RoutedEventArgs e)
@@ -804,7 +999,7 @@ public partial class MainWindow : Window
             VideoPlayer.Pause();
             _playerIsPlaying = false;
             _playerTimer.Stop();
-            BtnPlayPause.Content = "▶ Play";
+            BtnPlayPause.Content = "Play";
             return;
         }
         if (PreviewFallbackPanel.Visibility == Visibility.Visible) return;
@@ -814,13 +1009,54 @@ public partial class MainWindow : Window
         VideoPlayer.Play();
         _playerIsPlaying = true;
         _playerTimer.Start();
-        BtnPlayPause.Content = "⏸ Pause";
+        BtnPlayPause.Content = "Pause";
+    }
+
+    private void CloseEditorTool_Click(object sender, RoutedEventArgs e) => CloseEditorContext();
+
+    private void CloseEditorContext()
+    {
+        EditorContextLayer.Visibility = Visibility.Collapsed;
+        TrimPanel.Visibility = AudioPanel.Visibility = SharePanel.Visibility = Visibility.Collapsed;
+        AudioExpander.IsExpanded = false;
+        if (_activeEditorTool != null)
+        {
+            System.Windows.Automation.AutomationProperties.SetHelpText(_activeEditorTool, "Closed");
+            _activeEditorTool.Focus();
+        }
+        _activeEditorTool = null;
+    }
+
+    private void PreviewSurface_SizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        // Drawers scroll inside the existing preview allocation: no minimum
+        // editor height that pushes transport/actions out of a compact window.
+        EditorContextScroll.MaxHeight = Math.Max(32, PreviewSurface.ActualHeight - 100);
+    }
+
+    private void EditorTool_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button { Tag: string tool } button) return;
+        if (tool == "Original") { BtnPreviewMode_Click(sender, e); return; }
+        var panel = tool switch { "Trim" => TrimPanel, "Audio" => AudioPanel, _ => SharePanel };
+        bool open = panel.Visibility != Visibility.Visible;
+        CloseEditorContext();
+        if (!open) return;
+        _activeEditorTool = button;
+        panel.Visibility = Visibility.Visible;
+        EditorContextLayer.Visibility = Visibility.Visible;
+        if (tool == "Audio") AudioExpander.IsExpanded = true;
+        System.Windows.Automation.AutomationProperties.SetHelpText(button, "Open");
+        // Opening Share is navigation only; never starts export or posting.
+        if (tool == "Share") UpdateSharePresetSelection();
+        CloseEditorTool.Focus();
+        EditorContextScroll.ScrollToTop();
     }
 
     private void BtnPreviewMode_Click(object sender, RoutedEventArgs e)
     {
         if (BtnPreviewMode.ContextMenu is null) return;
-        BtnPreviewMode.ContextMenu.PlacementTarget = BtnPreviewMode;
+        BtnPreviewMode.ContextMenu.PlacementTarget = sender as Button ?? BtnPreviewMode;
         BtnPreviewMode.ContextMenu.IsOpen = true;
     }
 
@@ -896,7 +1132,7 @@ public partial class MainWindow : Window
     {
         _playerTimer.Stop();
         _playerIsPlaying = false;
-        BtnPlayPause.Content = "▶ Play";
+        BtnPlayPause.Content = "Play";
         PreviewFallbackPanel.Visibility = Visibility.Visible;
         BtnBuildPreview.Visibility = _playerView == PlayerView.Original ||
             _playerView == PlayerView.LocalCopy && !_previewWasReencoded

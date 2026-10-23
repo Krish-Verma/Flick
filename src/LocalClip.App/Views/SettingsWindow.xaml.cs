@@ -2,6 +2,8 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
+using System.Threading;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -10,6 +12,7 @@ using LocalClip.App.Services;
 using LocalClip.Core.Models;
 using LocalClip.Core.Rules;
 using LocalClip.Core.Sharing;
+using LocalClip.Core.Updates;
 
 namespace LocalClip.App.Views;
 
@@ -18,25 +21,206 @@ namespace LocalClip.App.Views;
 /// Save; Preview Notification and Manage Folders are explicit separate actions.
 /// Recording stays armed while simply browsing Settings.
 /// </summary>
-public partial class SettingsWindow : Window
+public partial class SettingsWindow : UserControl
 {
     private readonly AppSettings _settings;
-    private readonly bool _captureActive;
+    // The recording bar remains interactive while Settings is open; query
+    // live capture status at Save time instead of using a stale snapshot.
+    private readonly Func<bool> _isCaptureActive;
+    private string _customSoundPath = "";
     private bool _loading;
+    private TextBox? _editingShortcut;
+    private string _shortcutCandidate = "";
+    private bool _recordingShortcut;
+    public event Action<bool>? ShortcutEditingChanged;
     private string _activeCategory = "Recording";
+
+    private CancellationTokenSource? _updateCancellation;
+    private AvailableUpdate? _availableUpdate;
+    private DownloadedUpdate? _downloadedUpdate;
+    private bool _installingUpdate;
+    private bool _installerStarted;
+    private CancellationTokenSource? _installationCancellation;
+    public event Func<DownloadedUpdate, CancellationToken, Task<string?>>? InstallUpdateRequested;
 
     public bool UninstallRequested { get; private set; }
 
-    public event Action<bool, bool>? PreviewNotificationRequested;
+    /// <summary>True only after a successful, deliberate Save.</summary>
+    public event Action<bool>? CloseRequested;
+    public event Action<bool, bool, string, string>? PreviewNotificationRequested;
     public event EventHandler? ManageFoldersRequested;
 
-    public SettingsWindow(AppSettings settings, bool captureActive = false)
+    public SettingsWindow(AppSettings settings, Func<bool> isCaptureActive)
     {
         InitializeComponent();
         _settings = settings;
-        _captureActive = captureActive;
+        _isCaptureActive = isCaptureActive ?? throw new ArgumentNullException(nameof(isCaptureActive));
         Populate(settings);
         SelectCategory("Recording");
+        TxtCurrentVersion.Text = "Current version: " + FlickUpdateService.CurrentVersion;
+        ChkPreviewUpdates.IsChecked = ReleaseVersion.TryParse(FlickUpdateService.CurrentVersion, out var currentVersion) && currentVersion.IsPrerelease;
+        TxtUpdateMode.Text = FlickUninstallLauncher.IsInstalled
+            ? "Updates keep your clips and saved preferences. Save settings before installing; pending changes on this page are not applied by an update."
+            : "Portable copy: open the release page for a new ZIP, then quit Flick and replace the extracted application folder. Your clips and preferences live separately.";
+        Unloaded += (_, _) => LeavePage();
+    }
+
+    /// <summary>Leaving Settings cancels network work and removes this page's staged installer.</summary>
+    public void LeavePage()
+    {
+        _updateCancellation?.Cancel();
+        _installationCancellation?.Cancel();
+        _updateCancellation = null;
+        DiscardDownloadedUpdate();
+        if (!_installingUpdate)
+        {
+            SetUpdateBusy(false);
+            TxtUpdateStatus.Text = "Check for updates when you're ready.";
+        }
+    }
+
+    /// <summary>The child setup process owns its downloaded executable until it has finished.</summary>
+    public void MarkUpdateInstallerStarted()
+    {
+        _installerStarted = true;
+        _downloadedUpdate = null; // Do not delete a setup file while its child process is starting.
+    }
+
+    private void DiscardDownloadedUpdate()
+    {
+        if (_downloadedUpdate != null)
+            FlickUpdateService.DiscardDownload(_downloadedUpdate);
+        _downloadedUpdate = null;
+    }
+
+    private void SetUpdateBusy(bool busy)
+    {
+        BtnCheckUpdates.IsEnabled = !busy;
+        ChkPreviewUpdates.IsEnabled = !busy;
+        BtnDownloadUpdate.Visibility = !busy && _availableUpdate != null && _downloadedUpdate == null
+            && FlickUninstallLauncher.IsInstalled ? Visibility.Visible : Visibility.Collapsed;
+        BtnInstallUpdate.Visibility = !busy && _downloadedUpdate != null ? Visibility.Visible : Visibility.Collapsed;
+        BtnCancelUpdate.Visibility = busy && !_installingUpdate ? Visibility.Visible : Visibility.Collapsed;
+        BtnCancelUpdate.IsEnabled = true;
+        UpdateProgress.Visibility = busy && !_installingUpdate ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private void PreviewUpdates_Changed(object sender, RoutedEventArgs e)
+    {
+        if (TxtUpdateStatus == null || _updateCancellation != null) return;
+        _availableUpdate = null;
+        DiscardDownloadedUpdate();
+        TxtUpdateStatus.Text = "Check for updates to use this release channel.";
+        SetUpdateBusy(false);
+    }
+
+    private async void CheckUpdates_Click(object sender, RoutedEventArgs e)
+    {
+        if (_updateCancellation != null || _installingUpdate) return;
+        DiscardDownloadedUpdate();
+        _availableUpdate = null;
+        using var cancellation = new CancellationTokenSource();
+        _updateCancellation = cancellation;
+        SetUpdateBusy(true);
+        UpdateProgress.IsIndeterminate = true;
+        TxtUpdateStatus.Text = "Checking GitHub Releases…";
+        try
+        {
+            var client = new UpdateClient();
+            var release = await client.CheckAsync(FlickUpdateService.CurrentVersion,
+                ChkPreviewUpdates.IsChecked == true, cancellation.Token);
+            if (!ReferenceEquals(_updateCancellation, cancellation)) return;
+            _availableUpdate = release;
+            TxtUpdateStatus.Text = release == null ? "You're up to date on this release channel."
+                : $"Flick {release.Version} is available." + (FlickUninstallLauncher.IsInstalled
+                    ? " Review the release notes, then download when you're ready."
+                    : " Open Release Notes to download the portable ZIP.");
+        }
+        catch (OperationCanceledException)
+        { if (ReferenceEquals(_updateCancellation, cancellation)) TxtUpdateStatus.Text = "Update check cancelled."; }
+        catch (Exception)
+        { if (ReferenceEquals(_updateCancellation, cancellation)) TxtUpdateStatus.Text = "Couldn't check for updates. Check your connection and try again, or open Release Notes."; }
+        finally
+        {
+            if (ReferenceEquals(_updateCancellation, cancellation))
+            { _updateCancellation = null; SetUpdateBusy(false); }
+        }
+    }
+
+    private async void DownloadUpdate_Click(object sender, RoutedEventArgs e)
+    {
+        if (_availableUpdate == null || _updateCancellation != null || _installingUpdate) return;
+        if (!FlickUninstallLauncher.IsInstalled)
+        { UpdateReleaseNotes_Click(sender, e); return; }
+        using var cancellation = new CancellationTokenSource();
+        _updateCancellation = cancellation;
+        SetUpdateBusy(true);
+        UpdateProgress.IsIndeterminate = false;
+        UpdateProgress.Value = 0;
+        TxtUpdateStatus.Text = "Downloading update…";
+        var progress = new Progress<double>(percent =>
+        {
+            if (ReferenceEquals(_updateCancellation, cancellation))
+                UpdateProgress.Value = Math.Clamp(percent * 100, 0, 100);
+        });
+        try
+        {
+            var client = new UpdateClient();
+            var download = await client.DownloadAsync(_availableUpdate,
+                FlickUpdateService.DownloadDirectory, progress, cancellation.Token);
+            if (!ReferenceEquals(_updateCancellation, cancellation))
+            { FlickUpdateService.DiscardDownload(download); return; }
+            _downloadedUpdate = download;
+            TxtUpdateStatus.Text = $"Flick {download.Release.Version} downloaded and checksum verified. Save settings, then choose Install and Restart when replay is off and other work has finished.";
+        }
+        catch (OperationCanceledException)
+        { if (ReferenceEquals(_updateCancellation, cancellation)) TxtUpdateStatus.Text = "Download cancelled. Your installed version is unchanged."; }
+        catch (Exception)
+        { if (ReferenceEquals(_updateCancellation, cancellation)) TxtUpdateStatus.Text = "The update couldn't be downloaded or verified. Try again, or open Release Notes."; }
+        finally
+        {
+            if (ReferenceEquals(_updateCancellation, cancellation))
+            { _updateCancellation = null; SetUpdateBusy(false); }
+        }
+    }
+
+    private void CancelUpdate_Click(object sender, RoutedEventArgs e)
+    {
+        _updateCancellation?.Cancel();
+        BtnCancelUpdate.IsEnabled = false;
+        TxtUpdateStatus.Text = "Cancelling…";
+    }
+
+    private async void InstallUpdate_Click(object sender, RoutedEventArgs e)
+    {
+        if (_downloadedUpdate == null || _installingUpdate || _updateCancellation != null ||
+            InstallUpdateRequested == null) return;
+        var download = _downloadedUpdate;
+        using var cancellation = new CancellationTokenSource();
+        _installationCancellation = cancellation;
+        _installingUpdate = true;
+        SetUpdateBusy(true);
+        TxtUpdateStatus.Text = "Checking installer and Windows signature…";
+        try
+        {
+            string? message = await InstallUpdateRequested.Invoke(download, cancellation.Token);
+            if (message != null) TxtUpdateStatus.Text = message;
+        }
+        catch (Exception)
+        { TxtUpdateStatus.Text = "Flick couldn't start the installer. Your installed version is unchanged."; }
+        finally
+        {
+            if (cancellation.IsCancellationRequested && !_installerStarted) FlickUpdateService.DiscardDownload(download);
+            _installationCancellation = null;
+            _installingUpdate = false;
+            SetUpdateBusy(false);
+        }
+    }
+
+    private void UpdateReleaseNotes_Click(object sender, RoutedEventArgs e)
+    {
+        try { FlickUpdateService.OpenReleasePage(_availableUpdate?.ReleaseUrl); }
+        catch (Exception) { TxtUpdateStatus.Text = "Couldn't open GitHub Releases. Visit github.com/Krish-Verma/Flick/releases."; }
     }
 
     private void SettingsCategory_Click(object sender, RoutedEventArgs e)
@@ -47,6 +231,7 @@ public partial class SettingsWindow : Window
 
     private void SelectCategory(string category)
     {
+        CancelShortcutEdit();
         _activeCategory = category;
         foreach (var (button, panel, name) in new[]
         {
@@ -90,6 +275,9 @@ public partial class SettingsWindow : Window
             ChkStartMinimized.IsChecked = settings.StartMinimizedToTray;
             ChkClipSavedOverlay.IsChecked = settings.ShowClipSavedOverlay;
             ChkClipSavedSound.IsChecked = settings.PlayClipSavedSound;
+            CmbNotificationTone.SelectedIndex = settings.ClipSavedSoundTone switch { "Quiet" => 1, "Custom" => 2, _ => 0 };
+            _customSoundPath = settings.ClipSavedSoundPath;
+            CustomSoundName.Text = string.IsNullOrWhiteSpace(_customSoundPath) ? "No custom sound selected" : Path.GetFileName(_customSoundPath);
             ChkEnableWebhook.IsChecked = settings.EnableDiscordWebhook;
             TxtWebhookChannel.Text = settings.DiscordWebhookChannelName;
             TxtWebhookUrl.Password = DiscordWebhookClient.UnprotectSecret(settings.MaskedWebhookUrl);
@@ -105,6 +293,7 @@ public partial class SettingsWindow : Window
         }
         finally { _loading = false; }
         UpdateBufferWarning();
+        SaveShortcutLabel.Text = $"Save Last {settings.ReplayDurationSeconds}s";
     }
 
     private string Preset() => CmbQuality.SelectedIndex switch
@@ -116,7 +305,12 @@ public partial class SettingsWindow : Window
 
     private void CaptureProfile_Changed(object sender, EventArgs e)
     {
-        if (!_loading) UpdateBufferWarning();
+        if (!_loading)
+        {
+            UpdateBufferWarning();
+            if (SaveShortcutLabel != null && int.TryParse(TxtDuration.Text, out int seconds))
+                SaveShortcutLabel.Text = $"Save Last {seconds}s";
+        }
     }
 
     private void Microphone_Changed(object sender, RoutedEventArgs e)
@@ -165,35 +359,70 @@ public partial class SettingsWindow : Window
         };
     }
 
+    private void ChangeShortcut_Click(object sender, RoutedEventArgs e)
+    {
+        CancelShortcutEdit();
+        _editingShortcut = sender is Button { Tag: "Toggle" } ? TxtToggleHotkey : TxtSaveHotkey;
+        ShortcutEditor.Visibility = Visibility.Visible;
+        ShortcutHint.Text = "Select Record Shortcut, then press a combination with Ctrl or Alt.";
+        ShortcutEditingChanged?.Invoke(true);
+    }
+
+    private void RecordShortcut_Click(object sender, RoutedEventArgs e)
+    {
+        if (_editingShortcut is null) return;
+        _recordingShortcut = true;
+        _shortcutCandidate = "";
+        SaveShortcutButton.IsEnabled = false;
+        ShortcutHint.Text = "Listening here… press a full shortcut. Escape cancels.";
+        _editingShortcut.Focus();
+    }
+
+    private void CancelShortcutEdit()
+    {
+        _editingShortcut = null;
+        _recordingShortcut = false;
+        _shortcutCandidate = "";
+        if (ShortcutEditor != null) ShortcutEditor.Visibility = Visibility.Collapsed;
+        if (SaveShortcutButton != null) SaveShortcutButton.IsEnabled = false;
+        ShortcutEditingChanged?.Invoke(false);
+    }
+
+    private void CancelShortcut_Click(object sender, RoutedEventArgs e) => CancelShortcutEdit();
+
+    private void SaveShortcut_Click(object sender, RoutedEventArgs e)
+    {
+        if (_editingShortcut is null || !SaveShortcutButton.IsEnabled) return;
+        _editingShortcut.Text = _shortcutCandidate; // staged only
+        CancelShortcutEdit();
+    }
+
     private void Shortcut_PreviewKeyDown(object sender, KeyEventArgs e)
     {
-        if (sender is not TextBox textBox) return;
-        if (e.Key == Key.Tab) return;
-        if (e.Key == Key.Escape)
-        {
-            textBox.Text = ReferenceEquals(textBox, TxtToggleHotkey)
-                ? _settings.CaptureToggleHotkey : _settings.SaveReplayHotkey;
-            e.Handled = true;
-            return;
-        }
+        if (_editingShortcut is null || !_recordingShortcut ||
+            !ReferenceEquals(sender, _editingShortcut)) return;
+        if (e.Key == Key.Tab) { _recordingShortcut = false; return; }
+        e.Handled = true;
+        if (e.Key == Key.Escape) { CancelShortcutEdit(); return; }
         Key key = e.Key == Key.System ? e.SystemKey : e.Key;
         if (key is Key.LeftCtrl or Key.RightCtrl or Key.LeftShift or Key.RightShift or
-            Key.LeftAlt or Key.RightAlt or Key.LWin or Key.RWin or Key.None)
-            return;
-
+            Key.LeftAlt or Key.RightAlt or Key.LWin or Key.RWin or Key.None) return;
         ModifierKeys modifiers = Keyboard.Modifiers;
-        if ((modifiers & (ModifierKeys.Control | ModifierKeys.Alt | ModifierKeys.Shift)) == 0)
-            return; // Avoid unexpected global shortcuts for normal typed characters.
-
-        string prefix = "";
-        if (modifiers.HasFlag(ModifierKeys.Control)) prefix += "Ctrl+";
-        if (modifiers.HasFlag(ModifierKeys.Shift)) prefix += "Shift+";
-        if (modifiers.HasFlag(ModifierKeys.Alt)) prefix += "Alt+";
-        if (modifiers.HasFlag(ModifierKeys.Windows)) prefix += "Win+";
-        string proposal = prefix + key;
-        if (HotkeyManager.IsValidHotkey(proposal))
-            textBox.Text = proposal;
-        e.Handled = true;
+        string proposal = "";
+        if (modifiers.HasFlag(ModifierKeys.Control)) proposal += "Ctrl+";
+        if (modifiers.HasFlag(ModifierKeys.Shift)) proposal += "Shift+";
+        if (modifiers.HasFlag(ModifierKeys.Alt)) proposal += "Alt+";
+        if (modifiers.HasFlag(ModifierKeys.Windows)) proposal += "Win+";
+        proposal += key;
+        string other = ReferenceEquals(_editingShortcut, TxtToggleHotkey)
+            ? TxtSaveHotkey.Text : TxtToggleHotkey.Text;
+        bool valid = HotkeyManager.IsValidHotkey(proposal) &&
+            !HotkeyManager.AreEquivalentHotkeys(proposal, other);
+        _shortcutCandidate = valid ? proposal : "";
+        SaveShortcutButton.IsEnabled = valid;
+        ShortcutHint.Text = valid ? proposal + " — select Save Shortcut to keep it."
+            : "Choose a different combination with Ctrl or Alt; reserved and duplicate shortcuts are unavailable.";
+        _recordingShortcut = false;
     }
 
     private void BrowseOriginals_Click(object sender, RoutedEventArgs e)
@@ -224,22 +453,50 @@ public partial class SettingsWindow : Window
         ManageFoldersRequested?.Invoke(this, EventArgs.Empty);
 
     private void PreviewNotification_Click(object sender, RoutedEventArgs e) =>
-        PreviewNotificationRequested?.Invoke(true, ChkClipSavedSound.IsChecked == true);
+        PreviewNotificationRequested?.Invoke(true, ChkClipSavedSound.IsChecked == true, NotificationTone(), _customSoundPath);
+
+    private string NotificationTone() => CmbNotificationTone.SelectedIndex switch { 1 => "Quiet", 2 => "Custom", _ => "Chime" };
+
+    private void ChooseSound_Click(object sender, RoutedEventArgs e)
+    {
+        var picker = new Microsoft.Win32.OpenFileDialog { Filter = "PCM WAV audio (*.wav)|*.wav", CheckFileExists = true, Multiselect = false };
+        if (picker.ShowDialog(Window.GetWindow(this)) != true) return;
+        try
+        {
+            _ = NotificationSoundFile.Read(picker.FileName);
+            _customSoundPath = picker.FileName;
+            CustomSoundName.Text = Path.GetFileName(_customSoundPath);
+            CmbNotificationTone.SelectedIndex = 2;
+        }
+        catch (Exception ex) { FlickDialog.Show(ex.Message, "Choose a Short WAV Sound"); }
+    }
+
+    private void ResetSound_Click(object sender, RoutedEventArgs e)
+    {
+        _customSoundPath = "";
+        CustomSoundName.Text = "No custom sound selected";
+        CmbNotificationTone.SelectedIndex = 0;
+    }
 
     private void Save_Click(object sender, RoutedEventArgs e)
     {
+        if (_editingShortcut != null)
+        {
+            ShortcutHint.Text = "Save or cancel the shortcut change before saving Settings.";
+            return; // Never silently apply or discard an unfinished shortcut.
+        }
         if (!int.TryParse(TxtDuration.Text, out int duration) ||
             duration < 15 || duration > 120)
         {
             SelectCategory("Recording");
-            MessageBox.Show("Replay Duration Must Be Between 15 and 120 Seconds.", "Invalid Duration");
+            LocalClip.App.Services.FlickDialog.Show("Replay Duration Must Be Between 15 and 120 Seconds.", "Invalid Duration");
             return;
         }
         int cap = GetShareCap();
         if (!ShareExportTargets.IsValid(cap))
         {
             SelectCategory("Sharing");
-            MessageBox.Show("Select a File Limit Between 1 and 250 MB.", "Invalid Export Limit");
+            LocalClip.App.Services.FlickDialog.Show("Select a File Limit Between 1 and 250 MB.", "Invalid Export Limit");
             return;
         }
         string toggle = TxtToggleHotkey.Text.Trim();
@@ -248,7 +505,7 @@ public partial class SettingsWindow : Window
             HotkeyManager.AreEquivalentHotkeys(toggle, save))
         {
             SelectCategory("Shortcuts");
-            MessageBox.Show("Choose Two Different Valid Hotkeys.", "Invalid Shortcuts");
+            LocalClip.App.Services.FlickDialog.Show("Choose Two Different Valid Hotkeys.", "Invalid Shortcuts");
             return;
         }
         string originals, exports;
@@ -268,7 +525,7 @@ public partial class SettingsWindow : Window
         catch (Exception ex)
         {
             SelectCategory("Storage");
-            MessageBox.Show("Invalid Storage Paths: " + ex.Message, "Storage Settings");
+            LocalClip.App.Services.FlickDialog.Show("Invalid Storage Paths: " + ex.Message, "Storage Settings");
             return;
         }
 
@@ -278,12 +535,12 @@ public partial class SettingsWindow : Window
             !DiscordWebhookClient.ValidateWebhookUrl(webhook, out _)))
         {
             SelectCategory("Sharing");
-            MessageBox.Show("A valid Discord webhook is required to enable optional direct posting.",
+            LocalClip.App.Services.FlickDialog.Show("A valid Discord webhook is required to enable optional direct posting.",
                 "Invalid Webhook");
             return;
         }
-        if (_captureActive && _settings.EnableMicrophone && ChkMicrophone.IsChecked != true &&
-            MessageBox.Show("Turning off an active microphone will stop the replay buffer and discard unsaved footage. Continue?",
+        if (_isCaptureActive() && _settings.EnableMicrophone && ChkMicrophone.IsChecked != true &&
+            LocalClip.App.Services.FlickDialog.Show("Turning off an active microphone will stop the replay buffer and discard unsaved footage. Continue?",
                 "Disable Microphone", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes)
             return;
 
@@ -306,6 +563,8 @@ public partial class SettingsWindow : Window
             staged.StartMinimizedToTray = ChkStartMinimized.IsChecked == true;
             staged.ShowClipSavedOverlay = ChkClipSavedOverlay.IsChecked == true;
             staged.PlayClipSavedSound = ChkClipSavedSound.IsChecked == true;
+            staged.ClipSavedSoundTone = NotificationTone();
+            staged.ClipSavedSoundPath = _customSoundPath;
             staged.DiscordTargetSizeMb = cap;
             RecordingProfiles.TryApply(Preset(), staged);
             staged.DiscordWebhookChannelName = TxtWebhookChannel.Text.Trim();
@@ -340,12 +599,13 @@ public partial class SettingsWindow : Window
             _settings.StartMinimizedToTray = staged.StartMinimizedToTray;
             _settings.ShowClipSavedOverlay = staged.ShowClipSavedOverlay;
             _settings.PlayClipSavedSound = staged.PlayClipSavedSound;
+            _settings.ClipSavedSoundTone = staged.ClipSavedSoundTone;
+            _settings.ClipSavedSoundPath = staged.ClipSavedSoundPath;
             _settings.DiscordTargetSizeMb = staged.DiscordTargetSizeMb;
             _settings.DiscordWebhookChannelName = staged.DiscordWebhookChannelName;
             _settings.MaskedWebhookUrl = staged.MaskedWebhookUrl;
             _settings.EnableDiscordWebhook = staged.EnableDiscordWebhook;
-            DialogResult = true;
-            Close();
+            CloseRequested?.Invoke(true);
         }
         catch (Exception ex)
         {
@@ -354,7 +614,7 @@ public partial class SettingsWindow : Window
                 try { WindowsStartupRegistration.Apply(originalStartup, originalMinimized); }
                 catch { /* Warn: the original registry entry may need manual review. */ }
             }
-            MessageBox.Show("Settings Couldn't Be Saved: " + ex.Message, "Flick Settings");
+            LocalClip.App.Services.FlickDialog.Show("Settings Couldn't Be Saved: " + ex.Message, "Flick Settings");
         }
     }
 
@@ -362,31 +622,43 @@ public partial class SettingsWindow : Window
     {
         if (!FlickUninstallLauncher.IsInstalled)
         {
-            MessageBox.Show(this,
+            LocalClip.App.Services.FlickDialog.Show(Window.GetWindow(this),
                 "This is a portable copy or Flick was not installed normally. Quit Flick through the tray and delete the extracted application folder. Your videos and settings live separately.",
                 "Portable Flick", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
-        if (MessageBox.Show(this,
+        if (LocalClip.App.Services.FlickDialog.Show(Window.GetWindow(this),
                 "Uninstall Flick now? Any active replay buffer will be stopped. The uninstaller will ask separately whether to remove Flick settings and caches. Original recordings and exported videos are kept.",
                 "Uninstall Flick", MessageBoxButton.YesNo,
                 MessageBoxImage.Warning, MessageBoxResult.No) != MessageBoxResult.Yes)
             return;
 
         UninstallRequested = true;
-        DialogResult = false;
-        Close();
+        CloseRequested?.Invoke(false);
+    }
+
+    private void Settings_KeyDown(object sender, KeyEventArgs e)
+    {
+        // Avoid stealing Escape from the shortcut capture fields; their own
+        // handler uses it to restore the old chord without exiting Settings.
+        if (e.Key == Key.Escape && _editingShortcut != null) { CancelShortcutEdit(); e.Handled = true; return; }
+        if (e.Key != Key.Escape || e.Handled ||
+            ReferenceEquals(Keyboard.FocusedElement, TxtToggleHotkey) ||
+            ReferenceEquals(Keyboard.FocusedElement, TxtSaveHotkey))
+            return;
+
+        e.Handled = true;
+        CloseRequested?.Invoke(false); // Cancel staged changes, stay in Flick.
     }
 
     private void Cancel_Click(object sender, RoutedEventArgs e)
     {
-        DialogResult = false;
-        Close();
+        CloseRequested?.Invoke(false);
     }
 
     private void RestoreDefaults_Click(object sender, RoutedEventArgs e)
     {
-        if (MessageBox.Show("Restore the default settings? Existing clips and exported files will not be deleted.",
+        if (LocalClip.App.Services.FlickDialog.Show("Restore the default settings? Existing clips and exported files will not be deleted.",
             "Restore Flick Defaults", MessageBoxButton.YesNo, MessageBoxImage.Question) ==
             MessageBoxResult.Yes)
             Populate(AppSettings.CreateDefault()); // Still staged; Save applies it.

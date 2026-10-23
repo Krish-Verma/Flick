@@ -32,7 +32,7 @@
     <Style x:Key="Flick.Text.Control" TargetType="{x:Type TextBlock}" BasedOn="{StaticResource Flick.Text.Base}">
         <Setter Property="FontSize" Value="{StaticResource Flick.Font.Control}"/>
         <Setter Property="LineHeight" Value="18"/>
-        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="FontWeight" Value="Normal"/>
     </Style>
     <Style x:Key="Flick.Text.Caption" TargetType="{x:Type TextBlock}" BasedOn="{StaticResource Flick.Text.Base}">
         <Setter Property="FontSize" Value="{StaticResource Flick.Font.Caption}"/>
@@ -42,18 +42,48 @@
     <Style x:Key="Flick.Text.Muted" TargetType="{x:Type TextBlock}" BasedOn="{StaticResource Flick.Text.Caption}">
         <Setter Property="Foreground" Value="{DynamicResource Flick.Brush.TextMuted}"/>
     </Style>
-    <!-- Logo occupies the whole squircle; never stack a second circular badge around it. -->
+    <!-- Preserve the original PNG and its sunset colors. Its visible artwork
+         sits about 3 source pixels above/left of the optical center. Shift the
+         drawing by 1 DIP inside a fixed 38-DIP viewport; moving the Image itself
+         would also move its circular clip and leave the badge off-center.
+         Nav, Settings and toast all share this one corrected source. -->
+    <DrawingImage x:Key="Flick.Image.BrandMark.Source">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <DrawingGroup.ClipGeometry>
+                    <EllipseGeometry Center="19,19" RadiusX="19" RadiusY="19"/>
+                </DrawingGroup.ClipGeometry>
+                <!-- Match the original canvas under the shifted bitmap. This
+                     also fixes the viewport bounds at exactly 38 x 38 DIPs. -->
+                <GeometryDrawing Brush="#FF06030D">
+                    <GeometryDrawing.Geometry>
+                        <RectangleGeometry Rect="0,0,38,38"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <ImageDrawing ImageSource="pack://application:,,,/Flick;component/Assets/Brand/FlickLogo.png"
+                              Rect="1,1,38,38"/>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
     <Style x:Key="Flick.Image.BrandMark" TargetType="{x:Type Image}">
-        <Setter Property="Source" Value="pack://application:,,,/Assets/Brand/FlickLogo.png"/>
+        <Setter Property="Source" Value="{StaticResource Flick.Image.BrandMark.Source}"/>
         <Setter Property="Width" Value="{StaticResource Flick.Size.ToastLogo}"/>
         <Setter Property="Height" Value="{StaticResource Flick.Size.ToastLogo}"/>
-        <Setter Property="Stretch" Value="UniformToFill"/>
+        <Setter Property="Stretch" Value="Uniform"/>
+        <Setter Property="HorizontalAlignment" Value="Center"/>
+        <Setter Property="VerticalAlignment" Value="Center"/>
         <Setter Property="SnapsToDevicePixels" Value="True"/>
+        <Setter Property="UseLayoutRounding" Value="True"/>
         <Setter Property="RenderOptions.BitmapScalingMode" Value="HighQuality"/>
+        <Setter Property="Clip">
+            <Setter.Value>
+                <EllipseGeometry Center="19,19" RadiusX="19" RadiusY="19"/>
+            </Setter.Value>
+        </Setter>
     </Style>
     <Style x:Key="Flick.Icon.Line" TargetType="{x:Type Path}">
         <Setter Property="Stroke" Value="{DynamicResource Flick.Brush.TextSecondary}"/>
-        <Setter Property="StrokeThickness" Value="1.75"/>
+        <Setter Property="StrokeThickness" Value="1.5"/>
         <Setter Property="StrokeLineJoin" Value="Round"/>
         <Setter Property="StrokeStartLineCap" Value="Round"/>
         <Setter Property="StrokeEndLineCap" Value="Round"/>

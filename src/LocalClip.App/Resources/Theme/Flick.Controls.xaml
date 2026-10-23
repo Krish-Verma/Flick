@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
-    <!-- All styles are explicitly keyed. Existing qualified UI is unchanged until Slice 2. -->
+    <!-- Quiet desktop controls share Flick's violet surfaces; primary actions carry the accent. -->
 
     <Style x:Key="Flick.Surface.Panel" TargetType="{x:Type Border}">
         <Setter Property="Background" Value="{DynamicResource Flick.Brush.Surface}"/>
-        <Setter Property="BorderBrush" Value="{DynamicResource Flick.Brush.Border}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource Flick.Brush.Divider}"/>
         <Setter Property="BorderThickness" Value="1"/>
         <Setter Property="CornerRadius" Value="{StaticResource Flick.Corner.Panel}"/>
         <Setter Property="Padding" Value="{StaticResource Flick.Inset.Panel}"/>
@@ -13,11 +13,11 @@
     </Style>
     <Style x:Key="Flick.Surface.Frosted" TargetType="{x:Type Border}" BasedOn="{StaticResource Flick.Surface.Panel}">
         <Setter Property="Background" Value="{DynamicResource Flick.Brush.Frosted}"/>
-        <Setter Property="BorderBrush" Value="{DynamicResource Flick.Brush.BorderStrong}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource Flick.Brush.Divider}"/>
     </Style>
     <Style x:Key="Flick.Surface.Toast" TargetType="{x:Type Border}" BasedOn="{StaticResource Flick.Surface.Panel}">
         <Setter Property="Background" Value="{DynamicResource Flick.Brush.Toast}"/>
-        <Setter Property="BorderBrush" Value="{DynamicResource Flick.Brush.BorderStrong}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource Flick.Brush.Border}"/>
         <Setter Property="Padding" Value="{StaticResource Flick.Inset.Toast}"/>
         <Setter Property="CornerRadius" Value="{StaticResource Flick.Corner.Popover}"/>
     </Style>
@@ -29,7 +29,7 @@
         <Setter Property="BorderThickness" Value="1"/>
         <Setter Property="FontFamily" Value="{StaticResource Flick.Font.UI}"/>
         <Setter Property="FontSize" Value="{StaticResource Flick.Font.Control}"/>
-        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="FontWeight" Value="Normal"/>
         <Setter Property="Padding" Value="12,0"/>
         <Setter Property="MinHeight" Value="{StaticResource Flick.Size.Control}"/>
         <Setter Property="MinWidth" Value="68"/>
@@ -54,10 +54,10 @@
                     </Border>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="Chrome" Property="Opacity" Value=".94"/>
+                            <Setter TargetName="Chrome" Property="Opacity" Value=".96"/>
                         </Trigger>
                         <Trigger Property="IsPressed" Value="True">
-                            <Setter TargetName="Chrome" Property="Opacity" Value=".80"/>
+                            <Setter TargetName="Chrome" Property="Opacity" Value=".82"/>
                         </Trigger>
                         <Trigger Property="IsKeyboardFocused" Value="True">
                             <Setter TargetName="Chrome" Property="BorderBrush"
@@ -71,15 +71,20 @@
                 </ControlTemplate>
             </Setter.Value>
         </Setter>
+        <Style.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+                <Setter Property="Background" Value="{DynamicResource Flick.Brush.Hover}"/>
+            </Trigger>
+        </Style.Triggers>
     </Style>
     <Style x:Key="Flick.Button.Primary" TargetType="{x:Type Button}" BasedOn="{StaticResource Flick.Button.Base}">
-        <Setter Property="Background" Value="{DynamicResource Flick.Brush.Accent}"/>
+        <Setter Property="Background" Value="{DynamicResource Flick.Brush.PrimaryGradient}"/>
         <Setter Property="Foreground" Value="{DynamicResource Flick.Brush.OnAccent}"/>
         <Setter Property="BorderBrush" Value="{DynamicResource Flick.Brush.Accent}"/>
         <Setter Property="MinHeight" Value="{StaticResource Flick.Size.PrimaryButton}"/>
         <Style.Triggers>
             <Trigger Property="IsMouseOver" Value="True">
-                <Setter Property="Background" Value="{DynamicResource Flick.Brush.AccentHover}"/>
+                <Setter Property="Background" Value="{DynamicResource Flick.Brush.PrimaryGradientHover}"/>
             </Trigger>
         </Style.Triggers>
     </Style>
@@ -104,10 +109,13 @@
 
     <Style x:Key="Flick.Input.Text" TargetType="{x:Type TextBox}">
         <Setter Property="MinHeight" Value="{StaticResource Flick.Size.Control}"/>
-        <Setter Property="Padding" Value="11,7"/>
+        <Setter Property="Padding" Value="10,5"/>
         <Setter Property="Background" Value="{DynamicResource Flick.Brush.Raised}"/>
         <Setter Property="Foreground" Value="{DynamicResource Flick.Brush.TextPrimary}"/>
-        <Setter Property="CaretBrush" Value="{DynamicResource Flick.Brush.Accent}"/>
+        <Setter Property="CaretBrush" Value="{DynamicResource Flick.Brush.TextPrimary}"/>
+        <Setter Property="SelectionBrush" Value="{DynamicResource Flick.Brush.BorderStrong}"/>
+        <Setter Property="SelectionTextBrush" Value="{DynamicResource Flick.Brush.TextPrimary}"/>
+        <Setter Property="SelectionOpacity" Value=".65"/>
         <Setter Property="BorderBrush" Value="{DynamicResource Flick.Brush.Border}"/>
         <Setter Property="BorderThickness" Value="1"/>
         <Setter Property="FontFamily" Value="{StaticResource Flick.Font.UI}"/>
@@ -146,7 +154,8 @@
         <Setter Property="Foreground" Value="{DynamicResource Flick.Brush.TextPrimary}"/>
         <Setter Property="FontFamily" Value="{StaticResource Flick.Font.UI}"/>
         <Setter Property="FontSize" Value="{StaticResource Flick.Font.Control}"/>
-        <Setter Property="Padding" Value="11,9"/>
+        <Setter Property="Padding" Value="10,6"/>
+        <Setter Property="MinHeight" Value="32"/>
         <Setter Property="Background" Value="Transparent"/>
         <Setter Property="Template">
             <Setter.Value>
@@ -163,7 +172,7 @@
                         </Trigger>
                         <Trigger Property="IsSelected" Value="True">
                             <Setter TargetName="ItemSurface" Property="Background"
-                                    Value="{DynamicResource Flick.Brush.Frosted}"/>
+                                    Value="{DynamicResource Flick.Brush.Hover}"/>
                         </Trigger>
                         <Trigger Property="IsEnabled" Value="False">
                             <Setter Property="Opacity" Value=".4"/>
@@ -197,18 +206,39 @@
                                       IsChecked="{Binding IsDropDownOpen, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}">
                             <ToggleButton.Template>
                                 <ControlTemplate TargetType="{x:Type ToggleButton}">
-                                    <Border CornerRadius="{StaticResource Flick.Corner.Control}"
+                                    <Border x:Name="ComboChrome" CornerRadius="{StaticResource Flick.Corner.Control}"
                                             Background="{TemplateBinding Background}"
                                             BorderBrush="{TemplateBinding BorderBrush}"
                                             BorderThickness="{TemplateBinding BorderThickness}"/>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter TargetName="ComboChrome" Property="Background" Value="{DynamicResource Flick.Brush.Hover}"/>
+                                        </Trigger>
+                                        <Trigger Property="IsPressed" Value="True">
+                                            <Setter TargetName="ComboChrome" Property="Opacity" Value=".82"/>
+                                        </Trigger>
+                                        <Trigger Property="IsChecked" Value="True">
+                                            <Setter TargetName="ComboChrome" Property="Background" Value="{DynamicResource Flick.Brush.Canvas}"/>
+                                        </Trigger>
+                                    </ControlTemplate.Triggers>
                                 </ControlTemplate>
                             </ToggleButton.Template>
                         </ToggleButton>
                         <ContentPresenter Margin="11,0,32,0" VerticalAlignment="Center"
-                                          HorizontalAlignment="Left" IsHitTestVisible="False"
-                                          Content="{TemplateBinding SelectionBoxItem}"/>
+                                          HorizontalAlignment="Stretch" IsHitTestVisible="False"
+                                          Content="{TemplateBinding SelectionBoxItem}"
+                                          ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}"
+                                          ContentTemplateSelector="{TemplateBinding ItemTemplateSelector}"
+                                          ContentStringFormat="{TemplateBinding SelectionBoxItemStringFormat}">
+                            <ContentPresenter.Resources>
+                                <Style TargetType="{x:Type TextBlock}" BasedOn="{StaticResource Flick.Text.Control}">
+                                    <Setter Property="TextWrapping" Value="NoWrap"/>
+                                    <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+                                </Style>
+                            </ContentPresenter.Resources>
+                        </ContentPresenter>
                         <Path Data="M 0,0 L 4,4 8,0" Stroke="{DynamicResource Flick.Brush.TextSecondary}"
-                              StrokeThickness="1.75" Width="9" Height="5" Stretch="Fill"
+                              StrokeThickness="1.5" Width="9" Height="5" Stretch="Fill"
                               HorizontalAlignment="Right" VerticalAlignment="Center"
                               Margin="0,0,12,0" IsHitTestVisible="False"/>
                         <Popup x:Name="PART_Popup" Placement="Bottom" PlacementTarget="{Binding ElementName=DropButton}"
@@ -217,7 +247,7 @@
                             <Border MinWidth="{Binding ActualWidth, ElementName=DropButton}"
                                     MaxHeight="260" Padding="5"
                                     Background="{DynamicResource Flick.Brush.Surface}"
-                                    BorderBrush="{DynamicResource Flick.Brush.BorderStrong}"
+                                    BorderBrush="{DynamicResource Flick.Brush.Border}"
                                     BorderThickness="1" CornerRadius="{StaticResource Flick.Corner.Popover}">
                                 <ScrollViewer CanContentScroll="True" VerticalScrollBarVisibility="Auto">
                                     <ItemsPresenter KeyboardNavigation.DirectionalNavigation="Contained"/>
@@ -243,31 +273,34 @@
         <Setter Property="Foreground" Value="{DynamicResource Flick.Brush.TextPrimary}"/>
         <Setter Property="FontFamily" Value="{StaticResource Flick.Font.UI}"/>
         <Setter Property="FontSize" Value="{StaticResource Flick.Font.Body}"/>
+        <Setter Property="MinHeight" Value="32"/>
         <Setter Property="VerticalContentAlignment" Value="Center"/>
         <Setter Property="Cursor" Value="Hand"/>
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="{x:Type CheckBox}">
-                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                        <Grid Width="40" Height="22" VerticalAlignment="Center">
-                            <Border x:Name="ToggleTrack" CornerRadius="11" BorderThickness="1"
-                                    Background="{DynamicResource Flick.Brush.Raised}"
-                                    BorderBrush="{DynamicResource Flick.Brush.Border}"/>
-                            <Ellipse x:Name="ToggleThumb" Width="16" Height="16" HorizontalAlignment="Left"
-                                     VerticalAlignment="Center" Margin="3,0,0,0"
-                                     Fill="{DynamicResource Flick.Brush.TextSecondary}"/>
-                        </Grid>
-                        <ContentPresenter VerticalAlignment="Center" Margin="12,0,0,0"
-                                          RecognizesAccessKey="True"
-                                          Content="{TemplateBinding Content}"/>
-                    </StackPanel>
+                    <Grid MinHeight="32" Background="Transparent">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <Grid Width="40" Height="22" VerticalAlignment="Center">
+                                <Border x:Name="ToggleTrack" CornerRadius="11" BorderThickness="1"
+                                        Background="{DynamicResource Flick.Brush.Raised}"
+                                        BorderBrush="{DynamicResource Flick.Brush.Border}"/>
+                                <Ellipse x:Name="ToggleThumb" Width="16" Height="16" HorizontalAlignment="Left"
+                                         VerticalAlignment="Center" Margin="3,0,0,0"
+                                         Fill="{DynamicResource Flick.Brush.TextSecondary}"/>
+                            </Grid>
+                            <ContentPresenter VerticalAlignment="Center" Margin="12,0,0,0"
+                                              RecognizesAccessKey="True"
+                                              Content="{TemplateBinding Content}"/>
+                        </StackPanel>
+                    </Grid>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsChecked" Value="True">
-                            <Setter TargetName="ToggleTrack" Property="Background" Value="{DynamicResource Flick.Brush.Accent}"/>
-                            <Setter TargetName="ToggleTrack" Property="BorderBrush" Value="{DynamicResource Flick.Brush.Accent}"/>
+                            <Setter TargetName="ToggleTrack" Property="Background" Value="{DynamicResource Flick.Brush.BorderStrong}"/>
+                            <Setter TargetName="ToggleTrack" Property="BorderBrush" Value="{DynamicResource Flick.Brush.BorderStrong}"/>
                             <Setter TargetName="ToggleThumb" Property="HorizontalAlignment" Value="Right"/>
                             <Setter TargetName="ToggleThumb" Property="Margin" Value="0,0,3,0"/>
-                            <Setter TargetName="ToggleThumb" Property="Fill" Value="{DynamicResource Flick.Brush.OnAccent}"/>
+                            <Setter TargetName="ToggleThumb" Property="Fill" Value="{DynamicResource Flick.Brush.TextPrimary}"/>
                         </Trigger>
                         <Trigger Property="IsKeyboardFocused" Value="True">
                             <Setter TargetName="ToggleTrack" Property="BorderBrush" Value="{DynamicResource Flick.Brush.Focus}"/>
@@ -282,14 +315,101 @@
         </Setter>
     </Style>
 
+    <!-- A conventional compact checkbox for the editor's Mute action. The
+         native CheckBox still owns toggling, three-state behavior and access keys. -->
+    <Style x:Key="Flick.Input.CheckBox" TargetType="{x:Type CheckBox}">
+        <Setter Property="Foreground" Value="{DynamicResource Flick.Brush.TextPrimary}"/>
+        <Setter Property="FontFamily" Value="{StaticResource Flick.Font.UI}"/>
+        <Setter Property="FontSize" Value="{StaticResource Flick.Font.Control}"/>
+        <Setter Property="MinHeight" Value="32"/>
+        <Setter Property="VerticalContentAlignment" Value="Center"/>
+        <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="{x:Type CheckBox}">
+                    <Border x:Name="CheckFocus" Background="Transparent" BorderBrush="Transparent"
+                            BorderThickness="1" CornerRadius="4" Padding="3,0" MinHeight="32">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="14"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Grid Grid.Column="0" Width="14" Height="14" VerticalAlignment="Center">
+                                <Border x:Name="Indicator" CornerRadius="3" BorderThickness="1"
+                                        Background="{DynamicResource Flick.Brush.Raised}"
+                                        BorderBrush="{DynamicResource Flick.Brush.BorderStrong}"/>
+                                <Path x:Name="Checkmark" Data="M 3,7 L 6,10 L 11,4" Visibility="Collapsed"
+                                      Stroke="{DynamicResource Flick.Brush.TextPrimary}" StrokeThickness="1.5"
+                                      StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"
+                                      IsHitTestVisible="False"/>
+                                <Path x:Name="IndeterminateMark" Data="M 4,7 L 10,7" Visibility="Collapsed"
+                                      Stroke="{DynamicResource Flick.Brush.TextPrimary}" StrokeThickness="1.5"
+                                      StrokeStartLineCap="Round" StrokeEndLineCap="Round" IsHitTestVisible="False"/>
+                            </Grid>
+                            <ContentPresenter Grid.Column="1" Margin="7,0,0,0"
+                                              HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                              VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                                              Content="{TemplateBinding Content}"
+                                              ContentTemplate="{TemplateBinding ContentTemplate}"
+                                              ContentTemplateSelector="{TemplateBinding ContentTemplateSelector}"
+                                              ContentStringFormat="{TemplateBinding ContentStringFormat}"
+                                              RecognizesAccessKey="True"/>
+                        </Grid>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsChecked" Value="True">
+                            <Setter TargetName="Indicator" Property="Background" Value="{DynamicResource Flick.Brush.BorderStrong}"/>
+                            <Setter TargetName="Checkmark" Property="Visibility" Value="Visible"/>
+                        </Trigger>
+                        <Trigger Property="IsChecked" Value="{x:Null}">
+                            <Setter TargetName="Indicator" Property="Background" Value="{DynamicResource Flick.Brush.BorderStrong}"/>
+                            <Setter TargetName="IndeterminateMark" Property="Visibility" Value="Visible"/>
+                        </Trigger>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Indicator" Property="BorderBrush" Value="{DynamicResource Flick.Brush.TextSecondary}"/>
+                        </Trigger>
+                        <MultiTrigger>
+                            <MultiTrigger.Conditions>
+                                <Condition Property="IsChecked" Value="False"/>
+                                <Condition Property="IsMouseOver" Value="True"/>
+                            </MultiTrigger.Conditions>
+                            <Setter TargetName="Indicator" Property="Background" Value="{DynamicResource Flick.Brush.Hover}"/>
+                        </MultiTrigger>
+                        <Trigger Property="IsPressed" Value="True">
+                            <Setter TargetName="Indicator" Property="Opacity" Value=".82"/>
+                        </Trigger>
+                        <Trigger Property="IsKeyboardFocused" Value="True">
+                            <Setter TargetName="CheckFocus" Property="BorderBrush" Value="{DynamicResource Flick.Brush.Focus}"/>
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter Property="Opacity" Value=".4"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
     <Style x:Key="Flick.Slider.Thumb" TargetType="{x:Type Thumb}">
-        <Setter Property="Width" Value="16"/>
-        <Setter Property="Height" Value="16"/>
+        <Setter Property="Width" Value="32"/>
+        <Setter Property="Height" Value="32"/>
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="{x:Type Thumb}">
-                    <Ellipse Fill="{DynamicResource Flick.Brush.Accent}"
-                             Stroke="{DynamicResource Flick.Brush.Canvas}" StrokeThickness="2"/>
+                    <Grid Background="Transparent">
+                        <Ellipse x:Name="ThumbFace" Width="12" Height="12"
+                                 Fill="{DynamicResource Flick.Brush.TextPrimary}"
+                                 HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Grid>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="ThumbFace" Property="Width" Value="14"/>
+                            <Setter TargetName="ThumbFace" Property="Height" Value="14"/>
+                        </Trigger>
+                        <Trigger Property="IsDragging" Value="True">
+                            <Setter TargetName="ThumbFace" Property="Fill" Value="{DynamicResource Flick.Brush.TextSecondary}"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
                 </ControlTemplate>
             </Setter.Value>
         </Setter>
@@ -299,8 +419,10 @@
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="{x:Type RepeatButton}">
-                    <Border Height="4" Background="{DynamicResource Flick.Brush.Accent}"
-                            CornerRadius="2" VerticalAlignment="Center"/>
+                    <Grid Background="Transparent">
+                        <Border Height="3" Background="{DynamicResource Flick.Brush.TextSecondary}"
+                                CornerRadius="2" VerticalAlignment="Center"/>
+                    </Grid>
                 </ControlTemplate>
             </Setter.Value>
         </Setter>
@@ -310,36 +432,40 @@
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="{x:Type RepeatButton}">
-                    <Border Height="4" Background="{DynamicResource Flick.Brush.Border}"
-                            CornerRadius="2" VerticalAlignment="Center"/>
+                    <Grid Background="Transparent">
+                        <Border Height="3" Background="{DynamicResource Flick.Brush.Border}"
+                                CornerRadius="2" VerticalAlignment="Center"/>
+                    </Grid>
                 </ControlTemplate>
             </Setter.Value>
         </Setter>
     </Style>
     <Style x:Key="Flick.Input.Slider" TargetType="{x:Type Slider}">
-        <Setter Property="MinHeight" Value="28"/>
-        <Setter Property="Foreground" Value="{DynamicResource Flick.Brush.Accent}"/>
+        <Setter Property="MinHeight" Value="32"/>
+        <Setter Property="Foreground" Value="{DynamicResource Flick.Brush.TextPrimary}"/>
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="{x:Type Slider}">
-                    <Grid Height="28">
-                        <Track x:Name="PART_Track" VerticalAlignment="Center">
-                            <Track.DecreaseRepeatButton>
-                                <RepeatButton Style="{StaticResource Flick.Slider.TrackFilled}"
-                                              Command="Slider.DecreaseLarge"/>
-                            </Track.DecreaseRepeatButton>
-                            <Track.IncreaseRepeatButton>
-                                <RepeatButton Style="{StaticResource Flick.Slider.TrackEmpty}"
-                                              Command="Slider.IncreaseLarge"/>
-                            </Track.IncreaseRepeatButton>
-                            <Track.Thumb>
-                                <Thumb Style="{StaticResource Flick.Slider.Thumb}"/>
-                            </Track.Thumb>
-                        </Track>
-                    </Grid>
+                    <Border x:Name="SliderFocus" BorderBrush="Transparent" BorderThickness="1" CornerRadius="4">
+                        <Grid Height="32">
+                            <Track x:Name="PART_Track" VerticalAlignment="Center">
+                                <Track.DecreaseRepeatButton>
+                                    <RepeatButton Style="{StaticResource Flick.Slider.TrackFilled}"
+                                                  Command="Slider.DecreaseLarge"/>
+                                </Track.DecreaseRepeatButton>
+                                <Track.IncreaseRepeatButton>
+                                    <RepeatButton Style="{StaticResource Flick.Slider.TrackEmpty}"
+                                                  Command="Slider.IncreaseLarge"/>
+                                </Track.IncreaseRepeatButton>
+                                <Track.Thumb>
+                                    <Thumb Style="{StaticResource Flick.Slider.Thumb}"/>
+                                </Track.Thumb>
+                            </Track>
+                        </Grid>
+                    </Border>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsKeyboardFocused" Value="True">
-                            <Setter TargetName="PART_Track" Property="Opacity" Value=".86"/>
+                            <Setter TargetName="SliderFocus" Property="BorderBrush" Value="{DynamicResource Flick.Brush.Focus}"/>
                         </Trigger>
                         <Trigger Property="IsEnabled" Value="False">
                             <Setter Property="Opacity" Value=".4"/>
@@ -352,22 +478,125 @@
 
     <Style x:Key="Flick.Progress" TargetType="{x:Type ProgressBar}">
         <Setter Property="Height" Value="5"/>
-        <Setter Property="Foreground" Value="{DynamicResource Flick.Brush.Accent}"/>
+        <Setter Property="Foreground" Value="{DynamicResource Flick.Brush.TextSecondary}"/>
         <Setter Property="Background" Value="{DynamicResource Flick.Brush.Border}"/>
         <Setter Property="BorderThickness" Value="0"/>
     </Style>
+
+    <!-- All keyed callers expand downward. The existing Expander remains the
+         automation/state owner; its keyboard-focusable HeaderSite toggles it. -->
+    <Style x:Key="Flick.Expander.Disclosure" TargetType="{x:Type Expander}">
+        <Setter Property="Foreground" Value="{DynamicResource Flick.Brush.TextPrimary}"/>
+        <Setter Property="FontFamily" Value="{StaticResource Flick.Font.UI}"/>
+        <Setter Property="FontSize" Value="{StaticResource Flick.Font.Control}"/>
+        <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+        <Setter Property="IsTabStop" Value="False"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="{x:Type Expander}">
+                    <Border Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
+                            Padding="{TemplateBinding Padding}">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="*"/>
+                            </Grid.RowDefinitions>
+                            <ToggleButton x:Name="HeaderSite" Grid.Row="0" MinHeight="32"
+                                          Foreground="{TemplateBinding Foreground}"
+                                          FontFamily="{TemplateBinding FontFamily}" FontSize="{TemplateBinding FontSize}"
+                                          FontWeight="{TemplateBinding FontWeight}" FocusVisualStyle="{x:Null}"
+                                          HorizontalContentAlignment="Left" VerticalContentAlignment="Center"
+                                          Content="{TemplateBinding Header}"
+                                          ContentTemplate="{TemplateBinding HeaderTemplate}"
+                                          ContentTemplateSelector="{TemplateBinding HeaderTemplateSelector}"
+                                          ContentStringFormat="{TemplateBinding HeaderStringFormat}"
+                                          IsChecked="{Binding IsExpanded, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}">
+                                <ToggleButton.Template>
+                                    <ControlTemplate TargetType="{x:Type ToggleButton}">
+                                        <Border x:Name="HeaderChrome" Background="Transparent" BorderBrush="Transparent"
+                                                BorderThickness="1" CornerRadius="4" Padding="2,0,4,0">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="18"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                </Grid.ColumnDefinitions>
+                                                <Path x:Name="DisclosureChevron" Grid.Column="0" Width="9" Height="6"
+                                                      Data="{StaticResource Flick.Icon.Geometry.ChevronDown}"
+                                                      Stretch="Uniform" Stroke="{TemplateBinding Foreground}"
+                                                      StrokeThickness="1.5" StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+                                                      StrokeLineJoin="Round" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                      IsHitTestVisible="False">
+                                                    <Path.LayoutTransform><RotateTransform Angle="-90"/></Path.LayoutTransform>
+                                                </Path>
+                                                <ContentPresenter Grid.Column="1" Content="{TemplateBinding Content}"
+                                                                  ContentTemplate="{TemplateBinding ContentTemplate}"
+                                                                  ContentTemplateSelector="{TemplateBinding ContentTemplateSelector}"
+                                                                  ContentStringFormat="{TemplateBinding ContentStringFormat}"
+                                                                  RecognizesAccessKey="True" VerticalAlignment="Center"/>
+                                            </Grid>
+                                        </Border>
+                                        <ControlTemplate.Triggers>
+                                            <Trigger Property="IsChecked" Value="True">
+                                                <Setter TargetName="DisclosureChevron" Property="LayoutTransform">
+                                                    <Setter.Value><RotateTransform Angle="0"/></Setter.Value>
+                                                </Setter>
+                                            </Trigger>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter TargetName="HeaderChrome" Property="Background" Value="{DynamicResource Flick.Brush.Raised}"/>
+                                            </Trigger>
+                                            <Trigger Property="IsPressed" Value="True">
+                                                <Setter TargetName="HeaderChrome" Property="Opacity" Value=".82"/>
+                                            </Trigger>
+                                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                                <Setter TargetName="HeaderChrome" Property="BorderBrush" Value="{DynamicResource Flick.Brush.Focus}"/>
+                                            </Trigger>
+                                        </ControlTemplate.Triggers>
+                                    </ControlTemplate>
+                                </ToggleButton.Template>
+                            </ToggleButton>
+                            <ContentPresenter x:Name="ExpandSite" Grid.Row="1" Visibility="Collapsed"
+                                              HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                              VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                                              Content="{TemplateBinding Content}"
+                                              ContentTemplate="{TemplateBinding ContentTemplate}"
+                                              ContentTemplateSelector="{TemplateBinding ContentTemplateSelector}"
+                                              ContentStringFormat="{TemplateBinding ContentStringFormat}"/>
+                        </Grid>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsExpanded" Value="True">
+                            <Setter TargetName="ExpandSite" Property="Visibility" Value="Visible"/>
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter Property="Opacity" Value=".4"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
     <!-- Single compact and keyboard-focusable segmented source filter. -->
+    <Style x:Key="Flick.Library.FilterTrack" TargetType="{x:Type Border}">
+        <Setter Property="Background" Value="{DynamicResource Flick.Brush.Canvas}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource Flick.Brush.Divider}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="CornerRadius" Value="6"/>
+        <Setter Property="Padding" Value="2"/>
+        <Setter Property="SnapsToDevicePixels" Value="True"/>
+    </Style>
     <Style x:Key="Flick.Library.FilterChip" TargetType="{x:Type RadioButton}">
         <Setter Property="FontFamily" Value="{StaticResource Flick.Font.UI}"/>
         <Setter Property="FontSize" Value="{StaticResource Flick.Font.Caption}"/>
-        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="FontWeight" Value="Normal"/>
         <Setter Property="Foreground" Value="{DynamicResource Flick.Brush.TextSecondary}"/>
         <Setter Property="Cursor" Value="Hand"/>
-        <Setter Property="MinHeight" Value="28"/>
+        <Setter Property="MinHeight" Value="32"/>
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="{x:Type RadioButton}">
-                    <Border x:Name="Chip" Padding="10,4" CornerRadius="7"
+                    <Border x:Name="Chip" Padding="10,4" CornerRadius="4"
                             BorderThickness="1" BorderBrush="Transparent"
                             Background="Transparent">
                         <ContentPresenter VerticalAlignment="Center"
@@ -375,17 +604,15 @@
                                           RecognizesAccessKey="True"/>
                     </Border>
                     <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Chip" Property="Background"
+                                    Value="{DynamicResource Flick.Brush.Raised}"/>
+                        </Trigger>
                         <Trigger Property="IsChecked" Value="True">
                             <Setter TargetName="Chip" Property="Background"
-                                    Value="{DynamicResource Flick.Brush.Frosted}"/>
-                            <Setter TargetName="Chip" Property="BorderBrush"
-                                    Value="{DynamicResource Flick.Brush.BorderStrong}"/>
+                                    Value="{DynamicResource Flick.Brush.Hover}"/>
                             <Setter Property="Foreground"
                                     Value="{DynamicResource Flick.Brush.TextPrimary}"/>
-                        </Trigger>
-                        <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="Chip" Property="BorderBrush"
-                                    Value="{DynamicResource Flick.Brush.Border}"/>
                         </Trigger>
                         <Trigger Property="IsKeyboardFocused" Value="True">
                             <Setter TargetName="Chip" Property="BorderBrush"
@@ -413,7 +640,7 @@
     </Style>
     <Style x:Key="Flick.Library.Item" TargetType="{x:Type ListBoxItem}">
         <Setter Property="Padding" Value="0"/>
-        <Setter Property="Margin" Value="0,0,0,5"/>
+        <Setter Property="Margin" Value="0,0,0,4"/>
         <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
         <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
         <Setter Property="Template">
@@ -421,25 +648,26 @@
                 <ControlTemplate TargetType="{x:Type ListBoxItem}">
                     <Border x:Name="ItemChrome"
                             BorderBrush="Transparent" BorderThickness="1"
-                            Background="Transparent" CornerRadius="10">
+                            Background="Transparent" CornerRadius="6">
                         <ContentPresenter Margin="0"
                                           HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"/>
                     </Border>
                     <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="ItemChrome" Property="Background"
+                                    Value="{DynamicResource Flick.Brush.Raised}"/>
+                        </Trigger>
                         <Trigger Property="IsSelected" Value="True">
                             <Setter TargetName="ItemChrome" Property="Background"
-                                    Value="{DynamicResource Flick.Brush.Frosted}"/>
-                            <Setter TargetName="ItemChrome" Property="BorderBrush"
-                                    Value="{DynamicResource Flick.Brush.BorderStrong}"/>
-                        </Trigger>
-                        <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="ItemChrome" Property="BorderBrush"
-                                    Value="{DynamicResource Flick.Brush.Border}"/>
+                                    Value="{DynamicResource Flick.Brush.Hover}"/>
                         </Trigger>
                         <Trigger Property="IsKeyboardFocused" Value="True">
                             <Setter TargetName="ItemChrome" Property="BorderBrush"
                                     Value="{DynamicResource Flick.Brush.Focus}"/>
                             <Setter TargetName="ItemChrome" Property="BorderThickness" Value="2"/>
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter Property="Opacity" Value=".4"/>
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>

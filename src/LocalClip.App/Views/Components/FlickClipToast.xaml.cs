@@ -13,7 +13,7 @@ public partial class FlickClipToast : UserControl
 
     public static readonly DependencyProperty DetailProperty = DependencyProperty.Register(
         nameof(Detail), typeof(string), typeof(FlickClipToast),
-        new PropertyMetadata("Last Round Clutch · 0:29"));
+        new PropertyMetadata("30 sec"));
 
     public static readonly DependencyProperty IsErrorProperty = DependencyProperty.Register(
         nameof(IsError), typeof(bool), typeof(FlickClipToast),

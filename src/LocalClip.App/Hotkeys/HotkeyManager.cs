@@ -15,6 +15,8 @@ public class HotkeyManager : IDisposable
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool UnregisterHotKey(IntPtr hWnd, int id);
 
+    public bool IsShortcutEditing { get; set; }
+
     private const int WM_HOTKEY = 0x0312;
 
     private const uint MOD_ALT = 0x0001;
@@ -155,13 +157,14 @@ public class HotkeyManager : IDisposable
 
         if (key == Key.None) return false;
         vk = (uint)KeyInterop.VirtualKeyFromKey(key);
-        return vk > 0;
+        return LocalClip.Core.Rules.ShortcutChordRules.IsAllowed(modifiers, vk);
     }
 
     private IntPtr HwndHook(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
     {
         if (msg == WM_HOTKEY)
         {
+            if (IsShortcutEditing || LocalClip.App.Services.FlickDialog.IsOpen) { handled = true; return IntPtr.Zero; }
             int id = wParam.ToInt32();
             if (id == _toggleId)
             {
