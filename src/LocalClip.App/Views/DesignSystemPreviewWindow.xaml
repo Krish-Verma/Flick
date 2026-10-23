@@ -20,7 +20,7 @@
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
                 <Image Grid.Column="0" Style="{StaticResource Flick.Image.BrandMark}"
-                       Width="56" Height="56" Margin="0,0,16,0"/>
+                       Width="38" Height="38" Margin="0,0,16,0"/>
                 <StackPanel Grid.Column="1" VerticalAlignment="Center">
                     <TextBlock Text="Flick Design Foundation"
                                Style="{StaticResource Flick.Text.PageTitle}"/>
