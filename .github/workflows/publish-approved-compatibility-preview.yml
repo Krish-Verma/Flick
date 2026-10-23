@@ -1,0 +1,318 @@
+name: Publish approved Flick 1.0.5 unsigned compatibility preview
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/publish-approved-compatibility-preview.yml'
+      - 'release/PUBLISH-COMPATIBILITY-PREVIEW-20261023.md'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: flick-approved-compatibility-preview-20261023
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: github.repository == 'Krish-Verma/Flick' && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'release/publish-compatibility-preview-20261023' && github.event.pull_request.base.ref == 'main'
+    runs-on: windows-latest
+    timeout-minutes: 40
+    permissions:
+      contents: write
+      actions: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+      APPROVED_SOURCE: 'a6d2cd880c9716e96e9957279b4848eb8d3ca076'
+      APPROVED_TREE: '590aede30ca884e6445f1d373fec49c56416c111'
+      CI_RUN: '40001598489'
+      RENDER_RUN: '40001598486'
+      PACKAGE_RUN: '40001598491'
+      ARTIFACT_ID: '12523350391'
+      ARTIFACT_DIGEST: 'sha256:f44071b256458df954b7d846d038fb2e5490f6fd855bcb43c8540c1de36c63c0'
+      SETUP_SHA256: 'B2E42A2D6A81C78B3AC62356A452D8993782761531A305CEF7DD55D3A856D7C6'
+    steps:
+      - name: Verify exact approved source and successful build evidence
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $true
+          $candidateReceipt = Join-Path $env:RUNNER_TEMP 'flick-publication-candidate.json'
+          [ordered]@{ phase = 'preflight'; source = $env:APPROVED_SOURCE; sourceTree = $env:APPROVED_TREE; completed = $false } |
+            ConvertTo-Json | Set-Content $candidateReceipt -Encoding utf8
+          if ($env:APPROVED_SOURCE -cnotmatch '^[0-9a-f]{40}$' -or $env:APPROVED_TREE -cnotmatch '^[0-9a-f]{40}$' -or
+              $env:ARTIFACT_DIGEST -cnotmatch '^sha256:[0-9a-f]{64}$' -or $env:SETUP_SHA256 -cnotmatch '^[A-Fa-f0-9]{64}$') {
+            throw 'Immutable publication pins are incomplete or malformed; no publication is authorized'
+          }
+          foreach ($value in @($env:CI_RUN, $env:RENDER_RUN, $env:PACKAGE_RUN, $env:ARTIFACT_ID)) {
+            if ($value -cnotmatch '^[1-9][0-9]*$') { throw 'A required immutable run/artifact ID is missing' }
+          }
+          if (@(@($env:CI_RUN, $env:RENDER_RUN, $env:PACKAGE_RUN) | Sort-Object -Unique).Count -ne 3) { throw 'Validation run IDs must be distinct' }
+          $repository = gh api repos/Krish-Verma/Flick | ConvertFrom-Json
+          if ($repository.private) { throw 'Approved public distribution requires the public Flick repository' }
+          $source = gh api "repos/Krish-Verma/Flick/git/commits/$env:APPROVED_SOURCE" | ConvertFrom-Json
+          if ($source.sha -cne $env:APPROVED_SOURCE -or $source.tree.sha -cne $env:APPROVED_TREE) { throw 'Approved source/tree mismatch' }
+          $checks = @(
+            @{ id = $env:CI_RUN; path = '.github/workflows/ci.yml' },
+            @{ id = $env:RENDER_RUN; path = '.github/workflows/render-ui.yml' },
+            @{ id = $env:PACKAGE_RUN; path = '.github/workflows/preview-installer.yml' }
+          )
+          foreach ($check in $checks) {
+            $run = gh api "repos/Krish-Verma/Flick/actions/runs/$($check.id)" | ConvertFrom-Json
+            if ($run.status -cne 'completed' -or $run.conclusion -cne 'success' -or $run.head_sha -cne $env:APPROVED_SOURCE -or
+                $run.path -cne $check.path -or $run.head_repository.full_name -cne 'Krish-Verma/Flick') {
+              throw 'Candidate source, workflow identity or successful validation mismatch'
+            }
+          }
+          $artifact = gh api "repos/Krish-Verma/Flick/actions/artifacts/$env:ARTIFACT_ID" | ConvertFrom-Json
+          if ($artifact.expired -or $artifact.workflow_run.id -ne [long]$env:PACKAGE_RUN -or
+              $artifact.workflow_run.repository_id -ne $repository.id -or $artifact.digest -cne $env:ARTIFACT_DIGEST) {
+            throw 'Artifact provenance mismatch'
+          }
+          if ($artifact.name -cnotmatch '^flick-unsigned-preview-([0-9a-f]{40})$') { throw 'Unexpected artifact source name' }
+          $build = gh api "repos/Krish-Verma/Flick/git/commits/$($Matches[1])" | ConvertFrom-Json
+          if ($build.tree.sha -cne $env:APPROVED_TREE) { throw 'Artifact build tree differs from approved source tree' }
+          [ordered]@{
+            source = $source.sha; sourceTree = $source.tree.sha; build = $build.sha
+            runs = @($env:CI_RUN, $env:RENDER_RUN, $env:PACKAGE_RUN)
+            artifact = $artifact.id; artifactDigest = $artifact.digest; phase = 'evidence-verified'
+          } | ConvertTo-Json -Depth 8 | Set-Content $candidateReceipt -Encoding utf8
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.APPROVED_SOURCE }}
+          persist-credentials: false
+      - name: Verify the complete pinned artifact archive
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          New-Item publication-receipt -ItemType Directory -Force | Out-Null
+          Copy-Item -LiteralPath (Join-Path $env:RUNNER_TEMP 'flick-publication-candidate.json') -Destination publication-receipt/candidate.json
+          if ((Get-Content release/preview-version.txt -Raw).Trim() -cne '1.0.5-preview.1') { throw 'Checkout version mismatch' }
+          $handler = [System.Net.Http.HttpClientHandler]::new()
+          $handler.AllowAutoRedirect = $false
+          $client = [System.Net.Http.HttpClient]::new($handler)
+          $client.Timeout = [TimeSpan]::FromSeconds(60)
+          try {
+            $client.DefaultRequestHeaders.Authorization = [System.Net.Http.Headers.AuthenticationHeaderValue]::new('Bearer', $env:GH_TOKEN)
+            $client.DefaultRequestHeaders.UserAgent.ParseAdd('Flick-release-verification')
+            $client.DefaultRequestHeaders.Add('X-GitHub-Api-Version', '2022-11-28')
+            $response = $client.GetAsync("https://api.github.com/repos/Krish-Verma/Flick/actions/artifacts/$env:ARTIFACT_ID/zip", [System.Net.Http.HttpCompletionOption]::ResponseHeadersRead).GetAwaiter().GetResult()
+            try {
+              if ([int]$response.StatusCode -notin @(302,307)) { throw 'Expected the authenticated artifact archive redirect' }
+              $location = $response.Headers.Location
+              if ($null -eq $location -or -not $location.IsAbsoluteUri -or $location.Scheme -cne 'https' -or
+                  $location.Host -notmatch '(^|\.)(actions\.githubusercontent\.com|blob\.core\.windows\.net|githubusercontent\.com|github\.com)$') {
+                throw 'Unexpected artifact download origin'
+              }
+            } finally { $response.Dispose() }
+          } finally { $client.Dispose(); $handler.Dispose() }
+          # The temporary archive URL receives no Authorization header.
+          Invoke-WebRequest -Uri $location.AbsoluteUri -OutFile candidate-artifact.zip -MaximumRedirection 6 -TimeoutSec 300
+          $actual = (Get-FileHash candidate-artifact.zip -Algorithm SHA256).Hash
+          if ($actual -cne $env:ARTIFACT_DIGEST.Substring(7).ToUpperInvariant()) { throw 'Downloaded artifact archive digest mismatch' }
+          Expand-Archive -LiteralPath candidate-artifact.zip -DestinationPath release-files
+      - name: Publish and verify new download before hiding the preserved baseline
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $true
+          $repo = 'Krish-Verma/Flick'
+          $tag = 'v1.0.5-preview.1'
+          $source = $env:APPROVED_SOURCE
+          $names = @('Flick-Setup.exe', 'Flick-v1.0.5-win-x64.zip', 'SHA256SUMS.txt')
+          $old = @{
+            id = 422126500; tag_name = 'v1.0.4-preview.1'
+            name = 'Flick 1.0.4 — UNSIGNED PREVIEW'
+            target_commitish = 'f5e701cdacfd57e477a2cced7dcf1e9f3bd835db'
+            assets = @(
+              @{ id = 669859579; name = 'Flick-Setup.exe'; size = 241947803; digest = 'sha256:da1a0bbfb6b1d5803fc0d54387682c24f43d6039bae6a2c999822628e7828a5f' },
+              @{ id = 669859568; name = 'Flick-v1.0.4-win-x64.zip'; size = 353057887; digest = 'sha256:64ad4c0c755ed3364032acbdbb940125c988b02efbcba599d8ecc5a4d11207da' },
+              @{ id = 669859576; name = 'SHA256SUMS.txt'; size = 415; digest = 'sha256:fa3fd419cec8821b6f8ac8f32797c70c548f0041096619a52c32ccb012c9630a' }
+            )
+          }
+          $receipt = [ordered]@{
+            tag = $tag; source = $source; sourceTree = $env:APPROVED_TREE; phase = 'validating'
+            releaseId = $null; publicDownloadsVerified = @(); preservedReleaseId = $old.id
+            baselineDrafted = $false; completed = $false
+          }
+          function Get-AllReleases {
+            $pages = gh api --paginate --slurp "repos/$repo/releases?per_page=100" | ConvertFrom-Json -NoEnumerate
+            foreach ($page in $pages) { foreach ($release in $page) { $release } }
+          }
+          function Get-TagCommit([string] $name) {
+            $reference = gh api "repos/$repo/git/ref/tags/$name" | ConvertFrom-Json
+            $object = $reference.object
+            for ($depth = 0; $depth -lt 5; $depth++) {
+              if ($object.type -ceq 'commit') { return $object.sha }
+              if ($object.type -cne 'tag') { throw 'Unexpected release tag object' }
+              $object = (gh api "repos/$repo/git/tags/$($object.sha)" | ConvertFrom-Json).object
+            }
+            throw 'Release tag nesting is excessive'
+          }
+          function Assert-Baseline($release, [bool] $expectedDraft) {
+            if ($release.id -ne $old.id -or $release.tag_name -cne $old.tag_name -or $release.name -cne $old.name -or
+                $release.target_commitish -cne $old.target_commitish -or [bool]$release.draft -ne $expectedDraft -or
+                $release.prerelease -or $release.immutable -or @($release.assets).Count -ne 3) {
+              throw 'Baseline release identity changed; refuse to hide it'
+            }
+            foreach ($expected in $old.assets) {
+              $found = @($release.assets | Where-Object { $_.id -eq $expected.id })
+              if ($found.Count -ne 1 -or $found[0].name -cne $expected.name -or $found[0].state -cne 'uploaded' -or
+                  $found[0].size -ne $expected.size -or $found[0].digest -cne $expected.digest) { throw 'Baseline assets changed; refuse to hide it' }
+            }
+            if ((Get-TagCommit $old.tag_name) -cne $old.target_commitish) { throw 'Baseline source tag changed' }
+          }
+          function Assert-NewAssets($release, $paths, $hashes) {
+            if ($release.tag_name -cne $tag -or $release.target_commitish -cne $source -or @($release.assets).Count -ne 3 -or
+                $release.name -cne 'Flick 1.0.5 — UNSIGNED COMPATIBILITY PREVIEW') { throw 'Unexpected new release identity' }
+            foreach ($name in $names) {
+              $found = @($release.assets | Where-Object { $_.name -ceq $name })
+              if ($found.Count -ne 1 -or $found[0].state -cne 'uploaded' -or $found[0].size -ne (Get-Item -LiteralPath $paths[$name]).Length -or
+                  $found[0].digest -cne ('sha256:' + $hashes[$name].ToLowerInvariant())) { throw "Published asset mismatch: $name" }
+            }
+          }
+          function Get-VerifiedNewRelease([long] $id, $paths, $hashes) {
+            for ($attempt = 0; $attempt -lt 6; $attempt++) {
+              $release = gh api "repos/$repo/releases/$id" | ConvertFrom-Json
+              try { Assert-NewAssets $release $paths $hashes; return $release }
+              catch { if ($attempt -eq 5) { throw }; Start-Sleep -Seconds 5 }
+            }
+          }
+          function Assert-Current($release, $paths, $hashes) {
+            Assert-NewAssets $release $paths $hashes
+            $latest = gh api "repos/$repo/releases/latest" | ConvertFrom-Json
+            if ($release.id -ne $receipt.releaseId -or $release.draft -or $release.prerelease -or
+                $latest.id -ne $receipt.releaseId -or $latest.tag_name -cne $tag -or (Get-TagCommit $tag) -cne $source) {
+              throw 'New current release or Latest designation changed'
+            }
+          }
+          try {
+            $existing = @(Get-AllReleases)
+            if ($existing.Count -ne 1 -or $existing[0].id -ne $old.id) { throw 'Unexpected release catalogue; inspect before publication' }
+            Assert-Baseline $existing[0] $false
+            $tagRefs = @(gh api "repos/$repo/git/matching-refs/tags/$tag" | ConvertFrom-Json)
+            if (@($tagRefs | Where-Object { $_.ref -ceq "refs/tags/$tag" }).Count) { throw 'Candidate tag already exists; inspect the previous outcome instead of overwriting or retrying' }
+            $files = @(Get-ChildItem release-files -Recurse -File)
+            if ($files.Count -ne 3) { throw 'Approved package artifact must contain exactly the three release files' }
+            $paths = @{}; $hashes = @{}
+            foreach ($name in $names) {
+              $found = @($files | Where-Object { $_.Name -ceq $name })
+              if ($found.Count -ne 1) { throw "Missing or ambiguous asset: $name" }
+              $paths[$name] = $found[0].FullName
+              $hashes[$name] = (Get-FileHash -LiteralPath $paths[$name] -Algorithm SHA256).Hash
+            }
+            $manifest = Get-Content -LiteralPath $paths['SHA256SUMS.txt'] -Raw
+            foreach ($name in @('Flick-Setup.exe', 'Flick-v1.0.5-win-x64.zip')) {
+              $entries = [regex]::Matches($manifest, '(?m)^([A-Fa-f0-9]{64}) [ *]' + [regex]::Escape($name) + '\r?$')
+              if ($entries.Count -ne 1 -or $entries[0].Groups[1].Value.ToUpperInvariant() -cne $hashes[$name]) { throw "Checksum mismatch: $name" }
+            }
+            if ($hashes['Flick-Setup.exe'] -cne $env:SETUP_SHA256.ToUpperInvariant()) { throw 'Reviewed Setup digest mismatch' }
+            $receipt.hashes = $hashes
+            $receipt.phase = 'creating-draft'
+            $notes = (Get-Content release/PREVIEW-RELEASE-NOTES.md -Raw) + [Environment]::NewLine + @"
+
+          ## Publication evidence
+
+          Source commit: [$source](https://github.com/$repo/commit/$source)
+          Source tree: $env:APPROVED_TREE
+          Windows CI: https://github.com/$repo/actions/runs/$env:CI_RUN
+          WPF rendering: https://github.com/$repo/actions/runs/$env:RENDER_RUN
+          Package and installer lifecycle: https://github.com/$repo/actions/runs/$env:PACKAGE_RUN
+          Artifact: $env:ARTIFACT_ID
+          Complete artifact archive digest: $env:ARTIFACT_DIGEST
+          Setup SHA-256: $env:SETUP_SHA256
+
+          This remains an UNSIGNED preview. Hosted CI does not qualify physical NVIDIA, AMD, Intel, hybrid or CPU recording, and checksums do not confer publisher trust. The SignPath application has been submitted; approval and a trusted signed release have not been verified.
+          [Code signing policy](https://github.com/$repo/blob/$source/CODE_SIGNING_POLICY.md)
+          "@
+            $notes | Set-Content publication-receipt/release-notes.md -Encoding utf8
+            gh release create $tag $paths['Flick-Setup.exe'] $paths['Flick-v1.0.5-win-x64.zip'] $paths['SHA256SUMS.txt'] --repo $repo --target $source --draft --prerelease --title 'Flick 1.0.5 — UNSIGNED COMPATIBILITY PREVIEW' --notes-file publication-receipt/release-notes.md
+            $draftMatches = @(Get-AllReleases | Where-Object { $_.tag_name -ceq $tag })
+            if ($draftMatches.Count -ne 1) { throw 'Unique new draft not found; inspect before retrying' }
+            $receipt.releaseId = $draftMatches[0].id
+            $draft = Get-VerifiedNewRelease $receipt.releaseId $paths $hashes
+            if (-not $draft.draft -or -not $draft.prerelease) { throw 'Expected an unpublished draft preview' }
+            # GitHub disallows Latest on a catalogue prerelease. The semantic
+            # preview version, UNSIGNED title and explicit app consent remain.
+            @{ draft = $false; prerelease = $false; make_latest = 'true' } |
+              ConvertTo-Json | Set-Content publication-receipt/publish-request.json -Encoding utf8
+            $receipt.phase = 'publishing-current-download'
+            gh api --method PATCH "repos/$repo/releases/$($receipt.releaseId)" --input publication-receipt/publish-request.json | Out-Null
+            $published = Get-VerifiedNewRelease $receipt.releaseId $paths $hashes
+            Assert-Current $published $paths $hashes
+            $receipt.url = $published.html_url
+            New-Item public-downloads -ItemType Directory -Force | Out-Null
+            $receipt.phase = 'verifying-all-unauthenticated-public-downloads'
+            foreach ($name in $names) {
+              $asset = @($published.assets | Where-Object { $_.name -ceq $name })[0]
+              $url = "https://github.com/$repo/releases/download/$tag/$name"
+              if ($asset.browser_download_url -cne $url) { throw 'Unexpected public asset URL' }
+              $destination = Join-Path public-downloads $name
+              Invoke-WebRequest -Uri $url -OutFile $destination -MaximumRedirection 6 -TimeoutSec 300
+              if ((Get-Item -LiteralPath $destination).Length -ne $asset.size -or
+                  (Get-FileHash -LiteralPath $destination -Algorithm SHA256).Hash -cne $hashes[$name]) { throw "Public download mismatch: $name" }
+              $receipt.publicDownloadsVerified += $name
+            }
+            $receipt.phase = 'revalidating-before-hiding-baseline'
+            $catalogue = @(Get-AllReleases)
+            if ($catalogue.Count -ne 2 -or @($catalogue | Where-Object { $_.id -notin @($old.id, $receipt.releaseId) }).Count) {
+              throw 'Unexpected release catalogue; refuse baseline change'
+            }
+            $baseline = gh api "repos/$repo/releases/$($old.id)" | ConvertFrom-Json
+            Assert-Baseline $baseline $false
+            $current = gh api "repos/$repo/releases/$($receipt.releaseId)" | ConvertFrom-Json
+            Assert-Current $current $paths $hashes
+            $receipt.baselineBefore = $old
+            # Preserve the baseline for authenticated upgrade CI and recovery.
+            # Only its Release draft flag changes; no asset or Git ref changes.
+            @{ draft = $true } | ConvertTo-Json | Set-Content publication-receipt/hide-baseline-request.json -Encoding utf8
+            $receipt.phase = 'hiding-preserved-baseline'
+            gh api --method PATCH "repos/$repo/releases/$($old.id)" --input publication-receipt/hide-baseline-request.json | Out-Null
+            $hidden = gh api "repos/$repo/releases/$($old.id)" | ConvertFrom-Json
+            Assert-Baseline $hidden $true
+            $receipt.baselineDrafted = $true
+            $remaining = @(Get-AllReleases)
+            if ($remaining.Count -ne 2 -or @($remaining | Where-Object { $_.id -notin @($old.id, $receipt.releaseId) }).Count) { throw 'Unexpected final authenticated catalogue' }
+            $current = gh api "repos/$repo/releases/$($receipt.releaseId)" | ConvertFrom-Json
+            Assert-Current $current $paths $hashes
+            $public = @(Invoke-RestMethod -Uri "https://api.github.com/repos/$repo/releases?per_page=100" -TimeoutSec 60)
+            if ($public.Count -ne 1 -or $public[0].id -ne $receipt.releaseId) { throw 'Public Releases catalogue must expose only the verified current download' }
+            $receipt.phase = 'complete'; $receipt.completed = $true
+            Write-Host "Published and verified $($current.html_url); preserved release $($old.id) as a draft with all assets and tags intact."
+          }
+          finally {
+            $receipt | ConvertTo-Json -Depth 15 | Set-Content publication-receipt/publication.json -Encoding utf8
+          }
+      - name: Preserve publication receipts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: flick-compatibility-preview-publication-${{ github.run_id }}
+          path: |
+            publication-receipt/*
+            ${{ runner.temp }}/flick-publication-candidate.json
+          if-no-files-found: warn
+          retention-days: 90
+
+  verify-preserved-upgrade-fixture:
+    needs: publish
+    runs-on: windows-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Verify a future read-only upgrade job can download the hidden baseline
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $true
+          gh release download v1.0.4-preview.1 --repo Krish-Verma/Flick --pattern Flick-Setup.exe --dir preserved-baseline
+          $path = 'preserved-baseline/Flick-Setup.exe'
+          if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw 'Read-only baseline fixture download did not produce the installer' }
+          $hash = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash
+          if ((Get-Item -LiteralPath $path).Length -ne 241947803 -or $hash -cne 'DA1A0BBFB6B1D5803FC0D54387682C24F43D6039BAE6A2C999822628E7828A5F') {
+            throw 'Preserved baseline installer does not match the approved upgrade fixture'
+          }
+          Write-Host "Read-only authenticated draft baseline fixture verified: $hash"
