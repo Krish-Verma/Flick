@@ -25,6 +25,10 @@ public partial class SettingsWindow : UserControl
     // live capture status at Save time instead of using a stale snapshot.
     private readonly Func<bool> _isCaptureActive;
     private bool _loading;
+    private TextBox? _editingShortcut;
+    private string _shortcutCandidate = "";
+    private bool _recordingShortcut;
+    public event Action<bool>? ShortcutEditingChanged;
     private string _activeCategory = "Recording";
 
     public bool UninstallRequested { get; private set; }
@@ -51,6 +55,7 @@ public partial class SettingsWindow : UserControl
 
     private void SelectCategory(string category)
     {
+        CancelShortcutEdit();
         _activeCategory = category;
         foreach (var (button, panel, name) in new[]
         {
@@ -109,6 +114,7 @@ public partial class SettingsWindow : UserControl
         }
         finally { _loading = false; }
         UpdateBufferWarning();
+        SaveShortcutLabel.Text = $"Save Last {settings.ReplayDurationSeconds}s";
     }
 
     private string Preset() => CmbQuality.SelectedIndex switch
@@ -120,7 +126,12 @@ public partial class SettingsWindow : UserControl
 
     private void CaptureProfile_Changed(object sender, EventArgs e)
     {
-        if (!_loading) UpdateBufferWarning();
+        if (!_loading)
+        {
+            UpdateBufferWarning();
+            if (SaveShortcutLabel != null && int.TryParse(TxtDuration.Text, out int seconds))
+                SaveShortcutLabel.Text = $"Save Last {seconds}s";
+        }
     }
 
     private void Microphone_Changed(object sender, RoutedEventArgs e)
@@ -169,35 +180,70 @@ public partial class SettingsWindow : UserControl
         };
     }
 
+    private void ChangeShortcut_Click(object sender, RoutedEventArgs e)
+    {
+        CancelShortcutEdit();
+        _editingShortcut = sender is Button { Tag: "Toggle" } ? TxtToggleHotkey : TxtSaveHotkey;
+        ShortcutEditor.Visibility = Visibility.Visible;
+        ShortcutHint.Text = "Select Record Shortcut, then press a combination with Ctrl or Alt.";
+        ShortcutEditingChanged?.Invoke(true);
+    }
+
+    private void RecordShortcut_Click(object sender, RoutedEventArgs e)
+    {
+        if (_editingShortcut is null) return;
+        _recordingShortcut = true;
+        _shortcutCandidate = "";
+        SaveShortcutButton.IsEnabled = false;
+        ShortcutHint.Text = "Listening here… press a full shortcut. Escape cancels.";
+        _editingShortcut.Focus();
+    }
+
+    private void CancelShortcutEdit()
+    {
+        _editingShortcut = null;
+        _recordingShortcut = false;
+        _shortcutCandidate = "";
+        if (ShortcutEditor != null) ShortcutEditor.Visibility = Visibility.Collapsed;
+        if (SaveShortcutButton != null) SaveShortcutButton.IsEnabled = false;
+        ShortcutEditingChanged?.Invoke(false);
+    }
+
+    private void CancelShortcut_Click(object sender, RoutedEventArgs e) => CancelShortcutEdit();
+
+    private void SaveShortcut_Click(object sender, RoutedEventArgs e)
+    {
+        if (_editingShortcut is null || !SaveShortcutButton.IsEnabled) return;
+        _editingShortcut.Text = _shortcutCandidate; // staged only
+        CancelShortcutEdit();
+    }
+
     private void Shortcut_PreviewKeyDown(object sender, KeyEventArgs e)
     {
-        if (sender is not TextBox textBox) return;
-        if (e.Key == Key.Tab) return;
-        if (e.Key == Key.Escape)
-        {
-            textBox.Text = ReferenceEquals(textBox, TxtToggleHotkey)
-                ? _settings.CaptureToggleHotkey : _settings.SaveReplayHotkey;
-            e.Handled = true;
-            return;
-        }
+        if (_editingShortcut is null || !_recordingShortcut ||
+            !ReferenceEquals(sender, _editingShortcut)) return;
+        if (e.Key == Key.Tab) { _recordingShortcut = false; return; }
+        e.Handled = true;
+        if (e.Key == Key.Escape) { CancelShortcutEdit(); return; }
         Key key = e.Key == Key.System ? e.SystemKey : e.Key;
         if (key is Key.LeftCtrl or Key.RightCtrl or Key.LeftShift or Key.RightShift or
-            Key.LeftAlt or Key.RightAlt or Key.LWin or Key.RWin or Key.None)
-            return;
-
+            Key.LeftAlt or Key.RightAlt or Key.LWin or Key.RWin or Key.None) return;
         ModifierKeys modifiers = Keyboard.Modifiers;
-        if ((modifiers & (ModifierKeys.Control | ModifierKeys.Alt | ModifierKeys.Shift)) == 0)
-            return; // Avoid unexpected global shortcuts for normal typed characters.
-
-        string prefix = "";
-        if (modifiers.HasFlag(ModifierKeys.Control)) prefix += "Ctrl+";
-        if (modifiers.HasFlag(ModifierKeys.Shift)) prefix += "Shift+";
-        if (modifiers.HasFlag(ModifierKeys.Alt)) prefix += "Alt+";
-        if (modifiers.HasFlag(ModifierKeys.Windows)) prefix += "Win+";
-        string proposal = prefix + key;
-        if (HotkeyManager.IsValidHotkey(proposal))
-            textBox.Text = proposal;
-        e.Handled = true;
+        string proposal = "";
+        if (modifiers.HasFlag(ModifierKeys.Control)) proposal += "Ctrl+";
+        if (modifiers.HasFlag(ModifierKeys.Shift)) proposal += "Shift+";
+        if (modifiers.HasFlag(ModifierKeys.Alt)) proposal += "Alt+";
+        if (modifiers.HasFlag(ModifierKeys.Windows)) proposal += "Win+";
+        proposal += key;
+        string other = ReferenceEquals(_editingShortcut, TxtToggleHotkey)
+            ? TxtSaveHotkey.Text : TxtToggleHotkey.Text;
+        bool valid = HotkeyManager.IsValidHotkey(proposal) &&
+            !HotkeyManager.AreEquivalentHotkeys(proposal, other);
+        _shortcutCandidate = valid ? proposal : "";
+        SaveShortcutButton.IsEnabled = valid;
+        ShortcutHint.Text = valid ? proposal + " — select Save Shortcut to keep it."
+            : "Choose a different combination with Ctrl or Alt; reserved and duplicate shortcuts are unavailable.";
+        _recordingShortcut = false;
     }
 
     private void BrowseOriginals_Click(object sender, RoutedEventArgs e)
@@ -232,6 +278,11 @@ public partial class SettingsWindow : UserControl
 
     private void Save_Click(object sender, RoutedEventArgs e)
     {
+        if (_editingShortcut != null)
+        {
+            SelectCategory("Shortcuts");
+            return; // An unfinished shortcut is discarded, never silently applied.
+        }
         if (!int.TryParse(TxtDuration.Text, out int duration) ||
             duration < 15 || duration > 120)
         {
@@ -384,6 +435,7 @@ public partial class SettingsWindow : UserControl
     {
         // Avoid stealing Escape from the shortcut capture fields; their own
         // handler uses it to restore the old chord without exiting Settings.
+        if (e.Key == Key.Escape && _editingShortcut != null) { CancelShortcutEdit(); e.Handled = true; return; }
         if (e.Key != Key.Escape || e.Handled ||
             ReferenceEquals(Keyboard.FocusedElement, TxtToggleHotkey) ||
             ReferenceEquals(Keyboard.FocusedElement, TxtSaveHotkey))

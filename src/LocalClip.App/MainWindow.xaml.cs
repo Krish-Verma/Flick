@@ -456,6 +456,7 @@ public partial class MainWindow : Window
 
     private void ReturnToClipWorkspace()
     {
+        _hotkeyManager.IsShortcutEditing = false;
         if (_foldersPage != null)
         {
             _foldersPage.CloseRequested -= CloseConnectedFolders;
@@ -616,6 +617,7 @@ public partial class MainWindow : Window
         var settings = new SettingsWindow(_vm.Settings,
             () => _vm.CaptureStatus is "Starting" or "Armed" or "Buffering");
         settings.CloseRequested += CloseSettingsPage;
+        settings.ShortcutEditingChanged += editing => _hotkeyManager.IsShortcutEditing = editing;
         settings.ManageFoldersRequested += (_, _) => OpenConnectedFolders();
         settings.PreviewNotificationRequested += (show, sound) =>
         {
