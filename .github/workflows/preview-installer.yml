@@ -94,10 +94,18 @@ jobs:
           Write-Host "Unsigned preview compiled; no hardware acceptance is asserted."
       - name: Verify per-user install, update wait, restart and data retention
         shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $true
+          $baselineDirectory = Join-Path $env:RUNNER_TEMP 'flick-baseline-1.0.4'
+          New-Item -ItemType Directory $baselineDirectory -Force | Out-Null
+          # Authenticated read also works after the previous Release is hidden
+          # as a draft. Its immutable tag and installer hash remain the fixture.
+          gh release download v1.0.4-preview.1 --repo Krish-Verma/Flick --pattern Flick-Setup.exe --dir $baselineDirectory
           $baseline = Join-Path $env:RUNNER_TEMP 'Flick-1.0.4-Setup.exe'
-          Invoke-WebRequest 'https://github.com/Krish-Verma/Flick/releases/download/v1.0.4-preview.1/Flick-Setup.exe' -OutFile $baseline
+          Move-Item (Join-Path $baselineDirectory 'Flick-Setup.exe') $baseline
           if ((Get-FileHash $baseline -Algorithm SHA256).Hash -cne 'DA1A0BBFB6B1D5803FC0D54387682C24F43D6039BAE6A2C999822628E7828A5F') {
             throw 'Public Flick 1.0.4 baseline installer hash mismatch.'
           }

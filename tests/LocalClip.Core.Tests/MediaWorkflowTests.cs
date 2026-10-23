@@ -109,7 +109,8 @@ public sealed class MediaWorkflowTests(ITestOutputHelper output)
         await fixture.AssertShareAsync(changed, 2, 2);
         Assert.InRange(changed.AttemptsUsed, 1, 3);
         Assert.NotEqual(first.Fingerprint, changed.Fingerprint);
-        Assert.False(firstHash.SequenceEqual(await HashAsync(changed.ExportFilePath)));
+        byte[] changedHash = await HashAsync(changed.ExportFilePath);
+        Assert.False(firstHash.SequenceEqual(changedHash));
         await fixture.AssertCornerAsync(changed.ExportFilePath, 0.25, blue: true);
         await fixture.AssertOriginalUnchangedAsync();
         fixture.AssertNoTemporaryExports();

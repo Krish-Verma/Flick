@@ -1,6 +1,6 @@
 # Flick — Third-party Components and Distribution Review
 
-These components are included or referenced by the project. **This page is not a certification that every license obligation of the actual compiled binary is satisfied.** Verify full source and binary provenance before making the repository or installer public.
+These components are included or referenced by the public project. **This page is not a certification that every license obligation of the actual compiled binary is satisfied.** This notice describes the 1.0.5-preview.1 development candidate, not the older 1.0.4 download's dependency inventory. Complete source/license provenance remains a release obligation.
 
 ## OBS Studio (libobs)
 
@@ -10,9 +10,12 @@ These components are included or referenced by the project. **This page is not a
 
 ## FFmpeg / FFprobe
 
-- Pinned downloaded build: FFmpeg 9.0.1 Essentials (Gyan.dev build), https://ffmpeg.org and https://www.gyan.dev/ffmpeg/builds/
-- Licensing depends on **actual configure flags** and linked libraries; do not assume the binary is only LGPL, or that a generic FFmpeg license statement covers every bundled component.
-- Before release, run the exact packaged ffmpeg.exe -buildconf, ffmpeg.exe -version and ffprobe.exe -version; record configuration, version, licenses, checksums and sources for that build. Supply corresponding source/licenses as legally required (including GPL components).
+- Pinned build: **FFmpeg 9.0.2 Essentials, Gyan.dev Windows x64 static GPLv3 build**. See [upstream release](https://github.com/GyanD/codexffmpeg/releases/tag/9.0.2), its [FFmpeg source anchor 946fcce07b](https://github.com/FFmpeg/FFmpeg/commit/946fcce07b), and the publisher's [build information](https://www.gyan.dev/ffmpeg/builds/). The dependency lock records `GPL-3.0-or-later`; the exact bundled text and each included component's terms govern redistribution.
+- Setup preserves the archive's exact `LICENSE` and `README.txt` as `tools/ffmpeg/UPSTREAM-LICENSE.txt` and `UPSTREAM-README.txt`. Packaging copies both beside `ffmpeg.exe` and `ffprobe.exe`. Their individual SHA-256 hashes and executable/archive hashes are pinned in `dependencies.lock.json` and checked by `check_ffmpeg_runtime.ps1`. These notices are not rewritten summaries.
+- Do not describe this GPL-enabled package as LGPL-only. FFmpeg's [pinned licensing explanation](https://github.com/FFmpeg/FFmpeg/blob/946fcce07b/LICENSE.md) describes how GPL features, version-3 options and linked libraries affect licensing. Preserve the publisher's configuration/component inventory and capture the packaged tools' `-buildconf` and `-version` output for each release.
+- Complete corresponding source for the **exact shipped binary and linked components**, applicable patches and build scripts must be available by a method satisfying their licenses. A commit URL, upstream link, checksum or this notice alone does not establish that obligation. A verified complete source bundle or other valid source-delivery arrangement remains to be completed before claiming distribution compliance. Original Flick source remains GPL-2.0-or-later; this notice does not relicense it or upstream components.
+- JPEG acknowledgment: This software is based in part on the work of the Independent JPEG Group. Preserve additional component-specific credits from the complete source/license inventory.
+- OBS 32.2.2 contains separate FFmpeg-related DLLs. Upgrading the standalone tools does not upgrade those separately pinned runtime components.
 
 ## Microsoft .NET / WPF
 
@@ -35,4 +38,4 @@ These components are included or referenced by the project. **This page is not a
 2. Include full required license/copyright texts for **all** shipped runtime files; identify any additional bundled libraries, modules, codecs and fonts.
 3. Confirm corresponding source availability, complete source/build scripts and any required written offer for each GPL-covered binary distribution.
 4. Ensure game screenshots, player artwork and the original Flick logo have authorized redistribution rights. Keep personal game footage out of source/release assets by default.
-5. Get owner legal/release review. No automated public release pipeline currently exists.
+5. Complete owner legal/release review for the exact candidate. Public preview workflows exist; publication and passing CI do not certify legal compliance, trusted signing or hardware acceptance.

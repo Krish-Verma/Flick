@@ -84,6 +84,8 @@ For the compatibility candidate, use [scripts/test_gpu_compatibility.ps1](script
 
 ## Privacy and security
 
+Read the [Privacy policy](PRIVACY.md), [Code signing policy](CODE_SIGNING_POLICY.md), and [candidate release-readiness record](docs/RELEASE-READINESS-1.0.5.md). SignPath Foundation signing is being prepared; current downloads remain unsigned until approval and verified integration.
+
 Flick has no required login and no built-in telemetry/cloud synchronization. It only records a source after manual arming. Microphone recording is opt-in; webhook publishing is disabled by default and requires confirmation. Review source-selection and permissions before gameplay. A linked import folder is indexed locally without copying or deleting imported originals.
 
 ## Contributing and licensing
