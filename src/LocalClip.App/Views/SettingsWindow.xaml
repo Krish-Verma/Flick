@@ -5,7 +5,8 @@
         Background="{DynamicResource Flick.Brush.Canvas}"
         Foreground="{DynamicResource Flick.Brush.TextPrimary}"
         FontFamily="{StaticResource Flick.Font.UI}"
-        UseLayoutRounding="True" SnapsToDevicePixels="True">
+        UseLayoutRounding="True" SnapsToDevicePixels="True"
+        KeyDown="Settings_KeyDown">
     <Grid>
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="162"/>

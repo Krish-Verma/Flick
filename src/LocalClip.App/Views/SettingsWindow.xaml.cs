@@ -380,6 +380,19 @@ public partial class SettingsWindow : UserControl
         CloseRequested?.Invoke(false);
     }
 
+    private void Settings_KeyDown(object sender, KeyEventArgs e)
+    {
+        // Avoid stealing Escape from the shortcut capture fields; their own
+        // handler uses it to restore the old chord without exiting Settings.
+        if (e.Key != Key.Escape || e.Handled ||
+            ReferenceEquals(Keyboard.FocusedElement, TxtToggleHotkey) ||
+            ReferenceEquals(Keyboard.FocusedElement, TxtSaveHotkey))
+            return;
+
+        e.Handled = true;
+        CloseRequested?.Invoke(false); // Cancel staged changes, stay in Flick.
+    }
+
     private void Cancel_Click(object sender, RoutedEventArgs e)
     {
         CloseRequested?.Invoke(false);
