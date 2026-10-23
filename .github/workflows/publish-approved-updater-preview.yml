@@ -1,0 +1,74 @@
+name: Publish owner-approved unsigned updater preview
+on:
+  pull_request:
+    paths:
+      - 'release/UPDATER-PREVIEW-20261023.md'
+      - '.github/workflows/publish-approved-updater-preview.yml'
+permissions:
+  contents: read
+concurrency:
+  group: flick-approved-updater-preview-20261023
+  cancel-in-progress: false
+jobs:
+  publish:
+    if: github.repository == 'Krish-Verma/Flick' && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'release/updates-brand-preview-20261023'
+    runs-on: windows-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write
+      actions: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Verify approved public preview source and immutable build evidence
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $repo = gh api repos/Krish-Verma/Flick | ConvertFrom-Json
+          if ($repo.private) { throw 'The owner approved public distribution after making this repository public' }
+          foreach ($id in @(39982356180, 39982356340, 39982356386)) {
+            $run = gh api "repos/Krish-Verma/Flick/actions/runs/$id" | ConvertFrom-Json
+            if ($run.conclusion -ne 'success' -or $run.head_sha -ne '7123509de13dc302a632bda5ac3cc986a38d9d22') { throw 'Candidate source or successful validation mismatch' }
+          }
+          $artifact = gh api repos/Krish-Verma/Flick/actions/artifacts/12513783914 | ConvertFrom-Json
+          if ($artifact.expired -or $artifact.workflow_run.id -ne 39982356386 -or $artifact.digest -ne 'sha256:5d0b0b83177060565a592528f87056a1385123403056d858d62990a72c1b86b6') { throw 'Artifact provenance mismatch' }
+          if ($artifact.name -notmatch '^flick-unsigned-preview-([0-9a-f]{40})$') { throw 'Unexpected build source name' }
+          $buildCommit = gh api "repos/Krish-Verma/Flick/git/commits/$($Matches[1])" | ConvertFrom-Json
+          $sourceCommit = gh api repos/Krish-Verma/Flick/git/commits/7123509de13dc302a632bda5ac3cc986a38d9d22 | ConvertFrom-Json
+          if ($buildCommit.tree.sha -ne $sourceCommit.tree.sha) { throw 'Built merge tree differs from approved source tree' }
+      - name: Download immutable validated Setup and portable package
+        uses: actions/download-artifact@v4
+        with:
+          artifact-ids: '12513783914'
+          run-id: '39982356386'
+          github-token: ${{ github.token }}
+          path: release-files
+          merge-multiple: true
+      - name: Verify exact bytes and publish one labelled unsigned prerelease
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $tag = 'v1.0.3-preview.1'
+          $existing = gh api 'repos/Krish-Verma/Flick/releases?per_page=100' | ConvertFrom-Json
+          if ($existing | Where-Object { $_.tag_name -eq $tag }) { throw 'Release exists; refuse to overwrite published assets' }
+          $files = Get-ChildItem release-files -Recurse -File
+          $paths = @{}
+          foreach ($name in @('Flick-Setup.exe', 'Flick-v1.0.3-win-x64.zip', 'SHA256SUMS.txt')) {
+            $found = @($files | Where-Object Name -eq $name)
+            if ($found.Count -ne 1) { throw "Missing or ambiguous asset: $name" }
+            $paths[$name] = $found[0].FullName
+          }
+          $manifest = Get-Content -LiteralPath $paths['SHA256SUMS.txt'] -Raw
+          foreach ($name in @('Flick-Setup.exe', 'Flick-v1.0.3-win-x64.zip')) {
+            $actual = (Get-FileHash -LiteralPath $paths[$name] -Algorithm SHA256).Hash
+            if ($manifest -notmatch ('(?mi)^' + $actual + '\s+' + [regex]::Escape($name) + '\s*$')) { throw "Checksum mismatch: $name" }
+          }
+          if ((Get-FileHash -LiteralPath $paths['Flick-Setup.exe'] -Algorithm SHA256).Hash -ne 'B19E97E454B9A9636CF1F12F60599B1B2D7949AF110796F615A3D0F55673BD38') { throw 'Reviewed Setup digest mismatch' }
+          gh release create $tag $paths['Flick-Setup.exe'] $paths['Flick-v1.0.3-win-x64.zip'] $paths['SHA256SUMS.txt'] --repo Krish-Verma/Flick --target 7123509de13dc302a632bda5ac3cc986a38d9d22 --prerelease --title 'Flick 1.0.3 Preview 1 — UI Refresh & Software Updates (UNSIGNED)' --notes-file release/UPDATER-PREVIEW-20261023.md
+          if ($LASTEXITCODE -ne 0) { throw 'Publication failed; inspect outcome before retrying' }
+          $published = gh release view $tag --repo Krish-Verma/Flick --json url,isDraft,isPrerelease,assets | ConvertFrom-Json
+          if ($published.isDraft -or -not $published.isPrerelease -or $published.assets.Count -ne 3) { throw 'Published preview metadata is unexpected' }
+          Write-Host "Published owner-approved public unsigned prerelease: $($published.url)"
