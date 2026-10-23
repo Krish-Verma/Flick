@@ -376,7 +376,10 @@ public class ClipExporter
         string durStr = durationSec.ToString("F3", CultureInfo.InvariantCulture);
 
         string vEncoder = useSoftware ? "libx264 -preset fast -threads 4" : "h264_nvenc -preset p4 -tune hq";
-        string scaleFilter = $"scale={budget.RecommendedWidth}:{budget.RecommendedHeight}";
+        // Imported videos may be rotated or use odd coded dimensions. Preserve
+        // their displayed aspect ratio and produce even YUV420-compatible output
+        // rather than stretching a portrait frame or repeatedly failing x264.
+        string scaleFilter = $"scale={budget.RecommendedWidth}:{budget.RecommendedHeight}:force_original_aspect_ratio=decrease:force_divisible_by=2";
 
         string filterComplex = $"[0:v]{scaleFilter},format=yuv420p[outv];{audioFilter}";
 

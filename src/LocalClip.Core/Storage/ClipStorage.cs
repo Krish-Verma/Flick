@@ -479,19 +479,31 @@ public sealed class ClipStorage
             try
             {
                 var data = JsonSerializer.Deserialize<List<ClipMetadata>>(
-                    File.ReadAllText(_metadataFile));
-                if (data is null) return;
+                    File.ReadAllText(_metadataFile)) ?? throw new InvalidDataException("Clip index contains no library array.");
                 var seen = new HashSet<string>(ClipLibraryPaths.FileComparer);
+                var validated = new List<ClipMetadata>();
                 foreach (var clip in data)
                 {
+                    // JSON nulls bypass non-null property initializers. Reject
+                    // damaged records before the library exposes them to search,
+                    // audio editing or source-ownership-sensitive deletion.
+                    if (clip is null || string.IsNullOrWhiteSpace(clip.Id) ||
+                        clip.Title is null || clip.TargetName is null ||
+                        clip.AudioTracks is null || clip.AudioTracks.Any(track => track is null) ||
+                        (!string.Equals(clip.SourceKind, "Flick", StringComparison.OrdinalIgnoreCase) &&
+                         !string.Equals(clip.SourceKind, "Imported", StringComparison.OrdinalIgnoreCase)))
+                        throw new InvalidDataException("Clip index contains a damaged entry. Back up or repair the original index before editing the library.");
                     if (string.IsNullOrWhiteSpace(clip.OriginalFilePath)) continue;
                     var path = SafeNormalize(clip.OriginalFilePath);
                     if (seen.Add(path))
                     {
                         clip.OriginalFilePath = path;
-                        _clips.Add(clip); // Keep OFFLINE entries across unplug/restart.
+                        validated.Add(clip); // Keep OFFLINE entries across unplug/restart.
                     }
                 }
+                // A later bad record cannot leave a partially loaded index that
+                // appears complete. Existing recovery guards preserve raw bytes.
+                _clips.AddRange(validated);
             }
             catch (Exception ex)
             {

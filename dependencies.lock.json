@@ -1,7 +1,7 @@
 {
   "$schema": "https://json.schemastore.org/package.manifest-1.0.0.json",
   "name": "Flick",
-  "version": "1.0.4-preview.1",
+  "version": "1.0.5-preview.1",
   "pinnedDependencies": {
     "dotnet": {
       "sdkVersion": "10.0.402",
@@ -26,11 +26,17 @@
       "headers": "https://github.com/obsproject/obs-studio/releases/download/32.2.2/OBS-Studio-32.2.2-Sources.tar.gz"
     },
     "ffmpeg": {
-      "version": "9.0.1-essentials_build",
+      "version": "9.0.2-essentials_build",
       "architecture": "win-x64",
-      "license": "GPL-2.0-or-later",
-      "source": "https://github.com/GyanD/codexffmpeg/releases/download/9.0.1/ffmpeg-9.0.1-essentials_build.zip",
-      "sha256": "fec81ae03971d9dd4be3ebe02e263bd2ec1d789483f931bdba5f5715e65da2e9"
+      "license": "GPL-3.0-or-later",
+      "source": "https://github.com/GyanD/codexffmpeg/releases/download/9.0.2/ffmpeg-9.0.2-essentials_build.zip",
+      "sha256": "60f467265b1e312373dbcd92200c2618a74850f98d3d078e94296bb3fa2047ba",
+      "files": {
+        "ffmpeg.exe": "3256173f3f8bffd7df12227c68adf68025edb1832273a9530688a7bb1ed8edec",
+        "ffprobe.exe": "f0d36ecbbdd3bcfac3efa078c96c7271c2e68b3810595552ac3b7f17e9a65c52",
+        "UPSTREAM-LICENSE.txt": "8ceb4b9ee5adedde47b31e975c1d90c73ad27b6b165a1dcd80c7c545eb65b903",
+        "UPSTREAM-README.txt": "0342de6bb39dd421cbec2c00d89ad274b640d75ad3f2cab09ffd647ce2d8f949"
+      }
     }
   }
 }

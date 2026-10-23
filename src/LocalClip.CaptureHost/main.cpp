@@ -17,6 +17,7 @@
 #include <system_error>
 
 #include "obs.h"
+#include "util/windows/window-helpers.h"
 #include "json.hpp"
 #include "encoder_policy.hpp"
 
@@ -87,7 +88,9 @@ struct ActiveCapture {
     CaptureState state = CaptureState::Off;
     std::string target_type; // "monitor" or "window"
     int monitor_index = 0;
+    std::string monitor_id;
     HWND window_hwnd = nullptr;
+    DWORD window_pid = 0;
     int fps = 30;
     int width = 1920;
     int height = 1080;
@@ -118,15 +121,42 @@ struct ActiveCapture {
     std::vector<std::string> track_names;
 
     // Pending save requests
-    std::string pending_save_id;
-    std::string pending_save_prefix;
+    flick::capture::SaveLifecycle save;
     std::chrono::steady_clock::time_point pending_save_start;
     std::filesystem::file_time_type pending_save_walltime;
-    std::atomic<bool> save_in_progress{false};
 };
 
 static ActiveCapture g_cap;
 static std::atomic<bool> g_obs_initialized{false};
+
+// This callback has its own small metadata lock and never takes the capture
+// state lock or emits protocol messages on an encoder's worker thread.
+static std::mutex g_history_mutex;
+static flick::capture::ReplayHistory g_history;
+static bool g_history_enabled = false;
+static bool g_history_failed = false;
+
+static void on_replay_packet(obs_output_t *, struct encoder_packet *packet, struct encoder_packet_time *, void *) {
+    if (!packet || packet->timebase_den <= 0 || packet->timebase_num <= 0) return;
+    const auto pts_us = static_cast<int64_t>(static_cast<long double>(packet->pts) * packet->timebase_num * 1000000 / packet->timebase_den);
+    std::lock_guard<std::mutex> lock(g_history_mutex);
+    if (g_history_enabled) {
+        try {
+            g_history.observe({packet->dts_usec, pts_us, static_cast<uint64_t>(packet->size),
+                               packet->type == OBS_ENCODER_VIDEO, packet->keyframe});
+        } catch (...) {
+            // Never unwind a C++ allocation failure through an OBS C callback.
+            g_history_enabled = false;
+            g_history_failed = true;
+            g_history.reset(30, 256, 30);
+        }
+    }
+}
+
+static flick::capture::ReplaySnapshot replay_snapshot() {
+    std::lock_guard<std::mutex> lock(g_history_mutex);
+    return g_history.snapshot();
+}
 
 static std::filesystem::path runtime_bin_directory() {
     wchar_t file_name[32768] = {};
@@ -149,21 +179,21 @@ static void on_replay_saved(void *data, calldata_t *cd) {
     std::filesystem::file_time_type requested_at;
     {
         std::lock_guard<std::mutex> lock(g_state_mutex);
-        if (!g_cap.save_in_progress || !g_cap.replay_output ||
+        if (!g_cap.save.pending() || !g_cap.replay_output ||
             g_cap.replay_output != output) return;
-        save_id = g_cap.pending_save_id;
+        save_id = g_cap.save.id();
         out_dir = g_cap.output_dir;
         requested_at = g_cap.pending_save_walltime;
         tracks = g_cap.track_names;
     }
 
     auto reject = [&](const char *message) {
+        bool rejected = false;
         {
             std::lock_guard<std::mutex> lock(g_state_mutex);
-            if (g_cap.replay_output == output && g_cap.pending_save_id == save_id)
-                g_cap.save_in_progress = false;
+            if (g_cap.replay_output == output) rejected = g_cap.save.complete(save_id);
         }
-        send_event("save_failed", {{"reason", message}, {"save_id", save_id}});
+        if (rejected) send_event("save_failed", {{"reason", message}, {"save_id", save_id}});
     };
 
     // The OBS saved signal may omit the path. Query THIS output, not the
@@ -204,26 +234,23 @@ static void on_replay_saved(void *data, calldata_t *cd) {
 
     // Each request gets a distinct immutable name even when multiple saves
     // occur within the same wall-clock second. MoveFileW never replaces.
-    std::string safe_id;
-    for (unsigned char c : save_id) {
-        if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
-            (c >= '0' && c <= '9') || c == '-' || c == '_')
-            safe_id.push_back(static_cast<char>(c));
-    }
-    if (safe_id.empty()) {
+    if (!flick::capture::valid_save_id(save_id)) {
         reject("Replay save ID was invalid");
         return;
     }
-    auto target = directory / std::filesystem::u8path("Flick_" + safe_id + ".mkv");
-    if (!MoveFileW(source.c_str(), target.c_str())) {
-        reject("Could not finalize the unique replay file without overwriting another clip");
-        return;
-    }
-
+    auto target = directory / std::filesystem::u8path("Flick_" + save_id + ".mkv");
+    bool moved = false;
     {
         std::lock_guard<std::mutex> lock(g_state_mutex);
-        if (g_cap.replay_output == output && g_cap.pending_save_id == save_id)
-            g_cap.save_in_progress = false;
+        if (g_cap.replay_output != output || !g_cap.save.pending() || g_cap.save.id() != save_id) return;
+        // Commit ownership and the atomic rename together: timeout cannot
+        // concurrently fail this ID and let a late mux publish another save.
+        moved = MoveFileW(source.c_str(), target.c_str()) != FALSE;
+        g_cap.save.complete(save_id);
+    }
+    if (!moved) {
+        send_event("save_failed", {{"reason", "Could not finalize the unique replay file without overwriting another clip"}, {"save_id", save_id}});
+        return;
     }
     send_event("replay_saved", {
         {"save_id", save_id},
@@ -242,6 +269,16 @@ struct WindowInfo {
     int height = 0;
 };
 
+static bool utf8_from_wide(const wchar_t *value, std::string &result) {
+    const int bytes = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, value, -1, nullptr, 0, nullptr, nullptr);
+    if (bytes <= 0) return false;
+    std::string converted(static_cast<size_t>(bytes), '\0');
+    if (!WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, value, -1, converted.data(), bytes, nullptr, nullptr)) return false;
+    converted.pop_back();
+    result = std::move(converted);
+    return true;
+}
+
 static BOOL CALLBACK EnumWindowsProc(HWND hwnd, LPARAM lParam) {
     auto *list = reinterpret_cast<std::vector<WindowInfo>*>(lParam);
     if (!IsWindowVisible(hwnd) || IsIconic(hwnd)) return TRUE;
@@ -255,19 +292,19 @@ static BOOL CALLBACK EnumWindowsProc(HWND hwnd, LPARAM lParam) {
     if (exStyle & WS_EX_TOOLWINDOW) return TRUE;
 
     int titleLen = GetWindowTextLengthW(hwnd);
-    if (titleLen <= 0) return TRUE;
+    if (titleLen <= 0 || titleLen > 32768) return TRUE;
 
-    RECT rc;
-    GetWindowRect(hwnd, &rc);
+    RECT rc = {};
+    if (!GetWindowRect(hwnd, &rc)) return TRUE;
     int w = rc.right - rc.left;
     int h = rc.bottom - rc.top;
     if (w < 100 || h < 100) return TRUE;
 
     std::vector<wchar_t> wtitle(titleLen + 1);
-    GetWindowTextW(hwnd, wtitle.data(), titleLen + 1);
+    if (!GetWindowTextW(hwnd, wtitle.data(), titleLen + 1)) return TRUE;
 
-    wchar_t clsName[256];
-    GetClassNameW(hwnd, clsName, 256);
+    wchar_t clsName[256] = {};
+    if (!GetClassNameW(hwnd, clsName, 256)) return TRUE;
     if (wcscmp(clsName, L"Progman") == 0 || wcscmp(clsName, L"WorkerW") == 0 || wcscmp(clsName, L"Shell_TrayWnd") == 0) {
         return TRUE;
     }
@@ -278,24 +315,22 @@ static BOOL CALLBACK EnumWindowsProc(HWND hwnd, LPARAM lParam) {
     std::string exeName;
     HANDLE hProc = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
     if (hProc) {
-        wchar_t path[MAX_PATH];
+        wchar_t path[MAX_PATH] = {};
         DWORD size = MAX_PATH;
         if (QueryFullProcessImageNameW(hProc, 0, path, &size)) {
             wchar_t *slash = wcsrchr(path, L'\\');
             std::wstring wexe = (slash ? slash + 1 : path);
-            char cexe[256];
-            WideCharToMultiByte(CP_UTF8, 0, wexe.c_str(), -1, cexe, sizeof(cexe), nullptr, nullptr);
-            exeName = cexe;
+            utf8_from_wide(wexe.c_str(), exeName);
         }
         CloseHandle(hProc);
     }
 
-    char ctitle[512];
-    WideCharToMultiByte(CP_UTF8, 0, wtitle.data(), -1, ctitle, sizeof(ctitle), nullptr, nullptr);
+    std::string title;
+    if (!utf8_from_wide(wtitle.data(), title)) return TRUE;
 
     WindowInfo info;
     info.hwnd = reinterpret_cast<uint64_t>(hwnd);
-    info.title = ctitle;
+    info.title = std::move(title);
     info.pid = pid;
     info.exe_name = exeName;
     info.width = w;
@@ -331,8 +366,8 @@ static BOOL CALLBACK EnumMonitorsProc(HMONITOR hMon, HDC hdc, LPRECT rc, LPARAM 
     if (GetMonitorInfoW(hMon, &mi)) {
         MonitorInfo minfo;
         minfo.index = static_cast<int>(list->size());
-        char cdev[128];
-        WideCharToMultiByte(CP_UTF8, 0, mi.szDevice, -1, cdev, sizeof(cdev), nullptr, nullptr);
+        char cdev[128] = {};
+        if (!WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, mi.szDevice, -1, cdev, sizeof(cdev), nullptr, nullptr)) return TRUE;
         minfo.device_name = cdev;
         minfo.width = mi.rcMonitor.right - mi.rcMonitor.left;
         minfo.height = mi.rcMonitor.bottom - mi.rcMonitor.top;
@@ -340,6 +375,34 @@ static BOOL CALLBACK EnumMonitorsProc(HMONITOR hMon, HDC hdc, LPRECT rc, LPARAM 
         list->push_back(minfo);
     }
     return TRUE;
+}
+
+static bool selected_target_available(std::string &reason) {
+    if (g_cap.target_type == "window") {
+        DWORD pid = 0;
+        GetWindowThreadProcessId(g_cap.window_hwnd, &pid);
+        DWORD cloaked = 0;
+        const bool is_cloaked = SUCCEEDED(DwmGetWindowAttribute(g_cap.window_hwnd, DWMWA_CLOAKED, &cloaked, sizeof(cloaked))) && cloaked;
+        if (!IsWindow(g_cap.window_hwnd) || !pid || pid != g_cap.window_pid ||
+            !IsWindowVisible(g_cap.window_hwnd) || IsIconic(g_cap.window_hwnd) || is_cloaked) {
+            reason = "Selected window is closed, hidden or minimized; reselect a visible window";
+            return false;
+        }
+    } else if (g_cap.target_type == "monitor") {
+        std::vector<MonitorInfo> monitors;
+        EnumDisplayMonitors(nullptr, nullptr, EnumMonitorsProc, reinterpret_cast<LPARAM>(&monitors));
+        const auto found = std::find_if(monitors.begin(), monitors.end(), [](const MonitorInfo &monitor) {
+            return !g_cap.monitor_id.empty() && monitor.device_name == g_cap.monitor_id;
+        });
+        if (found == monitors.end()) {
+            reason = "Selected monitor was disconnected; reselect a display";
+            return false;
+        }
+    } else {
+        reason = "Selected capture target is unavailable";
+        return false;
+    }
+    return true;
 }
 
 // Initialization of OBS engine
@@ -429,8 +492,10 @@ static bool start_capture_attempt(const json &params, const flick::capture::Enco
 
     g_cap.target_type = params.value("target_type", "monitor");
     g_cap.monitor_index = params.value("monitor_index", 0);
+    g_cap.monitor_id.clear();
     uint64_t hwnd_raw = params.value("window_hwnd", 0ULL);
     g_cap.window_hwnd = reinterpret_cast<HWND>(hwnd_raw);
+    g_cap.window_pid = 0;
     g_cap.fps = profile.fps;
     g_cap.width = profile.width;
     g_cap.height = profile.height;
@@ -468,73 +533,44 @@ static bool start_capture_attempt(const json &params, const flick::capture::Enco
             SetThreadDesktop(hdesk);
             CloseDesktop(hdesk);
         }
-        if (!IsWindow(g_cap.window_hwnd)) {
-            out_err = "Target window handle is invalid or closed";
+        GetWindowThreadProcessId(g_cap.window_hwnd, &g_cap.window_pid);
+        if (!selected_target_available(out_err)) {
+            return false;
+        }
+        struct dstr title = {}, window_class = {}, executable = {};
+        ms_get_window_title(&title, g_cap.window_hwnd);
+        ms_get_window_class(&window_class, g_cap.window_hwnd);
+        ms_get_window_exe(&executable, g_cap.window_hwnd);
+        const std::string selected_title = title.array ? title.array : "";
+        const std::string selected_class = window_class.array ? window_class.array : "";
+        const std::string selected_exe = executable.array ? executable.array : "";
+        dstr_free(&title); dstr_free(&window_class); dstr_free(&executable);
+        const auto identity = flick::capture::window_identity(selected_title, selected_class, selected_exe);
+        // Match OBS's own WGC resolver before accepting the request. A second
+        // window with the same title must not silently replace the chosen HWND.
+        if (ms_find_window_top_level(EXCLUDE_MINIMIZED, WINDOW_PRIORITY_TITLE, selected_class.c_str(),
+                                     selected_title.c_str(), selected_exe.c_str()) != g_cap.window_hwnd) {
+            out_err = "Selected window cannot be identified uniquely; bring it forward and select it again";
             return false;
         }
         obs_data_t *w_settings = obs_data_create();
-        // OBS window capture expects title:class:exe format
-        wchar_t wtitle[256] = {0};
-        wchar_t wcls[256] = {0};
-        GetWindowTextW(g_cap.window_hwnd, wtitle, 256);
-        GetClassNameW(g_cap.window_hwnd, wcls, 256);
-        DWORD pid = 0;
-        GetWindowThreadProcessId(g_cap.window_hwnd, &pid);
-        wchar_t wexe[MAX_PATH] = {0};
-        HANDLE hProc = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
-        if (hProc) {
-            DWORD sz = MAX_PATH;
-            QueryFullProcessImageNameW(hProc, 0, wexe, &sz);
-            CloseHandle(hProc);
-        }
-        wchar_t *slash = wcsrchr(wexe, L'\\');
-        std::wstring exeOnly = (slash ? slash + 1 : wexe);
-
-        std::wstringstream wss;
-        wss << wtitle << L":" << wcls << L":" << exeOnly;
-        const std::wstring window_key = wss.str();
-        const int utf8_size = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, window_key.c_str(), -1, nullptr, 0, nullptr, nullptr);
-        if (utf8_size <= 0) {
-            obs_data_release(w_settings);
-            out_err = "Target window identity could not be encoded";
-            return false;
-        }
-        std::string cwindow(static_cast<size_t>(utf8_size), '\0');
-        if (!WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, window_key.c_str(), -1, cwindow.data(), utf8_size, nullptr, nullptr)) {
-            obs_data_release(w_settings);
-            out_err = "Target window identity could not be encoded";
-            return false;
-        }
-        obs_data_set_string(w_settings, "window", cwindow.c_str());
+        obs_data_set_string(w_settings, "window", identity.c_str());
+        obs_data_set_int(w_settings, "priority", WINDOW_PRIORITY_TITLE);
         obs_data_set_int(w_settings, "method", 2); // 2 = Windows Graphics Capture (non-injecting)
         obs_data_set_bool(w_settings, "cursor", true);
         g_cap.video_source = obs_source_create("window_capture", "WindowSource", w_settings, nullptr);
         obs_data_release(w_settings);
     } else {
         // Monitor capture
-        obs_data_t *m_settings = obs_data_create();
         std::vector<MonitorInfo> mons;
         EnumDisplayMonitors(nullptr, nullptr, EnumMonitorsProc, reinterpret_cast<LPARAM>(&mons));
-        std::string mon_id = params.value("monitor_id", "");
-        if (mon_id.empty()) {
-            if (g_cap.monitor_index < 0 || g_cap.monitor_index >= static_cast<int>(mons.size())) {
-                obs_data_release(m_settings);
-                out_err = "Selected monitor is unavailable; refusing silent monitor fallback";
-                return false;
-            }
-            mon_id = mons[g_cap.monitor_index].device_name;
-        } else {
-            auto selected = std::find_if(mons.begin(), mons.end(), [&](const MonitorInfo &monitor) {
-                return monitor.device_name == mon_id;
-            });
-            if (selected == mons.end()) {
-                obs_data_release(m_settings);
-                out_err = "Selected monitor is disconnected; refusing silent monitor fallback";
-                return false;
-            }
-            g_cap.monitor_index = static_cast<int>(std::distance(mons.begin(), selected));
-        }
+        std::vector<std::string> ids;
+        for (const auto &monitor : mons) ids.push_back(monitor.device_name);
+        g_cap.monitor_index = static_cast<int>(flick::capture::select_monitor(ids, params.value("monitor_id", ""), g_cap.monitor_index));
+        g_cap.monitor_id = mons[g_cap.monitor_index].device_name;
+        const auto &mon_id = g_cap.monitor_id;
         std::cerr << "[CaptureHost] Configured monitor capture: mon_id=" << mon_id << ", index=" << g_cap.monitor_index << ", method=2 (WGC)" << std::endl;
+        obs_data_t *m_settings = obs_data_create();
         if (!mon_id.empty()) {
             obs_data_set_string(m_settings, "monitor_id", mon_id.c_str());
         }
@@ -667,6 +703,13 @@ static bool start_capture_attempt(const json &params, const flick::capture::Enco
         obs_output_set_audio_encoder(g_cap.replay_output, g_cap.audio_encoders[t], static_cast<size_t>(t));
     }
 
+    {
+        std::lock_guard<std::mutex> lock(g_history_mutex);
+        g_history.reset(g_cap.duration_sec, g_cap.buffer_mb, g_cap.fps);
+        g_history_enabled = true;
+        g_history_failed = false;
+    }
+    obs_output_add_packet_callback(g_cap.replay_output, on_replay_packet, nullptr);
     signal_handler_connect(obs_output_get_signal_handler(g_cap.replay_output), "saved", on_replay_saved, g_cap.replay_output);
 
     if (!obs_output_start(g_cap.replay_output)) {
@@ -715,7 +758,6 @@ static bool start_capture_session(const json &params, std::string &out_err) {
             return false;
         }
         g_cap.state = CaptureState::Starting;
-        g_cap.save_in_progress = false;
     }
     try {
         cleanup_capture_resources();
@@ -727,8 +769,7 @@ static bool start_capture_session(const json &params, std::string &out_err) {
         (void)flick::capture::candidates(requested, allow_software, {});
         const auto bootstrap = flick::capture::profile_for(*flick::capture::find_encoder("obs_x264"), profile);
         const int duration = params.value("duration_sec", 30), buffer = params.value("buffer_mb", 256);
-        if (duration < 1 || duration > 300 || buffer < 16 || buffer > 2048)
-            throw std::invalid_argument("Replay duration or buffer memory limit is unsupported.");
+        flick::capture::validate_replay_limits(duration, buffer);
         if (!g_obs_initialized && !ensure_obs_init(bootstrap.width, bootstrap.height, bootstrap.fps)) {
             out_err = "OBS D3D11 capture initialization failed. Install current GPU drivers and the Microsoft Visual C++ v14 x64 runtime; Windows graphics support is required.";
             internal_stop_capture("initialization_failed");
@@ -786,15 +827,39 @@ static bool start_capture_session(const json &params, std::string &out_err) {
 // Release OBS worker/output resources without holding g_state_mutex: saved
 // callbacks need that mutex, including callbacks already in flight at stop.
 static void cleanup_capture_resources() {
-    obs_output_t *output = nullptr;
+    // Keep an accepted save's callback connected while its mux finishes.
+    // Command handling is serialized; workers may settle the request while
+    // this bounded wait owns neither the state nor the OBS signal mutex.
+    auto save_deadline = std::chrono::steady_clock::now();
     {
         std::lock_guard<std::mutex> lock(g_state_mutex);
-        g_cap.save_in_progress = false;
+        if (g_cap.save.pending()) save_deadline = g_cap.pending_save_start + std::chrono::seconds(15);
+    }
+    for (;;) {
+        bool pending = false;
+        { std::lock_guard<std::mutex> lock(g_state_mutex); pending = g_cap.save.pending(); }
+        if (!pending || std::chrono::steady_clock::now() >= save_deadline) break;
+        std::this_thread::sleep_for(std::chrono::milliseconds(20));
+    }
+    obs_output_t *output = nullptr;
+    std::string failed_save;
+    {
+        std::lock_guard<std::mutex> lock(g_state_mutex);
+        failed_save = g_cap.save.fail_pending();
         g_cap.is_armed = false;
         output = g_cap.replay_output;
         g_cap.replay_output = nullptr;
     }
+    if (!failed_save.empty())
+        send_event("save_failed", {{"save_id", failed_save}, {"reason", "Replay save did not finish before capture stopped"}});
+    {
+        std::lock_guard<std::mutex> lock(g_history_mutex);
+        g_history_enabled = false;
+    }
     if (output) {
+        // OBS removes packet callbacks under the callback-list mutex, waiting
+        // for this metadata observer without the state/history locks held.
+        obs_output_remove_packet_callback(output, on_replay_packet, nullptr);
         // In OBS 32.2.2, disconnect takes the same per-signal mutex that is
         // held while callbacks execute. From this command thread it waits
         // for any in-flight saved callback before the local owner is freed.
@@ -808,6 +873,11 @@ static void cleanup_capture_resources() {
             obs_output_force_stop(output);
         }
         obs_output_release(output);
+    }
+    {
+        std::lock_guard<std::mutex> lock(g_history_mutex);
+        g_history.reset(30, 256, 30);
+        g_history_failed = false;
     }
 
     if (g_cap.video_encoder) {
@@ -852,6 +922,8 @@ static void cleanup_capture_resources() {
     // before a retry changes the video canvas/device resources.
     if (g_obs_initialized) obs_wait_for_destroy_queue();
 
+    { std::lock_guard<std::mutex> lock(g_state_mutex); g_cap.save.reset(); }
+
     g_cap.encoder_id.clear();
     g_cap.encoder_name.clear();
     g_cap.software_fallback = false;
@@ -859,12 +931,19 @@ static void cleanup_capture_resources() {
 
 // Stop is called by the command reader, never while holding g_state_mutex.
 static void internal_stop_capture(const std::string &reason) {
+    bool transitioning = false;
+    {
+        std::lock_guard<std::mutex> lock(g_state_mutex);
+        transitioning = g_cap.state != CaptureState::Off;
+        if (transitioning) g_cap.state = CaptureState::Stopping;
+        g_cap.is_armed = false;
+    }
+    if (transitioning) send_event("state_changed", {{"state", "Stopping"}, {"reason", reason}});
     cleanup_capture_resources();
     {
         std::lock_guard<std::mutex> lock(g_state_mutex);
         g_cap.state = CaptureState::Off;
         g_cap.is_armed = false;
-        g_cap.save_in_progress = false;
     }
 
     json d;
@@ -874,21 +953,37 @@ static void internal_stop_capture(const std::string &reason) {
 }
 
 // Save replay buffer request
-static bool trigger_save_replay(const std::string &save_id, const std::string &prefix, std::string &out_err) {
+static bool trigger_save_replay(const std::string &save_id, const std::string &, std::string &out_err) {
     std::lock_guard<std::mutex> lock(g_state_mutex);
     if (!g_cap.replay_output || !obs_output_active(g_cap.replay_output)) {
         out_err = "Replay buffer is not active";
         return false;
     }
 
-    if (g_cap.save_in_progress) {
-        out_err = "A save request is already in progress";
+    if (!selected_target_available(out_err)) {
+        g_cap.state = CaptureState::Faulted;
+        g_cap.is_armed = false;
+        send_event("fault", {{"reason", out_err}});
+        return false;
+    }
+    if (!g_cap.video_source || !obs_source_get_width(g_cap.video_source) || !obs_source_get_height(g_cap.video_source) ||
+        !replay_snapshot().save_ready) {
+        out_err = "No decodable replay video is retained yet; wait for the selected source to produce video";
         return false;
     }
 
-    g_cap.save_in_progress = true;
-    g_cap.pending_save_id = save_id;
-    g_cap.pending_save_prefix = prefix;
+    if (!flick::capture::valid_save_id(save_id)) {
+        out_err = "Save ID must contain 1 to 128 letters, digits, dashes or underscores";
+        return false;
+    }
+    if (g_cap.save.pending()) {
+        out_err = "A save request is already in progress";
+        return false;
+    }
+    if (!g_cap.save.begin(save_id)) {
+        out_err = "Previous replay save failed; restart capture before saving again";
+        return false;
+    }
     g_cap.pending_save_start = std::chrono::steady_clock::now();
     g_cap.pending_save_walltime = std::filesystem::file_time_type::clock::now();
 
@@ -898,7 +993,7 @@ static bool trigger_save_replay(const std::string &save_id, const std::string &p
     bool accepted = ph && proc_handler_call(ph, "save", &cd);
     calldata_free(&cd);
     if (!accepted) {
-        g_cap.save_in_progress = false;
+        g_cap.save.complete(save_id);
         out_err = "Replay buffer did not accept save operation";
         return false;
     }
@@ -922,56 +1017,57 @@ static json get_current_status() {
         send_event("fault", {{"reason", detail && *detail ? detail : "Capture output stopped unexpectedly; check GPU drivers or try CPU compatibility mode"}});
     }
 
-    double elapsed = 0.0;
+    std::string target_error;
+    bool target_valid = true;
+    bool source_ready = false;
+    auto capturing = [&] { return g_cap.state == CaptureState::Buffering || g_cap.state == CaptureState::Armed || g_cap.state == CaptureState::Paused; };
+    if (capturing()) {
+        target_valid = selected_target_available(target_error);
+        source_ready = g_cap.video_source && obs_source_get_width(g_cap.video_source) && obs_source_get_height(g_cap.video_source);
+        if (!target_valid || (!source_ready && std::chrono::steady_clock::now() - g_cap.start_time > std::chrono::seconds(5))) {
+            g_cap.state = CaptureState::Faulted;
+            g_cap.is_armed = false;
+            fault_reason = "capture_target_lost";
+            if (target_error.empty()) target_error = "Selected source did not produce video; reselect a visible source or check graphics support";
+            send_event("fault", {{"reason", target_error}});
+        }
+    }
+    const auto history = replay_snapshot();
+    {
+        std::lock_guard<std::mutex> history_lock(g_history_mutex);
+        if (capturing() && g_history_failed) {
+            g_cap.state = CaptureState::Faulted;
+            g_cap.is_armed = false;
+            fault_reason = "capture_buffer_tracking_failed";
+            send_event("fault", {{"reason", "Replay buffer tracking failed; restart capture"}});
+        }
+    }
     if (g_cap.state == CaptureState::Buffering || g_cap.state == CaptureState::Armed) {
-        auto now = std::chrono::steady_clock::now();
-        elapsed = std::chrono::duration<double>(now - g_cap.start_time).count();
-        if (elapsed >= g_cap.duration_sec && g_cap.state == CaptureState::Buffering) {
-            g_cap.state = CaptureState::Armed;
-            g_cap.is_armed = true;
-            json d;
-            d["state"] = "Armed";
-            send_event("state_changed", d);
+        const auto next_state = source_ready && history.save_ready ? CaptureState::Armed : CaptureState::Buffering;
+        g_cap.is_armed = next_state == CaptureState::Armed;
+        if (g_cap.state != next_state) {
+            g_cap.state = next_state;
+            send_event("state_changed", {{"state", state_to_string(next_state)}});
         }
     }
 
-    double buffered = (elapsed > g_cap.duration_sec) ? static_cast<double>(g_cap.duration_sec) : elapsed;
-    if (g_cap.save_in_progress &&
+    const double buffered = capturing() && source_ready ? (std::min)(static_cast<double>(g_cap.duration_sec), history.seconds) : 0.0;
+    if (g_cap.save.pending() &&
         std::chrono::steady_clock::now() - g_cap.pending_save_start > std::chrono::seconds(15)) {
-        g_cap.save_in_progress = false;
-        send_event("save_failed", {{"reason", "Replay save timed out after 15 seconds"}});
+        const auto expired_id = g_cap.save.fail_pending();
+        g_cap.state = CaptureState::Faulted;
+        g_cap.is_armed = false;
+        fault_reason = "capture_save_timed_out";
+        send_event("save_failed", {{"reason", "Replay save timed out after 15 seconds; capture stopped to protect save identity"}, {"save_id", expired_id}});
     }
     j["buffered_sec"] = buffered;
     j["max_sec"] = g_cap.duration_sec;
     j["target_type"] = g_cap.target_type;
     j.update(capture_configuration_json());
     j["buffered_duration_estimated"] = true;
+    j["buffer_tracking_limited"] = history.tracking_limited;
     j["tracks"] = g_cap.track_names;
-
-    // Check target window liveness
-    if (g_cap.target_type == "window" && g_cap.window_hwnd) {
-        HDESK hdesk = OpenDesktopW(L"default", 0, FALSE, GENERIC_ALL);
-        if (hdesk) {
-            SetThreadDesktop(hdesk);
-            CloseDesktop(hdesk);
-        }
-        if (!IsWindow(g_cap.window_hwnd)) {
-            j["target_valid"] = false;
-            // Trip fault
-            if (g_cap.state != CaptureState::Faulted && g_cap.state != CaptureState::Off) {
-                g_cap.state = CaptureState::Faulted;
-                g_cap.is_armed = false;
-                fault_reason = "capture_target_lost";
-                json fd;
-                fd["reason"] = "Target window was closed";
-                send_event("fault", fd);
-            }
-        } else {
-            j["target_valid"] = true;
-        }
-    } else {
-        j["target_valid"] = true;
-    }
+    j["target_valid"] = target_valid;
 
     j["state"] = state_to_string(g_cap.state);
     j["is_armed"] = g_cap.is_armed.load();
@@ -1070,6 +1166,8 @@ int main(int argc, char **argv) {
                 } else {
                     send_response(id, false, nullptr, err);
                 }
+                if (g_cap.state == CaptureState::Faulted)
+                    internal_stop_capture("capture_target_lost");
             }
             else if (cmd == "get_status") {
                 json st = get_current_status();

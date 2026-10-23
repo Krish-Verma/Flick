@@ -1,41 +1,17 @@
-# Flick v1.0.2 — Windows NVIDIA NVENC Preview 2
+# Flick 1.0.5 — Windows compatibility candidate (UNSIGNED)
 
-**The current Flick preview for Windows 11 x64 PCs with compatible NVIDIA NVENC graphics.** This version contains the new native Flick interface, the lighter video/thumbnail handling, and a standard Windows setup wizard. It supersedes the previous v1.0.0 ZIP-only build for preview testers.
+This candidate adds automatic NVIDIA NVENC, AMD AMF and Intel Quick Sync H.264 recording, with an optional CPU fallback capped at 720p/30 fps. Sharing retries with CPU encoding if NVENC is unavailable. The existing purple interface, refined toolbar icons, subtle gradients and compact share panel remain.
 
-## Install in one click
+Replay readiness now follows observed decodable packets, and quitting waits for accepted replay saves and library indexing. Damaged library indexes are preserved instead of overwritten. Imported portrait/rotated and odd-sized video receives compatible export dimensions. FFmpeg is updated to the pinned 9.0.2 build with its exact upstream license and build notices.
 
-**Download [Flick-Setup.exe](https://github.com/Krish-Verma/Flick/releases/download/v1.0.2-preview.2/Flick-Setup.exe) from the Assets list below.** Double-click the file after verifying its SHA-256 and follow the Windows installation wizard. You can launch Flick from the Start Menu, optionally add a desktop shortcut, and uninstall it from Windows Settings > Apps > Installed Apps.
+## Installation and updates
 
-Flick bundles .NET, OBS capture runtime, FFmpeg and FFprobe. No separate launcher, SDK, installer manager or developer setup is needed.
+Use Flick-Setup.exe for a per-user installation. Existing installed Flick 1.0.4 copies can check Settings → General → Software Updates once this candidate is published. Older copies without the installer updater need one manual upgrade. Portable copies require quitting Flick and replacing the extracted application folder.
 
-**Portable option:** Download Flick-v1.0.2-win-x64.zip instead, extract the entire folder, then launch Flick.exe. Keep its bundled tools folder beside the EXE.
+Windows 11 x64, a working Direct3D 11 driver, and Microsoft Visual C++ v14 x64 runtime are required. Keep the bundled tools together. Verify the downloaded installer against SHA256SUMS.txt from the same release.
 
-## Normal uninstall, compatibility, and downloaded installer
+## Qualification
 
-Flick now has **Settings > General > Uninstall Flick…**, as well as Windows Installed Apps and a Start Menu uninstall shortcut. Uninstalling removes program files and owned registration; the uninstaller asks separately (No by default) whether to remove the Flick settings and thumbnail cache. Original recordings, exports and imported videos are **always preserved**.
+This is an unsigned compatibility candidate. Windows may block it; SHA-256 checks do not confer publisher trust. SignPath approval and a trusted signed build are separate gates. No new NVIDIA, AMD, Intel, hybrid or CPU hardware recording row is qualified by hosted CI. See docs/WINDOWS-GPU-COMPATIBILITY.md and docs/RELEASE-READINESS-1.0.5.md for current evidence and outstanding acceptance.
 
-The downloaded Flick-Setup.exe usually stays in the browser Downloads directory; after you run it, Windows installs the real application under LocalAppData/Programs/Flick. Delete the Setup download manually if you do not wish to keep it. No executable can guarantee zero Windows logs or browser/download traces.
-
-Recording compatibility is restricted to **Windows 11 x64 with NVIDIA NVENC**. AMD/Intel-only systems and ARM computers are not currently supported for recording. Windows 10 is unqualified. Do not interpret native Windows UI compatibility as capture/encoder support for every Windows PC.
-
-## What's in this preview
-
-- Native, compact WPF GUI with branded clip notifications, six settings groups, replay controls, gallery, playback, trim and audio editing.
-- Manual NVIDIA replay capture: recording always starts disabled. Global hotkeys: Ctrl+Shift+F9 toggles replay; Ctrl+Shift+F8 saves the recent clip.
-- Local H.264/AAC Discord-size MP4 export with 20 MB default and custom limits, plus file drag/drop and clipboard sharing.
-- Performance changes: bounded 320x180 thumbnails, 256-pixel decoded WPF images, lazy video decoder, search debounce and smaller hidden-to-tray poster footprint.
-- Traditional Windows installation and upgrade path under LocalAppData/Programs/Flick, preserving settings and library metadata in legacy LocalAppData/LocalClip.
-
-## QA and important limits
-
-GitHub CI checks native compilation, WPF builds, the offline test suite and final binary/checksum integrity. AntiGravity previously reported all 127 automated tests (120 offline plus seven real NVIDIA hardware tests) passing on RTX 5060 hardware, along with installation and safe-uninstall checks for the earlier code-equivalent preview. The measured prior working-set improvement was 163.10 to 154.35 MiB; the 120 MiB goal remains an engineering target.
-
-**This newly versioned installer still warrants a local smoke test.** Complete actual game FPS/1% low benchmarking, 100/125/150/200% screenshot review, and multi-hour endurance testing remain important acceptance gates. This is a private, unsigned **PRE-RELEASE**, not a public stable release.
-
-**Important:** This installer is unsigned. Windows may warn about an unknown publisher. Only run a file from your trusted private GitHub repo after confirming its SHA-256 against the attached SHA256SUMS.txt. Never ignore warnings for an unknown download. Installed clips and linked originals are not deliberately deleted when you uninstall Flick.
-
-The repository remains private until the owner signs off on open-source/third-party redistribution rights, release testing and publication. Source ZIP and tarball generated by GitHub for this tag correspond to the exact published preview source.
-
-## Feedback
-
-Use private repository issues with redacted logs and synthetic fixtures. Do not upload personal recorded video, webhook secrets or unrelated desktop screenshots.
+The release workflow must record the exact source SHA, successful CI runs, final asset hashes and installer upgrade receipt before publishing these notes. This source file does not itself announce a published release.

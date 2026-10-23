@@ -131,7 +131,7 @@ internal static class Program
         Invoke("CloseEditorContext");
         vm.CaptureStatus = "Armed";
         vm.BufferedDurationText = "~30.0s / 30s";
-        vm.StatusDetails = "Ready to Save: Full replay buffer available.";
+        vm.StatusDetails = "Ready to save retained replay.";
         typeof(MainViewModel).GetMethod("SetCaptureProfile", Private)!.Invoke(vm, new object[] {
             new CaptureEncodingProfile("obs_qsv11_v2", "Intel Quick Sync H.264", false, 1920, 1080, 60)
         });

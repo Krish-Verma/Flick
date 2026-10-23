@@ -6,7 +6,7 @@ $ErrorActionPreference = "Stop"
 
 $RootDir = (Get-Item $PSScriptRoot).Parent.FullName
 $DistDir = Join-Path $RootDir "dist"
-$PackageName = "Flick-v1.0.4-win-x64"
+$PackageName = "Flick-v1.0.5-win-x64"
 $PackageDir = Join-Path $DistDir $PackageName
 $ZipPath = Join-Path $DistDir "$PackageName.zip"
 
@@ -19,8 +19,12 @@ if (-not (Get-Command dotnet -ErrorAction SilentlyContinue)) { throw "dotnet SDK
 if (-not $SkipNativeBuild -and -not (Get-Command g++ -ErrorAction SilentlyContinue)) {
     throw "MinGW-w64 g++ not found on PATH"
 }
+if (-not $SkipNativeBuild -and -not (Get-Command windres -ErrorAction SilentlyContinue)) {
+    throw "MinGW-w64 windres is required for the capture worker's product/version metadata"
+}
 if (-not (Test-Path (Join-Path $RootDir "tools\\obs\\runtime\\bin\\64bit\\obs.dll"))) { throw "Missing pinned OBS runtime. Run scripts/setup_tools.ps1." }
 if (-not (Test-Path (Join-Path $RootDir "tools\\ffmpeg\\ffmpeg.exe"))) { throw "Missing FFmpeg runtime. Run scripts/setup_tools.ps1." }
+& (Join-Path $PSScriptRoot "check_ffmpeg_runtime.ps1") -RuntimeRoot (Join-Path $RootDir "tools\ffmpeg")
 & (Join-Path $PSScriptRoot "check_obs_runtime.ps1") -RuntimeRoot (Join-Path $RootDir "tools\obs\runtime")
 
 Write-Host "=== Step 2: Compiling Native CaptureHost (C++ MinGW) ===" -ForegroundColor Cyan
@@ -31,8 +35,11 @@ $HostInc = Join-Path $RootDir "src\LocalClip.CaptureHost"
 $ObsBin = Join-Path $RootDir "tools\obs\runtime\bin\64bit"
 
 if (-not $SkipNativeBuild) {
+    $ResourceOut = Join-Path $DistDir "capture-version.o"
+    windres -I "$HostInc" (Join-Path $HostInc "nativeversion.rc") -O coff -o "$ResourceOut"
+    if ($LASTEXITCODE -ne 0) { throw "Failed to compile native capture product/version resources" }
     g++ -O2 -std=c++17 -static-libgcc -static-libstdc++ `
-        -I "$ObsInc" -I "$HostInc" "$HostSrc" `
+        -I "$ObsInc" -I "$HostInc" "$HostSrc" "$ResourceOut" `
         -L "$ObsBin" "-Wl,-Bstatic" -lwinpthread "-Wl,-Bdynamic" -lobs -ldwmapi `
         -o "$HostOut"
     if ($LASTEXITCODE -ne 0) { throw "Failed to compile LocalClip.CaptureHost.exe" }
@@ -65,6 +72,9 @@ New-Item -ItemType Directory -Path (Join-Path $ToolsDest "obs") -Force | Out-Nul
 # Copy FFmpeg tools
 Copy-Item (Join-Path $RootDir "tools\ffmpeg\ffmpeg.exe") (Join-Path $ToolsDest "ffmpeg\") -Force
 Copy-Item (Join-Path $RootDir "tools\ffmpeg\ffprobe.exe") (Join-Path $ToolsDest "ffmpeg\") -Force
+Copy-Item (Join-Path $RootDir "tools\ffmpeg\UPSTREAM-LICENSE.txt") (Join-Path $ToolsDest "ffmpeg\") -Force
+Copy-Item (Join-Path $RootDir "tools\ffmpeg\UPSTREAM-README.txt") (Join-Path $ToolsDest "ffmpeg\") -Force
+& (Join-Path $PSScriptRoot "check_ffmpeg_runtime.ps1") -RuntimeRoot (Join-Path $ToolsDest "ffmpeg")
 
 # Copy OBS runtime
 Copy-Item (Join-Path $RootDir "tools\obs\runtime") (Join-Path $ToolsDest "obs\") -Recurse -Force
@@ -91,7 +101,7 @@ if (-not (Test-Path -LiteralPath (Join-Path $PackageDir "Flick.exe"))) {
 
 # Generate User Readme
 $Readme = @"
-# Flick v1.0.4 Preview — Windows x64 compatibility candidate
+# Flick v1.0.5 Preview — Windows x64 compatibility candidate
 
 Fast, private, offline-first gameplay clipper replicating the SteelSeries Moments workflow.
 
@@ -133,8 +143,8 @@ $ExeHash = (Get-FileHash -Path (Join-Path $PackageDir "Flick.exe") -Algorithm SH
 $HostHash = (Get-FileHash -Path (Join-Path $PackageDir "tools\obs\runtime\bin\64bit\LocalClip.CaptureHost.exe") -Algorithm SHA256).Hash
 
 $ChecksumContent = @"
-# Flick v1.0.4 Preview (Windows x64 compatibility candidate) SHA-256 Checksums
-$ZipHash  Flick-v1.0.4-win-x64.zip
+# Flick v1.0.5 Preview (Windows x64 compatibility candidate) SHA-256 Checksums
+$ZipHash  Flick-v1.0.5-win-x64.zip
 $ExeHash  Flick.exe
 $HostHash  LocalClip.CaptureHost.exe
 "@

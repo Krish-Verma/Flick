@@ -8,7 +8,8 @@ Does not exercise GPU capture, UI appearance, Smart App Control, or publisher tr
 #>
 param(
     [string]$SetupPath = "dist/Flick-Setup.exe",
-    [string]$PackagePath = "dist/Flick-v1.0.4-win-x64"
+    [string]$PackagePath = "dist/Flick-v1.0.5-win-x64",
+    [string]$BaselineSetupPath = ""
 )
 
 $ErrorActionPreference = 'Stop'
@@ -29,8 +30,12 @@ function Resolve-RepositoryPath([string]$Path) {
 $setupFile = Resolve-RepositoryPath $SetupPath
 $packageDirectory = Resolve-RepositoryPath $PackagePath
 $packageExe = Join-Path $packageDirectory 'Flick.exe'
+$baselineFile = if ($BaselineSetupPath) { Resolve-RepositoryPath $BaselineSetupPath } else { $null }
 foreach ($file in @($setupFile, $packageExe)) {
     if (-not (Test-Path -LiteralPath $file -PathType Leaf)) { throw "Required smoke input missing: $file" }
+}
+if ($baselineFile -and -not (Test-Path -LiteralPath $baselineFile -PathType Leaf)) {
+    throw 'Previous-version Setup input is missing.'
 }
 
 $uninstallKey = 'Software\Microsoft\Windows\CurrentVersion\Uninstall\{F3C41F96-EF62-4CB1-A292-91EF3F6C18E8}_is1'
@@ -81,6 +86,8 @@ $testPassed = $false
 $waitTimer = $null
 $restartedFlick = @()
 $failureReason = $null
+$baselineInstalledHash = $null
+$baselineVersion = $null
 
 function Get-TestFlickProcess {
     foreach ($candidate in @(Get-Process -Name Flick -ErrorAction SilentlyContinue)) {
@@ -127,10 +134,10 @@ function Assert-InstalledFiles {
     Assert-DataPreserved
 }
 
-function Start-TestSetup([string]$LogPath, [string[]]$ExtraArguments = @()) {
+function Start-TestSetup([string]$LogPath, [string[]]$ExtraArguments = @(), [string]$InstallerFile = $setupFile) {
     $installerArguments = @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/NOICONS',
         "/DIR=`"$installDirectory`"", "/LOG=`"$LogPath`"") + $ExtraArguments
-    $process = Start-Process -FilePath $setupFile -ArgumentList $installerArguments -PassThru
+    $process = Start-Process -FilePath $InstallerFile -ArgumentList $installerArguments -PassThru
     $startedInstallers.Add($process)
     return $process
 }
@@ -152,9 +159,19 @@ function Read-SetupLog([string]$Path) {
 
 Write-Host "Installer lifecycle smoke evidence: $evidenceRoot"
 try {
-    $normalSetup = Start-TestSetup $normalLog
+    $initialSetup = if ($baselineFile) { $baselineFile } else { $setupFile }
+    $normalSetup = Start-TestSetup -LogPath $normalLog -InstallerFile $initialSetup
     Wait-ForSuccessfulSetup $normalSetup
-    Assert-InstalledFiles
+    if ($baselineFile) {
+        if (-not (Test-Path -LiteralPath $installedExe -PathType Leaf)) { throw 'Previous-version installation is missing.' }
+        $baselineInstalledHash = (Get-FileHash -LiteralPath $installedExe -Algorithm SHA256).Hash
+        $baselineVersion = (Get-Item -LiteralPath $installedExe).VersionInfo.ProductVersion
+        if ($baselineInstalledHash -ceq $packageHash -or $baselineVersion -notlike '1.0.4*') {
+            throw 'Baseline must be the distinct public Flick 1.0.4 installation.'
+        }
+        if (@(Get-FlickRegistration).Count -eq 0) { throw 'Previous version did not register the shared Flick AppId.' }
+        Assert-DataPreserved
+    } else { Assert-InstalledFiles }
     Start-Sleep -Seconds 2
     if (@(Get-TestFlickProcess).Count -ne 0) { throw 'A normal silent installation unexpectedly launched Flick.' }
     $initialRegistration = @(Get-FlickRegistration | ConvertTo-Json -Compress)
@@ -290,6 +307,10 @@ finally {
         SetupSha256 = (Get-FileHash -LiteralPath $setupFile -Algorithm SHA256).Hash
         PortableZipSha256 = if (Test-Path -LiteralPath $zipFile) { (Get-FileHash -LiteralPath $zipFile -Algorithm SHA256).Hash } else { $null }
         InstalledExeSha256 = $packageHash
+        BaselineSetupSha256 = if ($baselineFile) { (Get-FileHash -LiteralPath $baselineFile -Algorithm SHA256).Hash } else { $null }
+        BaselineInstalledExeSha256 = $baselineInstalledHash
+        BaselineVersion = $baselineVersion
+        UpgradedFromPreviousVersion = [bool]($testPassed -and $baselineFile)
         ParentPid = if ($null -ne $surrogate) { $surrogate.Id } else { $null }
         VerifiedParentWaitSeconds = if ($null -ne $waitTimer) { [Math]::Round($waitTimer.Elapsed.TotalSeconds, 2) } else { $null }
         RestartedFlickPid = if ($restartedFlick.Count -gt 0) { $restartedFlick[0].Id } else { $null }
