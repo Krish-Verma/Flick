@@ -962,6 +962,8 @@ public partial class MainWindow : Window
         EditorContextLayer.Visibility = Visibility.Visible;
         if (tool == "Audio") AudioExpander.IsExpanded = true;
         System.Windows.Automation.AutomationProperties.SetHelpText(button, "Open");
+        // Opening Share is navigation only; never starts export or posting.
+        if (tool == "Share") UpdateSharePresetSelection();
         CloseEditorTool.Focus();
         EditorContextScroll.ScrollToTop();
     }
