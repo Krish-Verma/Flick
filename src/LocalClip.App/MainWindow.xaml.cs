@@ -37,9 +37,7 @@ public partial class MainWindow : Window
     private readonly DispatcherTimer _playerTimer;
     private SettingsWindow? _settingsPage;
     private ConnectedFoldersWindow? _foldersPage;
-    private bool _foldersReturnToSettings;
-    private bool _settingsCaptureWasActive;
-    private bool _settingsMicrophoneWasEnabled;
+    private bool _foldersReturnToSettings;    private bool _settingsMicrophoneWasEnabled;
     private bool _isDraggingSlider = false;
     private bool _isRealClosing = false;
     private System.Windows.Point? _shareDragStart;
@@ -606,10 +604,9 @@ public partial class MainWindow : Window
             ShowWorkspacePage(_settingsPage);
             return;
         }
-        _settingsCaptureWasActive = _vm.CaptureStatus == "Armed" ||
-                                    _vm.CaptureStatus == "Buffering";
         _settingsMicrophoneWasEnabled = _vm.Settings.EnableMicrophone;
-        var settings = new SettingsWindow(_vm.Settings, _settingsCaptureWasActive);
+        var settings = new SettingsWindow(_vm.Settings,
+            () => _vm.CaptureStatus is "Armed" or "Buffering");
         settings.CloseRequested += CloseSettingsPage;
         settings.ManageFoldersRequested += (_, _) => OpenConnectedFolders();
         settings.PreviewNotificationRequested += (show, sound) =>
@@ -639,13 +636,14 @@ public partial class MainWindow : Window
         _vm.RefreshExportPreferences();
         UpdateSharePresetSelection();
         UpdateStatusBadgeColor();
-        if (_settingsCaptureWasActive && _settingsMicrophoneWasEnabled &&
+        bool captureActive = _vm.CaptureStatus is "Armed" or "Buffering";
+        if (captureActive && _settingsMicrophoneWasEnabled &&
             !_vm.Settings.EnableMicrophone)
         {
             _ = StopCaptureForMicPrivacyAsync();
             return;
         }
-        _vm.StatusDetails = _settingsCaptureWasActive
+        _vm.StatusDetails = captureActive
             ? "Preferences saved. New capture profile takes effect on the next manual replay start."
             : "Preferences saved. Replay remains off until manually started.";
     }

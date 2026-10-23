@@ -21,7 +21,9 @@ namespace LocalClip.App.Views;
 public partial class SettingsWindow : UserControl
 {
     private readonly AppSettings _settings;
-    private readonly bool _captureActive;
+    // The recording bar remains interactive while Settings is open; query
+    // live capture status at Save time instead of using a stale snapshot.
+    private readonly Func<bool> _isCaptureActive;
     private bool _loading;
     private string _activeCategory = "Recording";
 
@@ -32,11 +34,11 @@ public partial class SettingsWindow : UserControl
     public event Action<bool, bool>? PreviewNotificationRequested;
     public event EventHandler? ManageFoldersRequested;
 
-    public SettingsWindow(AppSettings settings, bool captureActive = false)
+    public SettingsWindow(AppSettings settings, Func<bool> isCaptureActive)
     {
         InitializeComponent();
         _settings = settings;
-        _captureActive = captureActive;
+        _isCaptureActive = isCaptureActive ?? throw new ArgumentNullException(nameof(isCaptureActive));
         Populate(settings);
         SelectCategory("Recording");
     }
@@ -284,7 +286,7 @@ public partial class SettingsWindow : UserControl
                 "Invalid Webhook");
             return;
         }
-        if (_captureActive && _settings.EnableMicrophone && ChkMicrophone.IsChecked != true &&
+        if (_isCaptureActive() && _settings.EnableMicrophone && ChkMicrophone.IsChecked != true &&
             MessageBox.Show("Turning off an active microphone will stop the replay buffer and discard unsaved footage. Continue?",
                 "Disable Microphone", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes)
             return;
