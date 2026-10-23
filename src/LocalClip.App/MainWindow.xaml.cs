@@ -263,7 +263,7 @@ public partial class MainWindow : Window
         {
             // Nonessential overlays must never break capture or file persistence.
             if (_vm.Settings.ShowClipSavedOverlay)
-                _notifyIcon?.ShowBalloonTip(1800, "Flick · Clip Saved",
+                _notifyIcon?.ShowBalloonTip(1800, "Clip Saved",
                     NotificationWaveRules.DurationText(clip.DurationSeconds),
                     System.Windows.Forms.ToolTipIcon.Info);
         }

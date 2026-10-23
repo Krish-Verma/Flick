@@ -5,5 +5,6 @@
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/LocalClip.Core.Tests/LocalClip.Core.Tests.csproj" />
+    <Project Path="tests/LocalClip.App.Tests/LocalClip.App.Tests.csproj" />
   </Folder>
 </Solution>
