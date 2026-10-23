@@ -676,14 +676,15 @@ static bool start_capture_attempt(const json &params, const flick::capture::Enco
         return false;
     }
 
-    // OBS may reroute a texture encoder to its hardware memory-copy variant.
-    // Report the encoder that actually initialized, not the requested ID.
-    if (const char *actual_id = obs_encoder_get_id(g_cap.video_encoder)) {
-        g_cap.encoder_id = actual_id;
-        if (const auto *actual = flick::capture::find_encoder(g_cap.encoder_id)) {
-            g_cap.encoder_name = actual->name;
-            g_cap.software_fallback = actual->software;
-        } else if (const char *name = obs_encoder_get_display_name(actual_id))
+    // The successful public registration is available through OBS's API.
+    // OBS 32.2.2 returns orig_info.id here; an internal texture-to-memory
+    // reroute stays within that vendor's hardware encoder and is not exposed.
+    if (const char *selected_id = obs_encoder_get_id(g_cap.video_encoder)) {
+        g_cap.encoder_id = selected_id;
+        if (const auto *selected = flick::capture::find_encoder(g_cap.encoder_id)) {
+            g_cap.encoder_name = selected->name;
+            g_cap.software_fallback = selected->software;
+        } else if (const char *name = obs_encoder_get_display_name(selected_id))
             g_cap.encoder_name = name;
     }
     const auto actual_width = obs_encoder_get_width(g_cap.video_encoder);
@@ -908,7 +909,19 @@ static bool trigger_save_replay(const std::string &save_id, const std::string &p
 static json get_current_status() {
     std::lock_guard<std::mutex> lock(g_state_mutex);
     json j;
-    
+    std::string fault_reason;
+
+    // A driver/encoder may fail after obs_output_start accepted the pipeline.
+    // Do not advance an inactive output to Armed just because time elapsed.
+    if ((g_cap.state == CaptureState::Buffering || g_cap.state == CaptureState::Armed || g_cap.state == CaptureState::Paused) &&
+        (!g_cap.replay_output || !obs_output_active(g_cap.replay_output))) {
+        g_cap.state = CaptureState::Faulted;
+        g_cap.is_armed = false;
+        fault_reason = "capture_output_stopped";
+        const char *detail = g_cap.replay_output ? obs_output_get_last_error(g_cap.replay_output) : nullptr;
+        send_event("fault", {{"reason", detail && *detail ? detail : "Capture output stopped unexpectedly; check GPU drivers or try CPU compatibility mode"}});
+    }
+
     double elapsed = 0.0;
     if (g_cap.state == CaptureState::Buffering || g_cap.state == CaptureState::Armed) {
         auto now = std::chrono::steady_clock::now();
@@ -928,10 +941,8 @@ static json get_current_status() {
         g_cap.save_in_progress = false;
         send_event("save_failed", {{"reason", "Replay save timed out after 15 seconds"}});
     }
-    j["state"] = state_to_string(g_cap.state);
     j["buffered_sec"] = buffered;
     j["max_sec"] = g_cap.duration_sec;
-    j["is_armed"] = g_cap.is_armed.load();
     j["target_type"] = g_cap.target_type;
     j.update(capture_configuration_json());
     j["buffered_duration_estimated"] = true;
@@ -949,6 +960,8 @@ static json get_current_status() {
             // Trip fault
             if (g_cap.state != CaptureState::Faulted && g_cap.state != CaptureState::Off) {
                 g_cap.state = CaptureState::Faulted;
+                g_cap.is_armed = false;
+                fault_reason = "capture_target_lost";
                 json fd;
                 fd["reason"] = "Target window was closed";
                 send_event("fault", fd);
@@ -959,6 +972,10 @@ static json get_current_status() {
     } else {
         j["target_valid"] = true;
     }
+
+    j["state"] = state_to_string(g_cap.state);
+    j["is_armed"] = g_cap.is_armed.load();
+    if (!fault_reason.empty()) j["fault_reason"] = fault_reason;
 
     // Process memory usage (private bytes)
     PROCESS_MEMORY_COUNTERS_EX pmc;
@@ -1059,7 +1076,7 @@ int main(int argc, char **argv) {
                 send_response(id, true, st);
                 if (g_cap.state == CaptureState::Faulted) {
                     // Do not leave an actively encoding source behind a faulted UI.
-                    internal_stop_capture("capture_target_lost");
+                    internal_stop_capture(st.value("fault_reason", "capture_fault"));
                 }
             }
             else if (cmd == "stop_capture") {

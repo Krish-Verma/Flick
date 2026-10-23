@@ -62,7 +62,7 @@ try {
         $cases.Count -ne 2 -or @($cases | Where-Object outcome -ne 'Passed').Count -ne 0) {
         throw 'GPU recording qualification requires both expected tests to execute and pass; skips or missing tests are not acceptance.'
     }
-    Write-Host 'Recording and decode checks passed for this exact machine and host binary.'
+    Write-Host 'Recording, MP4 export and decode checks passed for this exact machine and host binary.'
     Write-Host 'Inspect the MKVs for full-display framing, motion, audio sync, HDR appearance and game performance before qualifying the setup.'
 }
 finally {

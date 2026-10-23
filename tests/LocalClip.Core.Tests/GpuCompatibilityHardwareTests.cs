@@ -28,6 +28,8 @@ public sealed class GpuCompatibilityHardwareTests(ITestOutputHelper output)
         Directory.CreateDirectory(directory);
         var settings = AppSettings.CreateDefault();
         settings.OriginalsFolder = directory;
+        settings.ExportsFolder = Path.Combine(directory, "Exports");
+        settings.TempFolder = Path.Combine(directory, "Temp");
         settings.EnableMicrophone = false;
         settings.VideoEncoder = software ? "obs_x264" : "auto";
         settings.AllowSoftwareFallback = true;
@@ -91,6 +93,24 @@ public sealed class GpuCompatibilityHardwareTests(ITestOutputHelper output)
             Assert.InRange(probe.DurationSeconds, 12, 18);
             Assert.NotEmpty(probe.AudioTracks);
             await DecodeReplayAsync(file);
+            // Sharing must work on an AMD/Intel/CPU-only machine even with
+            // the separate overshoot preference disabled (the default).
+            settings.UseTwoPassSoftwareIfHardwareOvershoots = false;
+            foreach (var track in probe.AudioTracks) track.IsMuted = track.TrackIndex != 0;
+            var clip = new ClipMetadata {
+                OriginalFilePath = file, DurationSeconds = probe.DurationSeconds,
+                TrimStartSeconds = 0, TrimEndSeconds = probe.DurationSeconds,
+                Width = probe.Width, Height = probe.Height, AudioTracks = probe.AudioTracks
+            };
+            var exporter = new ClipExporter(Environment.GetEnvironmentVariable("FLICK_TEST_FFMPEG"), prober);
+            var export = await exporter.ExportForDiscordAsync(clip, settings);
+            Assert.True(export.Success, export.ErrorMessage);
+            Assert.InRange(export.FileSizeBytes, 1L, settings.DiscordTargetSizeMb * 1_000_000L);
+            var exported = await prober.ProbeFileAsync(export.ExportFilePath);
+            Assert.True(exported.IsValid, exported.ErrorMessage);
+            Assert.Equal("h264", exported.VideoCodec);
+            Assert.Equal("aac", Assert.Single(exported.AudioTracks).Codec);
+            await DecodeReplayAsync(export.ExportFilePath);
             output.WriteLine("Saved replay retained for visual/audio review: " + file);
         }
         finally

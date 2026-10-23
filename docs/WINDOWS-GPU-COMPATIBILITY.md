@@ -30,6 +30,11 @@ The CPU profile also caps video bitrate at 6,000 Kb/s, uses the ultrafast preset
 and limits x264 to one or two worker threads; these bounds are not an FPS guarantee.
 There is no claim of equal image quality, FPS impact or resource use across GPUs.
 
+Sharing also retries with CPU H.264 if the NVIDIA export encoder cannot run.
+That compatibility retry does not depend on the separate hardware-overshoot
+preference. Export still validates the size cap, media streams and complete decode
+before promoting a temporary output to a shareable file.
+
 The target remains **Windows 11 x86-64**, a working Direct3D 11 graphics/capture
 stack and current manufacturer graphics drivers. Software encoding replaces the
 video compression path; it still needs that graphics stack. Remote sessions,
@@ -113,7 +118,8 @@ selected display and its system audio; review and retain the resulting evidence.
 
 The manual [test_gpu_compatibility.ps1](../scripts/test_gpu_compatibility.ps1)
 runner records automatic selection and forced CPU compatibility, checks the
-reported encoder, probes both MKVs and performs a complete FFmpeg decode. Pass
+reported encoder, probes both MKVs, exports size-capped H.264/AAC MP4s and
+performs complete FFmpeg decodes. Pass
 the expected exact OBS encoder ID for that machine; do not accept an unplanned
 CPU fallback as proof that a vendor's hardware encoder worked. Example:
 
@@ -127,6 +133,9 @@ and `h264_texture_amf` (AMD). `obs_x264` is the CPU encoder. Vendor IDs containi
 they are not x264. If one of those paths is the intended test, pass its actual
 reported ID and record that distinction. The auto order is NVIDIA texture, Intel
 texture, AMD texture, registered vendor compatibility paths, then allowed x264.
+The reported ID identifies the successful public OBS registration. OBS may
+internally reroute its input path without exposing a different ID through the
+public API; the result does not prove a particular internal texture/copy path.
 Definitions: [Flick encoder policy](../src/LocalClip.CaptureHost/encoder_policy.hpp),
 [OBS NVENC IDs](https://github.com/obsproject/obs-studio/blob/32.2.2/plugins/obs-nvenc/nvenc.c),
 [OBS QSV IDs](https://github.com/obsproject/obs-studio/blob/32.2.2/plugins/obs-qsv11/obs-qsv11.c),
