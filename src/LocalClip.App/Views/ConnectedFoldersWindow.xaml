@@ -5,7 +5,8 @@
         Background="{DynamicResource Flick.Brush.Canvas}"
         Foreground="{DynamicResource Flick.Brush.TextPrimary}"
         FontFamily="{StaticResource Flick.Font.UI}"
-        UseLayoutRounding="True" SnapsToDevicePixels="True">
+        UseLayoutRounding="True" SnapsToDevicePixels="True"
+        PreviewKeyDown="Folders_PreviewKeyDown">
     <Grid Margin="20">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
@@ -92,7 +93,7 @@
             <Button Grid.Column="3" Content="Cancel Scan"
                     Style="{StaticResource Flick.Button.Secondary}"
                     Click="CancelScan_Click" Margin="0,0,8,0"/>
-            <Button Grid.Column="4" Content="Close" IsCancel="True"
+            <Button Grid.Column="4" Content="Close"
                     Style="{StaticResource Flick.Button.Primary}"
                     Click="Close_Click"/>
         </Grid>

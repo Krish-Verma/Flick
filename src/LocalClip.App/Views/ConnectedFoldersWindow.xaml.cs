@@ -120,6 +120,14 @@ public partial class ConnectedFoldersWindow : System.Windows.Controls.UserContro
 
     private void CancelScan_Click(object sender, RoutedEventArgs e) => _vm.CancelImport();
 
+    private void Folders_PreviewKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
+    {
+        if (e.Key != System.Windows.Input.Key.Escape) return;
+        e.Handled = true;
+        LeavePage();
+        CloseRequested?.Invoke();
+    }
+
     private void Close_Click(object sender, RoutedEventArgs e)
     {
         LeavePage();
