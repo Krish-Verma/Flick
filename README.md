@@ -16,7 +16,8 @@ Flick is a Windows-native game clipper for capturing the last 15–120 seconds, 
 - Two-handle trim, per-track audio mute/gain, local original/export preview; user-controlled export folder.
 - Size-capped H.264/AAC MP4 export for Discord (20 MB default, 10/50/100 MB and custom sizes), FileDrop drag and Copy File. Optional webhook posting is disabled by default and requires explicit consent.
 - Compact Flick-branded two-second Clip Saved notification and optional chime; each independently toggleable.
-- Native Windows application, full Flick squircle logo, dark graphite UI; no Electron or cloud account.
+- Native Windows application, optically aligned Flick logo and restrained graphite/lavender UI.
+- In-app update checks, verified downloads and confirmed install/restart for installed copies.
 
 ## What the current Windows build supports
 
@@ -30,22 +31,18 @@ Windows 11 x86-64 with a supported NVIDIA NVENC GPU is the qualified target. AMD
 
 ## Download Flick for Windows
 
-**Newest private preview: [Flick v1.0.2 Preview 2](https://github.com/Krish-Verma/Flick/releases/tag/v1.0.2-preview.2)**
+**[Flick v1.0.3 Preview 1 — UNSIGNED](https://github.com/Krish-Verma/Flick/releases/tag/v1.0.3-preview.1)**
 
-**[Flick-Setup.exe — legacy unsigned test installer (may be blocked)](https://github.com/Krish-Verma/Flick/releases/download/v1.0.2-preview.2/Flick-Setup.exe)**
+**[Download Flick-Setup.exe](https://github.com/Krish-Verma/Flick/releases/download/v1.0.3-preview.1/Flick-Setup.exe)**
 
-One EXE runs the Windows setup wizard. It installs Flick in the Start Menu, registers it in Windows Installed Apps, and offers an optional desktop shortcut. You don't need to install .NET, OBS, or FFmpeg separately. For a no-install option, download Flick-v1.0.2-win-x64.zip from the same release and extract the entire folder before launching Flick.exe.
+Run Setup to install Flick for your Windows account, with a Start Menu shortcut and optional desktop shortcut. The package includes .NET, OBS and FFmpeg. Windows may block this unsigned preview; it has no verified publisher identity. Check SHA-256 against the release's SHA256SUMS.txt. Trusted signing and physical Windows/NVIDIA acceptance remain pending.
 
-This preview is **unsigned** and intended for repository collaborators/testers while the repo is private. Verify SHA-256 against SHA256SUMS.txt and do not run an untrusted executable. The newer preview is separate from the older v1.0.0 stable release; full public-release qualification is still pending. See [Install/Upgrade Guide](docs/INSTALLATION-DISTRIBUTION.md) and [Release Process](docs/RELEASE-PROCESS.md).
+Older installed versions need **one manual upgrade** to this release. Install over the existing Flick installation without uninstalling it. Thereafter use **Settings → General → Software Updates** to check, download and install a newer release, with explicit confirmation before Flick restarts. An update waits for recording, clip saving, imports, exports, scans and uploads to finish. See [Software Updates](docs/SOFTWARE-UPDATES.md).
 
 ## Run or install
 
-The source builds two **different** local preview deliverables, with the installer additionally available directly from the GitHub preview release:
-
-1. **Flick-v1.0.2-win-x64.zip** — extract everything into one folder and launch **Flick.exe**. Do not move only the EXE: it requires the packaged OBS/FFmpeg runtime directory.
-2. **Flick-Setup.exe** — a conventional per-user Inno Setup wizard. It installs binaries under **%LOCALAPPDATA%\Programs\Flick**, registers Flick in Windows Installed Apps, creates a Start Menu shortcut and optionally a desktop shortcut. It does not require elevation.
-
-Both artifacts are distributed privately as a preview while public release approval is pending. The setup build is currently **unsigned**, and Windows may show a publisher/SmartScreen warning. Do not bypass warnings for untrusted downloads. The actual installer requires a clean-machine AntiGravity smoke test before distribution.
+1. **Flick-Setup.exe** installs under **%LOCALAPPDATA%\Programs\Flick**, registers Flick in Windows Installed Apps and needs no administrator access.
+2. **[Flick-v1.0.3-win-x64.zip](https://github.com/Krish-Verma/Flick/releases/download/v1.0.3-preview.1/Flick-v1.0.3-win-x64.zip)** runs as a portable copy. Extract the entire folder before launching Flick.exe; keep the packaged runtime files together. Portable copies link to Releases for manual folder replacement after quitting Flick.
 
 Flick saves settings, indexes and thumbnail cache under the **legacy %LOCALAPPDATA%\LocalClip** path for compatibility with previous builds. Default original videos are in your Videos/LocalClip/Originals folder (or a user-selected folder). The new program directory is **different**: an ordinary uninstall removes program files, not your recordings or legacy profile data. **Do not run older LocalClip uninstall.ps1 scripts:** those previously removed the whole legacy data directory.
 

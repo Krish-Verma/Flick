@@ -1,3 +1,4 @@
+using System.IO;
 using System.Security.Cryptography;
 using LocalClip.App.Services;
 using LocalClip.Core.Updates;

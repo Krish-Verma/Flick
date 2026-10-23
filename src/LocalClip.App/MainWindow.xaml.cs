@@ -197,7 +197,27 @@ public partial class MainWindow : Window
                 new Uri("pack://application:,,,/Assets/Brand/FlickLogo.png"));
             if (asset == null) return System.Drawing.SystemIcons.Application;
             using var stream = asset.Stream;
-            using var bitmap = new System.Drawing.Bitmap(stream);
+            using var source = new System.Drawing.Bitmap(stream);
+            // Match the WPF brand source and packaged ICO: keep a fixed dark
+            // circle, and move only its original artwork by 1/38 of the canvas.
+            const int size = 128;
+            using var bitmap = new System.Drawing.Bitmap(size, size,
+                System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+            using (var graphics = System.Drawing.Graphics.FromImage(bitmap))
+            using (var clip = new System.Drawing.Drawing2D.GraphicsPath())
+            using (var canvas = new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(255, 6, 3, 13)))
+            {
+                graphics.Clear(System.Drawing.Color.Transparent);
+                graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+                graphics.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
+                graphics.PixelOffsetMode = System.Drawing.Drawing2D.PixelOffsetMode.HighQuality;
+                var viewport = new System.Drawing.RectangleF(0, 0, size, size);
+                graphics.FillEllipse(canvas, viewport);
+                clip.AddEllipse(viewport);
+                graphics.SetClip(clip);
+                float offset = size / 38f;
+                graphics.DrawImage(source, new System.Drawing.RectangleF(offset, offset, size, size));
+            }
             IntPtr native = bitmap.GetHicon();
             try
             {
@@ -645,15 +665,20 @@ public partial class MainWindow : Window
     }
 
     private bool UpdateRequiresFinishingWork() =>
-        _vm.IsCaptureActive || _vm.IsReplaySavePending || _vm.IsImporting || _vm.IsExporting;
+        _vm.IsCaptureActive || _vm.IsReplaySavePending || _vm.IsImporting || _vm.IsExporting ||
+        _vm.IsBackgroundWorkActive;
 
     private async System.Threading.Tasks.Task<string?> InstallUpdateAsync(DownloadedUpdate download, CancellationToken cancellationToken)
     {
+        var originatingSettings = _settingsPage;
+        if (cancellationToken.IsCancellationRequested || originatingSettings == null ||
+            !ReferenceEquals(WorkspacePageHost.Content, originatingSettings))
+            return "Open Software Updates again to install the update.";
         if (_updateInstallInProgress) return "An update installation is already being prepared.";
         if (!FlickUninstallLauncher.IsInstalled)
             return "This copy is portable. Open Release Notes for a new ZIP, then quit Flick and replace its extracted application folder.";
         if (UpdateRequiresFinishingWork())
-            return "Save any replay you want to keep, stop replay yourself, and wait for saving, imports and exports to finish before installing. Flick will not stop or discard your work for an update.";
+            return "Save any replay you want to keep, stop replay yourself, and wait for clip saving, imports, library scans, exports and uploads to finish before installing. Flick will not stop or discard your work for an update.";
 
         _updateInstallInProgress = true;
         bool wasEnabled = MainInteractionSurface.IsEnabled;
@@ -665,7 +690,11 @@ public partial class MainWindow : Window
             // Native trust verification may contact Windows' revocation service;
             // keep it off the dispatcher and do not let hotkeys start capture meanwhile.
             using var prepared = await FlickUpdateService.PrepareInstallationAsync(download, cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
             if (_isRealClosing || Dispatcher.HasShutdownStarted) return null;
+            if (!ReferenceEquals(_settingsPage, originatingSettings) ||
+                !ReferenceEquals(WorkspacePageHost.Content, originatingSettings))
+                return "Open Software Updates again to install the update.";
             string warning = prepared.IsUnsignedPreview
                 ? $"Install Flick {download.Release.Version}? This preview installer is unsigned. Its download checksum matches this GitHub release, but Windows has not verified its publisher. Smart App Control may block it. Continue only if you trust this release; Flick will not disable or bypass Windows protections. Flick will close and restart after installation. Pending Settings edits are not saved."
                 : $"Install Flick {download.Release.Version} and restart? Windows verified the installer's signature. Flick will close while the update is installed. Saved clips and preferences are kept; pending Settings edits are not saved.";
@@ -675,13 +704,16 @@ public partial class MainWindow : Window
 
             // The consent UI pumps dispatcher messages. Recheck live work, the
             // page and installation immediately before launching; never stop capture.
+            cancellationToken.ThrowIfCancellationRequested();
             if (_isRealClosing || Dispatcher.HasShutdownStarted) return null;
             if (UpdateRequiresFinishingWork())
-                return "New work started while preparing the update. Stop replay and wait for saving, imports and exports to finish, then try again.";
-            if (_settingsPage == null)
+                return "New work started while preparing the update. Stop replay and wait for clip saving, imports, library scans, exports and uploads to finish, then try again.";
+            if (!ReferenceEquals(_settingsPage, originatingSettings) ||
+                !ReferenceEquals(WorkspacePageHost.Content, originatingSettings))
                 return "Open Software Updates again to install the update.";
+            cancellationToken.ThrowIfCancellationRequested();
             FlickUpdateService.LaunchInstaller(prepared);
-            _settingsPage.MarkUpdateInstallerStarted();
+            originatingSettings.MarkUpdateInstallerStarted();
             RealQuit(); // Normal tray cleanup and App.OnExit release the single-instance mutex.
             return null;
         }

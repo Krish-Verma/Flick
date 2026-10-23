@@ -101,6 +101,7 @@ internal static class Program
         Render("07-settings-updates.png", 1240, 720);
         RenderBrandScaleSamples(app, output);
         RenderSavedToast(output);
+        RenderNativeTrayIcon(main, output);
         string applicationVersion = typeof(MainWindow).Assembly
             .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? "unknown";
         File.WriteAllText(Path.Combine(output, "PROVENANCE.txt"),
@@ -167,6 +168,24 @@ internal static class Program
         using var stream = File.Create(Path.Combine(output, "09-clip-saved-toast.png"));
         encoder.Save(stream);
         Console.WriteLine("Rendered actual Clip Saved notification control");
+    }
+
+    private static void RenderNativeTrayIcon(MainWindow main, string output)
+    {
+        // Exercise the actual runtime native-icon conversion, without creating
+        // a NotifyIcon or touching the Windows taskbar. Keep System.Drawing
+        // types in the app assembly so this WPF-only harness stays WPF-only.
+        object icon = typeof(MainWindow).GetMethod("CreateTrayIcon", Private)!.Invoke(main, null)!;
+        if (!(bool)typeof(MainWindow).GetField("_ownsTrayBrandIcon", Private)!.GetValue(main)!)
+            throw new InvalidOperationException("Native icon rendering fell back to the generic Windows icon.");
+        using var lifetime = (IDisposable)icon;
+        var handle = (IntPtr)icon.GetType().GetProperty("Handle")!.GetValue(icon)!;
+        var bitmap = System.Windows.Interop.Imaging.CreateBitmapSourceFromHIcon(
+            handle, Int32Rect.Empty, BitmapSizeOptions.FromEmptyOptions());
+        var encoder = new PngBitmapEncoder(); encoder.Frames.Add(BitmapFrame.Create(bitmap));
+        using var stream = File.Create(Path.Combine(output, "10-native-tray-icon.png"));
+        encoder.Save(stream);
+        Console.WriteLine("Rendered actual runtime native tray icon without showing it");
     }
 
     private static void WriteSyntheticPoster(string path)

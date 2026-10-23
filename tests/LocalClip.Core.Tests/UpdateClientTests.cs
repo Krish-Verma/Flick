@@ -29,6 +29,7 @@ public class UpdateClientTests
     [InlineData("1.0.2", true, "v1.0.3-1", "v1.0.3-alpha", "1.0.3-alpha")]
     [InlineData("1.0.2", true, "v1.0.3-alpha", "v1.0.3-alpha.1", "1.0.3-alpha.1")]
     [InlineData("1.0.2", false, "v1.0.3+build.1", "v1.0.3-preview.99", "1.0.3+build.1")]
+    [InlineData("1.0.2", false, "v1.0.3+ci-123", "v1.0.3-preview.99", "1.0.3+ci-123")]
     [InlineData("1.0.2", false, "v1.999999999999999999999.0", "v2.0.0", "2.0.0")]
     public async Task AppliesSemverPrecedenceAndPreviewChannel(string current, bool includePreviews, string first,
         string second, string expected)
@@ -317,7 +318,8 @@ public class UpdateClientTests
         var encodedTag = Uri.EscapeDataString(tag);
         return new JsonObject
         {
-            ["tag_name"] = tag, ["draft"] = false, ["prerelease"] = tag.Contains('-'),
+            ["tag_name"] = tag, ["draft"] = false,
+            ["prerelease"] = ReleaseVersion.TryParse(tag, out var version) && version.IsPrerelease,
             ["html_url"] = $"https://github.com/Krish-Verma/Flick/releases/tag/{encodedTag}",
             ["assets"] = new JsonArray(Asset("Flick-Setup.exe", "101", Installer.Length), Asset("SHA256SUMS.txt", "102", 150))
         };

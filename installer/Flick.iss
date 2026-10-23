@@ -96,12 +96,14 @@ begin
   end;
   ParentHandle := OpenProcess($00100000, False, ParentPid);
   if ParentHandle = 0 then Exit; // Already exited; AppMutex still protects files.
+  Log('Flick update: waiting for parent PID ' + IntToStr(ParentPid));
   WaitResult := WaitForSingleObject(ParentHandle, 30000);
   CloseHandle(ParentHandle);
   if WaitResult <> 0 then begin
     MsgBox('Flick is still closing. No update was installed. Try again after Flick has quit.', mbError, MB_OK);
     Result := False;
   end;
+  if Result then Log('Flick update: parent exited.');
 end;
 
 function InitializeUninstall(): Boolean;
