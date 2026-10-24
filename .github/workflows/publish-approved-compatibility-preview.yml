@@ -4,7 +4,7 @@ on:
   pull_request:
     paths:
       - '.github/workflows/publish-approved-compatibility-preview.yml'
-      - 'release/PUBLISH-COMPATIBILITY-PREVIEW-20261023.md'
+      - 'release/PUBLISH-REPLAY-PREVIEW-20261024.md'
 
 permissions:
   contents: read
@@ -228,7 +228,7 @@ jobs:
               $hashes[$name] = (Get-FileHash -LiteralPath $paths[$name] -Algorithm SHA256).Hash
             }
             $manifest = Get-Content -LiteralPath $paths['SHA256SUMS.txt'] -Raw
-            foreach ($name in @('Flick-Setup.exe', 'Flick-v1.0.5-win-x64.zip')) {
+            foreach ($name in @('Flick-Setup.exe', 'Flick-v1.0.6-win-x64.zip')) {
               $entries = [regex]::Matches($manifest, '(?m)^([A-Fa-f0-9]{64}) [ *]' + [regex]::Escape($name) + '\r?$')
               if ($entries.Count -ne 1 -or $entries[0].Groups[1].Value.ToUpperInvariant() -cne $hashes[$name]) { throw "Checksum mismatch: $name" }
             }
