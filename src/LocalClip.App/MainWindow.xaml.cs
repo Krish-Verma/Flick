@@ -922,6 +922,17 @@ public partial class MainWindow : Window
         if (HandleEditorShortcut(e)) { e.Handled = true; return; }
         if (e.Key == Key.Escape && EditorContextLayer.Visibility == Visibility.Visible)
         {
+            // PreviewKeyDown tunnels through Window before the text box. The
+            // first Escape restores a size draft; a second closes the card.
+            if (SharePanel.Visibility == Visibility.Visible && CmbExportCap.SelectedIndex == 4 &&
+                (ReferenceEquals(e.OriginalSource, TxtCustomMb) || TxtCustomMb.IsKeyboardFocusWithin) &&
+                TxtCustomMb.Text != _vm.TargetSizeMb.ToString())
+            {
+                TxtCustomMb.Text = _vm.TargetSizeMb.ToString();
+                _vm.RecheckShareReadiness();
+                e.Handled = true;
+                return;
+            }
             CloseEditorContext();
             e.Handled = true;
             return;
@@ -1136,6 +1147,7 @@ public partial class MainWindow : Window
 
     private void CloseEditorContext()
     {
+        ShareMoreMenu.IsOpen = false;
         _vm.DeactivateSharePresentation();
         _vm.ClearFilmstrip();
         EditorContextLayer.Visibility = Visibility.Collapsed;
@@ -1151,8 +1163,8 @@ public partial class MainWindow : Window
 
     private void PreviewSurface_SizeChanged(object sender, SizeChangedEventArgs e)
     {
-        // Drawers scroll inside the existing preview allocation: no minimum
-        // editor height that pushes transport/actions out of a compact window.
+        // Trim/Audio scroll within the preview. Share fits as a complete card
+        // in the full editor allocation without adding a scrolling body.
         UpdateEditorContextHeight();
     }
 
@@ -1396,11 +1408,13 @@ public partial class MainWindow : Window
         try
         {
             _vm.TargetSizeMb = cap;
+            _vm.RecheckShareReadiness(); // Preserve a recent export's active cap while clearing a rejected draft.
             UpdateSharePresetSelection();
         }
         catch (Exception ex)
         {
             _vm.StatusDetails = "Couldn't Save File Limit: " + ex.Message;
+            _vm.ExportStatusMessage = _vm.StatusDetails;
             UpdateSharePresetSelection();
         }
     }
@@ -1420,20 +1434,23 @@ public partial class MainWindow : Window
         else if (e.Key == Key.Escape)
         {
             TxtCustomMb.Text = _vm.TargetSizeMb.ToString();
+            _vm.RecheckShareReadiness();
             e.Handled = true;
         }
     }
 
-    private void TryApplyCustomSize()
+    private bool TryApplyCustomSize()
     {
         if (!int.TryParse(TxtCustomMb.Text, out var cap) ||
             !ShareExportTargets.IsValid(cap))
         {
-            _vm.StatusDetails = "Custom Export Limit Must Be Between 1 and 250 MB.";
-            TxtCustomMb.Text = _vm.TargetSizeMb.ToString();
-            return;
+            _vm.IsExportReady = false; // No copy/drag with a rejected size draft.
+            _vm.ExportStatusMessage = "Choose a custom size from 1 to 250 MB before exporting.";
+            _vm.StatusDetails = _vm.ExportStatusMessage;
+            return false;
         }
         ApplyExportSize(cap);
+        return _vm.TargetSizeMb == cap;
     }
 
     private void UpdateSharePresetSelection()
@@ -1457,6 +1474,7 @@ public partial class MainWindow : Window
 
     private async void BtnExport_Click(object sender, RoutedEventArgs e)
     {
+        if (CmbExportCap.SelectedIndex == 4 && !TryApplyCustomSize()) return;
         CancelPendingPreview();
         SuspendPlayback(clearSource: true);
         var operation = _vm.ExportForDiscordAsync();

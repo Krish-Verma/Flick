@@ -1,8 +1,10 @@
 using System.IO;
+using System.Globalization;
 using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
+using System.Windows.Media;
 using LocalClip.App;
 using LocalClip.App.ViewModels;
 
@@ -26,15 +28,21 @@ internal static partial class Program
         var copy = (Button)window.FindName("BtnShareCopyFile");
         var export = (Button)window.FindName("BtnExport");
         var thumbnail = (Image)window.FindName("ShareThumbnail");
+        var status = (TextBlock)window.FindName("TxtShareExportStatus");
+        var format = (TextBlock)window.FindName("ShareFormatHint");
         bool titleMatches = title.Text == vm.ShareClipTitle;
         bool detailsMatch = details.Text == vm.ShareClipDetails;
         bool stateMatches = state.Text == vm.ShareTileStateText;
         bool copyMatches = copy.IsEnabled == vm.ShareCanCopy;
         bool exportMatches = export.IsEnabled == vm.CanStartExport;
         bool thumbnailMatches = ReferenceEquals(thumbnail.Source, vm.SharePreview);
+        bool summaryMatches = status.Text == vm.ShareStatusSummary;
+        bool fullMessagePreserved = Equals(status.ToolTip, vm.ExportStatusMessage);
+        bool formatMatches = format.Text == vm.ShareFormatHint;
         bool readyValid = !requireReady || (vm.TryGetReadyShareFile(out _) && vm.ShareCanCopy &&
             vm.ShareTileStateText == "MP4 ready");
-        bool bindingsMatch = titleMatches && detailsMatch && stateMatches && copyMatches && exportMatches && thumbnailMatches;
+        bool bindingsMatch = titleMatches && detailsMatch && stateMatches && copyMatches && exportMatches && thumbnailMatches &&
+            summaryMatches && fullMessagePreserved && formatMatches;
         object Binding(DependencyObject target, DependencyProperty property)
         {
             var expression = BindingOperations.GetBindingExpression(target, property);
@@ -75,6 +83,9 @@ internal static partial class Program
             ExpectedCopyEnabled = vm.ShareCanCopy, ActualCopyEnabled = copy.IsEnabled, copyMatches,
             ExpectedExportEnabled = vm.CanStartExport, ActualExportEnabled = export.IsEnabled, exportMatches,
             ExpectedHasThumbnail = vm.ShareHasPreview, ActualHasThumbnail = thumbnail.Source != null, thumbnailMatches,
+            ExpectedStatusSummary = vm.ShareStatusSummary, ActualStatusSummary = status.Text, summaryMatches,
+            FullMessage = vm.ExportStatusMessage, fullMessagePreserved,
+            ExpectedFormatHint = vm.ShareFormatHint, ActualFormatHint = format.Text, formatMatches,
             bindingsMatch, readyValid,
             TitleBinding = Binding(title, TextBlock.TextProperty), DetailsBinding = Binding(details, TextBlock.TextProperty),
             StateBinding = Binding(state, TextBlock.TextProperty), CopyBinding = Binding(copy, UIElement.IsEnabledProperty), ExportBinding = Binding(export, UIElement.IsEnabledProperty),
@@ -90,5 +101,97 @@ internal static partial class Program
         if (requireMatch && (!bindingsMatch || !readyValid))
             throw new InvalidOperationException("Share UI disagrees with its real view model in " + label +
                 $": title={titleMatches}, details={detailsMatch}, state={stateMatches}, copy={copyMatches}, export={exportMatches}, thumbnail={thumbnailMatches}, ready={readyValid}.");
+    }
+
+    private static (bool Fits, object Observation) InspectShareNoScrollLayout(MainWindow window)
+    {
+        T Find<T>(string name) => (T)window.FindName(name);
+        var context = Find<Border>("EditorContextLayer");
+        var share = Find<Border>("SharePanel");
+        var footer = Find<WrapPanel>("ShareActionFooter");
+        var root = (FrameworkElement)window.Content;
+        var failures = new List<string>();
+        var rows = new List<object>();
+        Rect Bounds(FrameworkElement element) => element.TransformToAncestor(root).TransformBounds(new Rect(element.RenderSize));
+        bool Contains(Rect outer, Rect inner) => inner.Width > 0 && inner.Height > 0 &&
+            inner.Left >= outer.Left - 1 && inner.Top >= outer.Top - 1 && inner.Right <= outer.Right + 1 && inner.Bottom <= outer.Bottom + 1;
+        object Coordinates(Rect rect) => new { X = rect.X, Y = rect.Y, Width = rect.Width, Height = rect.Height };
+        bool Visible(FrameworkElement element)
+        {
+            for (DependencyObject? node = element; node is Visual; node = VisualTreeHelper.GetParent(node))
+                if (node is UIElement { Visibility: not Visibility.Visible }) return false;
+            return true;
+        }
+        var ancestors = new List<ScrollViewer>();
+        for (DependencyObject? node = VisualTreeHelper.GetParent(share); node is Visual; node = VisualTreeHelper.GetParent(node))
+            if (node is ScrollViewer scroller) ancestors.Add(scroller);
+        var descendants = ProductVisuals(share).OfType<ScrollViewer>().Where(Visible).ToArray();
+        var allScrollers = ancestors.Concat(descendants).ToArray();
+        double scrollHeight = allScrollers.Select(scroll => scroll.ScrollableHeight).DefaultIfEmpty(0).Max();
+        double scrollWidth = allScrollers.Select(scroll => scroll.ScrollableWidth).DefaultIfEmpty(0).Max();
+        if (ancestors.Count != 0 || descendants.Length != 0 || scrollHeight > .5 || scrollWidth > .5)
+            failures.Add("Share content participates in scrolling.");
+        if (Find<ScrollViewer>("EditorContextScroll").Visibility != Visibility.Collapsed)
+            failures.Add("The separate Trim/Audio scroll host is not collapsed during Share.");
+        if (!Contains(Bounds(Find<Grid>("ClipEditorPanel")), Bounds(context))) failures.Add("Share context exceeds the actual editor allocation.");
+        void Check(string name, FrameworkElement container, bool required = true)
+        {
+            var element = Find<FrameworkElement>(name);
+            bool visible = Visible(element);
+            bool contained = visible && Contains(Bounds(container), Bounds(element));
+            rows.Add(new { Name = name, Visible = visible, Required = required, Contained = contained,
+                Bounds = Coordinates(Bounds(element)), Container = container.Name });
+            if ((required && !visible) || (visible && !contained)) failures.Add(name + " is hidden or clipped.");
+        }
+        Check("SharePanel", context);
+        Check("ShareActionFooter", context);
+        foreach (string name in new[] { "CloseEditorTool", "ShareMoreButton" }) Check(name, context);
+        foreach (string name in new[] { "DragHandle", "ShareExportOptions", "ShareFormatHint", "ShareStatusRow", "TxtShareExportStatus", "BtnShareDetails" }) Check(name, share);
+        foreach (string name in new[] { "ShareTileTitle", "ShareTileDetails", "ShareTileHint", "ShareOriginalLabel", "TxtShareTileState", "ShareThumbnail" }) Check(name, Find<Border>("DragHandle"));
+        foreach (string name in new[] { "CmbExportCap", "CmbShareAspect" }) Check(name, Find<FrameworkElement>("ShareExportOptions"));
+        bool custom = Find<FrameworkElement>("CustomCapPanel").Visibility == Visibility.Visible;
+        Check("CustomCapPanel", Find<FrameworkElement>("ShareExportOptions"), required: custom);
+        Check("TxtCustomMb", Find<FrameworkElement>("CustomCapPanel"), required: custom);
+        bool recent = ((MainViewModel)window.DataContext).RecentExports.Count > 0;
+        Check("ShareRecentExportsRow", share, required: recent);
+        Check("CmbRecentExports", Find<FrameworkElement>("ShareRecentExportsRow"), required: recent);
+        Check("ShareExportProgress", share, required: ((MainViewModel)window.DataContext).IsExporting);
+        foreach (string name in new[] { "BtnExport", "BtnShareCopyFile", "BtnShareOpenFolder", "BtnShareCancel" })
+            Check(name, footer, required: name != "BtnShareCancel" || ((MainViewModel)window.DataContext).IsExporting);
+        if (Bounds(share).Bottom > Bounds(footer).Top + 1) failures.Add("Share body overlaps its fixed action footer.");
+        var textObservations = new List<object>();
+        foreach (string name in new[] { "ShareTileTitle", "ShareTileDetails", "TxtShareTileState", "ShareTileHint", "ShareOriginalLabel", "ShareFormatHint", "TxtShareExportStatus" })
+        {
+            var text = Find<TextBlock>(name);
+            if (!Visible(text)) continue;
+            var formatted = new FormattedText(text.Text, CultureInfo.CurrentUICulture, text.FlowDirection,
+                new Typeface(text.FontFamily, text.FontStyle, text.FontWeight, text.FontStretch), text.FontSize,
+                text.Foreground ?? Brushes.White, VisualTreeHelper.GetDpi(text).PixelsPerDip);
+            if (!double.IsNaN(text.LineHeight)) formatted.LineHeight = text.LineHeight;
+            if (text.TextWrapping != TextWrapping.NoWrap) formatted.MaxTextWidth = Math.Max(1, text.ActualWidth);
+            bool titleEllipsis = name == "ShareTileTitle" && text.TextTrimming == TextTrimming.CharacterEllipsis &&
+                Equals(text.ToolTip, ((MainViewModel)window.DataContext).ShareClipTitle);
+            bool fits = text.ActualHeight + 1 >= formatted.Height && (titleEllipsis ||
+                text.TextWrapping != TextWrapping.NoWrap || text.ActualWidth + 1 >= formatted.WidthIncludingTrailingWhitespace);
+            textObservations.Add(new { Name = name, text.Text, text.FontSize, text.ActualWidth, text.ActualHeight,
+                NaturalTextHeight = formatted.Height, NaturalTextWidth = formatted.WidthIncludingTrailingWhitespace,
+                TitleEllipsisWithFullTooltip = titleEllipsis, Readable = fits });
+            if (!fits) failures.Add(name + " text is clipped.");
+        }
+        foreach (string name in new[] { "CloseEditorTool", "ShareMoreButton", "BtnShareDetails", "BtnExport", "BtnShareCopyFile", "BtnShareOpenFolder", "BtnShareCancel" })
+        {
+            var button = Find<Button>(name);
+            if (!Visible(button)) continue;
+            var label = new FormattedText(Convert.ToString(button.Content) ?? "", CultureInfo.CurrentUICulture, button.FlowDirection,
+                new Typeface(button.FontFamily, button.FontStyle, button.FontWeight, button.FontStretch), button.FontSize,
+                button.Foreground ?? Brushes.White, VisualTreeHelper.GetDpi(button).PixelsPerDip);
+            if (button.ActualWidth + 1 < label.WidthIncludingTrailingWhitespace + button.Padding.Left + button.Padding.Right ||
+                button.ActualHeight + 1 < label.Height + button.Padding.Top + button.Padding.Bottom)
+                failures.Add(name + " action label is clipped.");
+        }
+        return (failures.Count == 0, new { controlsFit = failures.Count == 0, NoScrollViewerAncestor = ancestors.Count == 0,
+            ScrollableHeight = scrollHeight, ScrollableWidth = scrollWidth,
+            ContextBounds = Coordinates(Bounds(context)), BodyBounds = Coordinates(Bounds(share)), FooterBounds = Coordinates(Bounds(footer)),
+            Rows = rows, Text = textObservations, Failures = failures });
     }
 }

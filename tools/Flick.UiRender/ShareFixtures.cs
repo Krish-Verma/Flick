@@ -109,6 +109,45 @@ internal static partial class Program
         ShareFrame("41-share-ready-accessible-palette.png", 1280, 720, requireReady: true);
         Invoke("ApplyShareAccessiblePalette", false);
 
+        // Exercise normal menu ownership without opening a native popup or
+        // invoking the confirmed webhook action in a rendering job.
+        var more = Find<Button>("ShareMoreButton");
+        var menu = Find<ContextMenu>("ShareMoreMenu");
+        menu.PlacementTarget = more;
+        DrainDispatcherThroughContextIdle(window.Dispatcher);
+        bool postingAvailable = menu.Items.OfType<MenuItem>().Any(item => item.Name == "ShareSendToChannel");
+        if (!postingAvailable || !ReferenceEquals(menu.DataContext, vm) || menu.IsOpen)
+            throw new InvalidOperationException("More must preserve its production context and optional confirmed posting action.");
+        ShareFrame("68-share-more-minimum.png", 720, 480, requireReady: true);
+        observations.Add(new { OptionalPostingAvailable = postingAvailable, MenuDataContextIsViewModel = ReferenceEquals(menu.DataContext, vm),
+            NativeMenuOpened = false, PostingInvoked = false });
+
+        int originalCap = vm.TargetSizeMb;
+        byte[] originalPreferences = File.ReadAllBytes(AppSettings.GetSettingsFilePath());
+        Find<ComboBox>("CmbExportCap").SelectedIndex = 4;
+        Find<TextBox>("TxtCustomMb").Text = "250";
+        Invoke("TryApplyCustomSize");
+        if (vm.TargetSizeMb != 250) throw new InvalidOperationException("The real Custom limit control did not apply 250 MB.");
+        ShareFrame("69-share-custom-minimum.png", 720, 480);
+        vm.TargetSizeMb = originalCap;
+        Invoke("UpdateSharePresetSelection");
+        if (!originalPreferences.SequenceEqual(File.ReadAllBytes(AppSettings.GetSettingsFilePath())))
+            throw new InvalidOperationException("Restoring the Custom fixture must restore the isolated preferences exactly.");
+        foreach (int invalid in new[] { 0, 251 })
+        {
+            Find<ComboBox>("CmbExportCap").SelectedIndex = 4;
+            Find<TextBox>("TxtCustomMb").Text = invalid.ToString();
+            byte[] beforeInvalid = File.ReadAllBytes(AppSettings.GetSettingsFilePath());
+            Invoke("BtnExport_Click", Find<Button>("BtnExport"), new RoutedEventArgs());
+            ShareFrame(invalid == 0 ? "70-share-custom-zero-minimum.png" : "71-share-custom-over-limit-minimum.png", 720, 480);
+            if (vm.IsExporting || vm.IsBackgroundWorkActive || vm.TargetSizeMb != originalCap ||
+                Find<TextBox>("TxtCustomMb").Text != invalid.ToString() ||
+                !beforeInvalid.SequenceEqual(File.ReadAllBytes(AppSettings.GetSettingsFilePath())))
+                throw new InvalidOperationException("Invalid Custom input started work, changed preferences or hid the draft.");
+        }
+        Invoke("UpdateSharePresetSelection");
+        vm.ActivateSharePresentation();
+
         vm.IsExporting = true; vm.IsExportReady = false; vm.ExportProgress = 42;
         vm.ExportStatusMessage = "Visual fixture: encoding a local MP4 (42%). No export is running for this state capture.";
         ShareFrame("42-share-exporting-minimum.png", 720, 480);
@@ -133,6 +172,14 @@ internal static partial class Program
         vm.SelectedClip = clip;
         vm.ActivateSharePresentation();
         ShareFrame("48-share-long-title-minimum.png", 720, 480);
+        vm.IsExportReady = false;
+        vm.ExportStatusMessage = "Export Failed: " + string.Join(" ", Enumerable.Repeat(
+            "Synthetic storage failure; the selected output location could not be used. Your original stays unchanged.", 8));
+        string fullFailure = vm.ExportStatusMessage;
+        ShareFrame("72-share-long-failure-minimum.png", 720, 480);
+        if (vm.ExportStatusMessage != fullFailure || vm.ShareStatusSummary == fullFailure ||
+            !vm.ShareStatusSummary.Contains("Details", StringComparison.Ordinal))
+            throw new InvalidOperationException("A long failure must keep its full message and show a concise Details route.");
         if (Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(original))) != originalHash)
             throw new InvalidOperationException("Share fixtures changed the immutable original.");
         File.WriteAllText(Path.Combine(output, "share-fixture-evidence.json"), JsonSerializer.Serialize(new {
@@ -141,6 +188,7 @@ internal static partial class Program
             ExportSha256 = Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(ready))),
             FullDecode = "Production exporter full decode passed; independent FFmpeg media workflow is separate",
             ClipboardOrExternalDragExecuted = false, ActualDiscordAcceptance = false,
+            CompleteShareMustFitWithoutScrolling = true, InvalidCustomLimitsRefusedBeforeAnyWorker = true,
             StatesExportingCancellingFailedAreVisualFixtures = true, Scales = observations
         }, new JsonSerializerOptions { WriteIndented = true }));
         vm.PropertyChanged -= observeNotification;

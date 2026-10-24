@@ -4,6 +4,8 @@ using System.IO;
 using System.Reflection;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
+using System.Windows.Interop;
 using LocalClip.App;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
@@ -28,7 +30,7 @@ internal static class SharePresentationAssertions
         object? Invoke(string name, params object?[] values) => typeof(MainViewModel).GetMethod(name, Private)!.Invoke(vm, values);
         void Notify(ClipMetadata clip) => Invoke("OnShareClipPropertyChanged", clip, new PropertyChangedEventArgs(nameof(ClipMetadata.ThumbnailPath)));
         Task Refresh(ClipMetadata clip) => (Task)Invoke("RefreshSharePreviewAsync", clip)!;
-        string[] savedNames = ["_selectedClip", "_sharePresentationActive", "_shareDisposed", "_shareObservedClip", "_sharePreview", "_sharePreviewCancellation", "_isExportReady", "_readyExportFilePath", "_exportStatusMessage"];
+        string[] savedNames = ["_selectedClip", "_sharePresentationActive", "_shareDisposed", "_shareObservedClip", "_sharePreview", "_sharePreviewCancellation", "_isExportReady", "_readyExportFilePath", "_exportStatusMessage", "_targetSizeMb"];
         var saved = savedNames.ToDictionary(name => name, Get);
         Assert.Null(saved["_sharePreviewCancellation"]); // The fixture must be idle before taking ownership.
         var gate = (SemaphoreSlim)Get("_sharePreviewGate")!;
@@ -114,6 +116,76 @@ internal static class SharePresentationAssertions
             File.Move(original + ".offline", original);
             RefreshAvailability();
             Assert.True(vm.CanStartExport); Assert.True(export.IsEnabled);
+
+            string completeFailure = "Export Failed: " + new string('x', 600) + " Keep the original and choose another folder.";
+            vm.ExportStatusMessage = completeFailure;
+            for (int pass = 0; pass < 3; pass++)
+                dispatcher.Invoke(() => { }, DispatcherPriority.ContextIdle, CancellationToken.None, TimeSpan.FromSeconds(2));
+            Assert.Contains("Details", vm.ShareStatusSummary);
+            Assert.True(vm.ShareStatusSummary.Length < 130);
+            Assert.Equal(completeFailure, vm.ExportStatusMessage); // Details keeps the complete cause/recovery.
+            Assert.Equal(vm.ShareStatusSummary, ((TextBlock)window.FindName("TxtShareExportStatus")).Text);
+            var more = (Button)window.FindName("ShareMoreButton");
+            more.ContextMenu.PlacementTarget = more;
+            for (int pass = 0; pass < 3; pass++)
+                dispatcher.Invoke(() => { }, DispatcherPriority.ContextIdle, CancellationToken.None, TimeSpan.FromSeconds(2));
+            Assert.Same(vm, more.ContextMenu.DataContext);
+            Assert.False(more.ContextMenu.IsOpen); // Inspecting More never posts or opens a native popup.
+
+            var cap = (ComboBox)window.FindName("CmbExportCap");
+            var custom = (TextBox)window.FindName("TxtCustomMb");
+            int selectedCap = cap.SelectedIndex, appliedCap = vm.TargetSizeMb;
+            string customBefore = custom.Text;
+            var updatingCap = typeof(MainWindow).GetField("_updatingExportCap", Private)!;
+            try
+            {
+                cap.SelectedIndex = 4;
+                foreach (string invalid in new[] { "0", "251", "not a number" })
+                {
+                    custom.Text = invalid;
+                    typeof(MainWindow).GetMethod("BtnExport_Click", Private)!.Invoke(window, [export, new RoutedEventArgs()]);
+                    Assert.Equal(invalid, custom.Text); // Preserve the owner's draft for correction.
+                    Assert.Contains("1 to 250", vm.ExportStatusMessage);
+                    Assert.Equal(appliedCap, vm.TargetSizeMb);
+                    Assert.False(vm.ShareCanCopy);
+                    Assert.False(vm.IsExporting); Assert.False(vm.IsBackgroundWorkActive);
+                    Assert.False(vm.CaptureHost.IsRunning);
+                }
+                // Recent exports restore an active custom cap without changing
+                // the default. Reapplying/escaping must keep that distinction.
+                int defaultCap = vm.Settings.DiscordTargetSizeMb;
+                int recentCap = defaultCap == 15 ? 17 : 15;
+                Set("_targetSizeMb", recentCap); custom.Text = recentCap.ToString();
+                Assert.True((bool)typeof(MainWindow).GetMethod("TryApplyCustomSize", Private)!.Invoke(window, null)!);
+                Assert.Equal(recentCap, vm.TargetSizeMb); Assert.Equal(defaultCap, vm.Settings.DiscordTargetSizeMb);
+                var layer = (System.Windows.Controls.Border)window.FindName("EditorContextLayer");
+                var panel = (System.Windows.Controls.Border)window.FindName("SharePanel");
+                Visibility layerBefore = layer.Visibility, panelBefore = panel.Visibility;
+                try
+                {
+                    layer.Visibility = panel.Visibility = Visibility.Visible;
+                    custom.Text = "251";
+                    using var input = new HwndSource(new HwndSourceParameters("Flick compact Share keyboard fixture") {
+                        Width = 1, Height = 1, WindowStyle = 0
+                    });
+                    KeyEventArgs Escape() => new(Keyboard.PrimaryDevice, input, Environment.TickCount, Key.Escape) {
+                        RoutedEvent = Keyboard.PreviewKeyDownEvent
+                    };
+                    var firstEscape = Escape(); custom.RaiseEvent(firstEscape);
+                    Assert.True(firstEscape.Handled); Assert.Equal(recentCap.ToString(), custom.Text);
+                    Assert.Equal(recentCap, vm.TargetSizeMb); Assert.Equal(defaultCap, vm.Settings.DiscordTargetSizeMb);
+                    Assert.Equal(Visibility.Visible, layer.Visibility);
+                    var secondEscape = Escape(); custom.RaiseEvent(secondEscape);
+                    Assert.True(secondEscape.Handled); Assert.Equal(Visibility.Collapsed, layer.Visibility);
+                }
+                finally { layer.Visibility = layerBefore; panel.Visibility = panelBefore; }
+            }
+            finally
+            {
+                updatingCap.SetValue(window, true);
+                try { cap.SelectedIndex = selectedCap; custom.Text = customBefore; }
+                finally { updatingCap.SetValue(window, false); }
+            }
         }
         finally
         {

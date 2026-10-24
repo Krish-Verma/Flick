@@ -133,8 +133,9 @@ internal static partial class Program
         Find<ComboBox>("CmbExportCap").SelectedIndex = 4;
         Find<TextBox>("TxtCustomMb").Text = "250";
         Render("15-share-custom-compact.png", 800, 600);
-        Find<Expander>("AdvancedShareExpander").IsExpanded = true;
-        Render("16-share-expanded-compact.png", 800, 600);
+        if (Find<ContextMenu>("ShareMoreMenu").Items.OfType<MenuItem>().All(item => item.Name != "ShareSendToChannel"))
+            throw new InvalidOperationException("Optional confirmed posting must remain available from More.");
+        Render("16-share-more-compact.png", 800, 600);
         Invoke("CloseEditorContext");
         vm.CaptureStatus = "Armed";
         vm.BufferedDurationText = "~30.0s / 30s";
@@ -395,7 +396,7 @@ internal static partial class Program
             "Application and renderer commit: " + Environment.GetEnvironmentVariable("GITHUB_SHA") + "\n" +
             "Workspace/settings: 1240x720 DIPs, 96 DPI. Synthetic clip names/thumbnails/monitor only.\n" +
             "Additional views: 1440x900 workspace; existing 800x600 compact library and editor branches.\n" +
-            "Compact Share: default, Custom 250 MB and expanded optional posting; no export or post action invoked.\n" +
+            "Compact Share: complete card with default/Custom limits and optional confirmed posting available from More. No post action or native menu popup is invoked.\n" +
             "Encoder status: synthetic Intel/CPU profiles exercise real bindings and the persistent compatibility warning. No encoder or capture host started.\n" +
             "Recording health: synthetic ledger observations exercise actual fault/retained-error, validating, success and stopped bindings at wide/compact sizes. Hotkey outcomes are simulated; no hotkeys registered and no clip validated by this renderer.\n" +
             "The VM polling timer is stopped for fixture isolation. Binding/render dispatcher work and recursive visual-tree measure invalidation settle changed labels before rasterization; no control widths or pixels are substituted. layout-observations.json records actual Save button geometry and an unconstrained caption measurement; clipped captions fail this renderer.\n" +
@@ -404,6 +405,7 @@ internal static partial class Program
             "Recording-test consent uses the real Run button and same-window FlickDialog; both prompts are programmatically declined with No. A synthetic overflowing source verifies positive body scrolling with No/Yes fixed inside the minimum viewport; the ordinary synthetic source is restored afterward. Source names and audio choices are synthetic. Running/cancelling/success/failure views simulate only bound VM state. No test helper, audio endpoint, saved test clip, timing measurement or media validation is claimed.\n" +
             "Brand samples: actual shared Image style rasterized by WPF at 96/120/144/192 DPI; not a physical per-monitor DPI session.\n" +
             "Share views37-48 additionally generate real synthetic H.264/AAC media, register it, use the production MP4 exporter/full decode and verify original immutability. Ready is backed by actual bytes/fingerprint; exporting/cancelling/failure are labelled visual fixtures. See share-fixture-evidence.json for exact scope. Share scaling images are raster tests; accessible palette is forced through the real local palette path without changing Windows settings. No external drag, clipboard or Discord operation is performed by the renderer.\n" +
+            "Share views68-75 verify minimum-size More availability, applied/restored Custom250 limits, invalid0/251 rejection before workers, long failure summary/full-message preservation, and recent-export/custom/long-title/busy combinations. Share must have no ScrollViewer ancestor or visible nested scroller, zero scroll range, contained readable body/header/footer controls and complete action labels. Title ellipsis retains the full title tooltip; Details retains full status. No hidden overflow or disabled-scrollbar shortcut is accepted.\n" +
             "No gameplay, live MediaElement playback, OS titlebar, real recording, updater network request, or full physical UI acceptance claimed.\n");
         vm.Dispose();
         app.Shutdown();
@@ -455,24 +457,9 @@ internal static partial class Program
             if (Find<Border>("SharePanel").Visibility == Visibility.Visible &&
                 Find<Border>("EditorContextLayer").Visibility == Visibility.Visible)
             {
-                Rect Bounds(FrameworkElement element) => element.TransformToAncestor(root).TransformBounds(new Rect(element.RenderSize));
-                bool Contains(Rect outer, Rect inner) => inner.Left >= outer.Left - 1 && inner.Top >= outer.Top - 1 &&
-                    inner.Right <= outer.Right + 1 && inner.Bottom <= outer.Bottom + 1;
-                var context = Find<Border>("EditorContextLayer");
-                var footer = Find<WrapPanel>("ShareActionFooter");
-                var scroll = Find<ScrollViewer>("EditorContextScroll");
-                FrameworkElement shareArea = Grid.GetRowSpan(context) > 1 ? Find<Grid>("ClipEditorPanel") : Find<Border>("PreviewSurface");
-                bool controlsFit = Contains(Bounds(shareArea), Bounds(context)) &&
-                    Contains(Bounds(context), Bounds(footer)) && Contains(Bounds(context), Bounds(Find<Button>("CloseEditorTool"))) &&
-                    Contains(Bounds(footer), Bounds(Find<Button>("BtnExport"))) &&
-                    Contains(Bounds(footer), Bounds(Find<Button>("BtnShareCopyFile"))) &&
-                    Contains(Bounds(footer), Bounds(Find<Button>("BtnShareOpenFolder"))) &&
-                    (Find<Button>("BtnShareCancel").Visibility != Visibility.Visible || Contains(Bounds(footer), Bounds(Find<Button>("BtnShareCancel")))) &&
-                    scroll.ViewportHeight >= Math.Min(160, Math.Max(32, shareArea.ActualHeight - 160)) && double.IsFinite(scroll.ViewportHeight);
-                shareLayout = new { controlsFit, scroll.ViewportHeight, scroll.ExtentHeight, scroll.ScrollableHeight,
-                    tileWidth = Find<Border>("DragHandle").ActualWidth, footerHeight = footer.ActualHeight,
-                    copyEnabled = Find<Button>("BtnShareCopyFile").IsEnabled, state = vm.ShareTileStateText };
-                if (!controlsFit) healthLayoutFailure = "Fixed Share actions or scroll viewport do not fit in " + file;
+                var measured = InspectShareNoScrollLayout(main);
+                shareLayout = measured.Observation;
+                if (!measured.Fits) healthLayoutFailure = "Complete Share content must fit without scrolling in " + file;
             }
             var healthPanel = Find<Border>("RecordingHealthPanel");
             if (healthPanel.Visibility == Visibility.Visible)

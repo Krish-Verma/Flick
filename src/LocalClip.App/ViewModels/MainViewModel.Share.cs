@@ -38,7 +38,32 @@ public partial class MainViewModel
         : IsExportReady ? "Drag this clip into Discord, or use Copy File."
         : ShareTileStateText == "Original offline" ? "Reconnect its folder before exporting."
         : "Choose a size limit, then export. Nothing is uploaded.";
+    public string ShareFormatHint => (ExportAspectPreset switch
+    {
+        "Vertical9x16" => "Fit 9:16 · no crop · ",
+        "Square1x1" => "Fit 1:1 · no crop · ",
+        _ => "Original shape · "
+    }) + $"up to {TargetSizeMb.ToString(CultureInfo.CurrentCulture)} MB · destination limits may vary";
+    public string ShareStatusSummary
+    {
+        get
+        {
+            string status = ExportStatusMessage;
+            if (status.Length <= 130) return status;
+            if (IsExporting) return ShareCanCancel ? "Preparing your local MP4…" : "Finishing cancellation…";
+            if (status.StartsWith("Export Failed", StringComparison.OrdinalIgnoreCase))
+                return "Export failed. Open Details for the reason. Your original is unchanged.";
+            if (status.StartsWith("Post failed", StringComparison.OrdinalIgnoreCase))
+                return "Posting failed. Open Details for the reason.";
+            return "Open Details for the full export message.";
+        }
+    }
+
     public string ShareSizeHint => $"Maximum {TargetSizeMb.ToString(CultureInfo.CurrentCulture)} MB · destination limits may vary";
+
+    // Revalidate the current per-file cap without replacing it with the
+    // global preference (recent exports deliberately restore a transient cap).
+    public void RecheckShareReadiness() => OnSelectedClipChanged();
 
     public void ActivateSharePresentation()
     {
@@ -140,7 +165,7 @@ public partial class MainViewModel
         if (name == nameof(SelectedClip)) ObserveShareClip();
         if (name == nameof(IsExporting) && !IsExporting) _shareCancellationRequested = false;
         if (name is nameof(SelectedClip) or nameof(IsExporting) or nameof(IsExportReady)
-            or nameof(ExportStatusMessage) or nameof(ReadyExportFilePath) or nameof(TargetSizeMb))
+            or nameof(ExportStatusMessage) or nameof(ReadyExportFilePath) or nameof(TargetSizeMb) or nameof(ExportAspectPreset))
             NotifySharePresentation();
     }
 
@@ -148,7 +173,7 @@ public partial class MainViewModel
     {
         foreach (string name in new[] { nameof(SharePreview), nameof(ShareHasPreview), nameof(ShareCanCopy),
                      nameof(ShareCanCancel), nameof(ShareClipTitle), nameof(ShareClipDetails), nameof(ShareTileStateText),
-                     nameof(ShareTileHint), nameof(ShareSizeHint) })
+                     nameof(ShareTileHint), nameof(ShareSizeHint), nameof(ShareFormatHint), nameof(ShareStatusSummary) })
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
     }
 

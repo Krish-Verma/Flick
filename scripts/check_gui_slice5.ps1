@@ -35,8 +35,11 @@ Require $main 'IsIndeterminate="True"' "Milestone stages must not be misrepresen
 Require $main 'CanStartExport' "Export must be disabled when no valid source exists"
 Require $main 'DragHandle_PreviewMouseMove' "Real OLE drag must wait for pointer motion"
 Require $main 'DataFormats.FileDrop|DragHandle' "Actual file drag tile missing"
-Require $main 'AdvancedShareExpander' "Direct posting must be secondary"
-Require $main 'IsExpanded="False"' "Direct posting must start collapsed"
+Require $main 'ShareMoreButton' "Direct posting must remain secondary"
+Require $main 'ShareMoreMenu' "Optional posting must use the explicit More menu"
+Require $main 'IsOpen="False"' "Optional posting must start closed"
+Require $main 'PlacementTarget.DataContext' "The disconnected menu must inherit the actual view model"
+Require $main 'BtnShareDetails' "Full status must stay keyboard accessible"
 if ($main -match 'x:Name="Radio20"|x:Name="Radio50"|x:Name="Radio100"') {
     throw "Previous oversized radio-button export toolbar remains"
 }

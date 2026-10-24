@@ -177,9 +177,11 @@ internal static partial class Program
                 var contextScroll = Find<ScrollViewer>("EditorContextScroll");
                 FrameworkElement allocation = Grid.GetRowSpan(context) > 1
                     ? Find<FrameworkElement>("ClipEditorPanel") : Find<Border>("PreviewSurface");
-                contextFits = ProductContains(Bounds(allocation), Bounds(context)) &&
-                    ProductContains(Bounds(context), Bounds(Find<Button>("CloseEditorTool"))) &&
-                    contextScroll.ViewportHeight > 0 && double.IsFinite(contextScroll.ViewportHeight);
+                contextFits = Find<Border>("SharePanel").Visibility == Visibility.Visible
+                    ? InspectShareNoScrollLayout(window).Fits
+                    : ProductContains(Bounds(allocation), Bounds(context)) &&
+                      ProductContains(Bounds(context), Bounds(Find<Button>("CloseEditorTool"))) &&
+                      contextScroll.ViewportHeight > 0 && double.IsFinite(contextScroll.ViewportHeight);
             }
             bool libraryFits = true;
             double? listHeight = null;
@@ -242,11 +244,28 @@ internal static partial class Program
         Split();
         Invoke("EditorTool_Click", Find<Button>("ToolShare"), new RoutedEventArgs());
         Find<ComboBox>("CmbRecentExports").SelectedIndex = 0;
-        Find<ScrollViewer>("EditorContextScroll").ScrollToBottom();
         ProductFrame("61-recent-exports-720.png", 1280, 720, "Recent validated MP4 selected; history timestamp synthetic");
         Compact(library: false);
-        Find<ScrollViewer>("EditorContextScroll").ScrollToBottom();
         ProductFrame("62-recent-exports-minimum.png", 720, 480, "Minimum recent exports selector and library");
+        int priorCap = vm.TargetSizeMb;
+        string priorTitle = media.Title;
+        vm.TargetSizeMb = 250;
+        Invoke("UpdateSharePresetSelection");
+        media.Title = "Synthetic recent clip with a deliberately long title to verify the full tooltip and compact metadata at minimum size";
+        vm.ActivateSharePresentation();
+        ProductFrame("73-share-recent-custom-long-minimum.png", 720, 480, "Recent export plus real Custom250 choice and long title; no new export");
+        vm.IsExporting = true;
+        vm.ExportProgress = 42;
+        vm.ExportStatusMessage = "Visual fixture: preparing Custom250 output; no encode worker is running.";
+        Invoke("UpdateSharePresetSelection");
+        ProductFrame("74-share-recent-custom-busy-minimum.png", 720, 480, "Recent export plus Custom limit and all four actions during synthetic export");
+        vm.CancelShareExport();
+        ProductFrame("75-share-recent-custom-cancelling-minimum.png", 720, 480, "Recent export plus Custom limit and pending synthetic cancellation");
+        vm.IsExporting = false;
+        vm.TargetSizeMb = priorCap;
+        Invoke("UpdateSharePresetSelection");
+        media.Title = priorTitle;
+        vm.ActivateSharePresentation();
         Invoke("CloseEditorContext");
         vm.LibrarySort = "Game";
         Split();
