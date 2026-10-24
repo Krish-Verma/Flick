@@ -76,4 +76,4 @@ if (Test-Path -LiteralPath $checksums) {
 }
 Write-Host "Flick Setup built: $output" -ForegroundColor Green
 Write-Host "SHA256: $hash"
-Write-Warning "Unsigned preview: AntiGravity must verify actual install, upgrade, uninstall, data preservation and Windows UI before any release."
+Write-Warning "Unsigned preview: release qualification requires actual install, upgrade, uninstall, data preservation and Windows UI evidence."
