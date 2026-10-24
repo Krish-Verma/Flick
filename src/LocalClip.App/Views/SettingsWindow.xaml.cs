@@ -541,7 +541,7 @@ public partial class SettingsWindow : UserControl
             return;
         }
         if (_isCaptureActive() && _settings.EnableMicrophone && ChkMicrophone.IsChecked != true &&
-            LocalClip.App.Services.FlickDialog.Show("Turning off an active microphone will stop the replay buffer and discard unsaved footage. Continue?",
+            LocalClip.App.Services.FlickDialog.Show("Turning off an active microphone stops the current recording. Unsaved replay footage will be discarded. Continue?",
                 "Disable Microphone", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes)
             return;
 

@@ -171,8 +171,10 @@ public sealed class ClipStorage
     }
 
     public async Task<ClipMetadata> RegisterNewOriginalAsync(string originalPath,
-        string targetName = "", IReadOnlyList<string>? trackNames = null)
+        string targetName = "", IReadOnlyList<string>? trackNames = null,
+        CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         string normalized = ClipLibraryPaths.Normalize(originalPath);
         lock (_lock)
         {
@@ -180,7 +182,7 @@ public sealed class ClipStorage
             if (duplicate != null) return duplicate;
         }
         return await RegisterOriginalAsync(normalized, targetName, null, trackNames,
-            thumbnail: true, CancellationToken.None);
+            thumbnail: true, cancellationToken);
     }
 
     private async Task<ClipMetadata> RegisterOriginalAsync(
@@ -255,6 +257,7 @@ public sealed class ClipStorage
 
         lock (_lock)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var existing = FindByPathLocked(normalized);
             if (existing != null) return existing;
             if (source != null && !_folders.Any(f => f.Id == source.Id))

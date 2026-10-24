@@ -56,6 +56,7 @@ internal static class Program
         // its actual WPF client visual directly, without starting a host/decoder.
         var root = (FrameworkElement)main.Content;
         var layoutObservations = new List<object>();
+        var consentObservations = new List<object>();
         // The Window normally paints this underneath its content. Rendering
         // Content alone otherwise leaves transparent/black gaps around panels.
         if (root is Panel panel) panel.Background = main.Background;
@@ -247,6 +248,143 @@ internal static class Program
         SetDiagnosticsFixture(false, "Synthetic fixture: no journal initialized; nothing was exported or uploaded.");
         Find<ScrollViewer>("RecordingHealthScroll").ScrollToBottom();
         Render("30-diagnostics-minimum-scrolled.png", 720, 480);
+
+        void RenderDeclinedRecordingConsent(string file, bool includeAudio, bool requireOverflow = false)
+        {
+            Find<CheckBox>("ChkDiagnosticAudio").IsChecked = includeAudio;
+            if (!vm.CanRunRecordingDiagnostic)
+                throw new InvalidOperationException("The synthetic idle source must permit a recording-test confirmation.");
+            bool observed = false;
+            Exception? failure = null;
+            main.Dispatcher.BeginInvoke(new Action(() =>
+            {
+                var host = Find<ContentControl>("DialogContentHost");
+                // The modal was just attached and this Window is unshown.
+                // Give its real templates a layout pass before locating No.
+                for (int pass = 0; pass < 3; pass++)
+                {
+                    InvalidateVisualMeasure(root);
+                    root.Measure(new Size(720, 480));
+                    root.Arrange(new Rect(0, 0, 720, 480));
+                    root.UpdateLayout();
+                    root.Dispatcher.Invoke(() => { }, DispatcherPriority.Render);
+                }
+                var safe = FindVisualDescendant<Button>(host);
+                try
+                {
+                    if (!LocalClip.App.Services.FlickDialog.IsOpen || safe?.Content?.ToString() != "No")
+                        throw new InvalidOperationException("The real recording consent must expose its safe No action.");
+                    observed = true;
+                    var yes = (safe.Parent as Panel)?.Children.OfType<Button>().SingleOrDefault(button => button.Content?.ToString() == "Yes")
+                        ?? throw new InvalidOperationException("The real recording consent must expose Yes beside No.");
+                    var body = FindVisualDescendant<ScrollViewer>(host)
+                        ?? throw new InvalidOperationException("The exact consent message must have its own scroll viewport.");
+                    Rect safeBounds = safe.TransformToAncestor(root).TransformBounds(new Rect(safe.RenderSize));
+                    Rect yesBounds = yes.TransformToAncestor(root).TransformBounds(new Rect(yes.RenderSize));
+                    bool safeActionVisible = new Rect(root.RenderSize).Contains(safeBounds);
+                    bool yesActionVisible = new Rect(root.RenderSize).Contains(yesBounds);
+                    bool bodyFinite = double.IsFinite(body.ViewportHeight) && body.ViewportHeight > 0;
+                    bool bodyScrolled = !requireOverflow;
+                    bool actionsStayedFixed = true;
+                    if (requireOverflow)
+                    {
+                        body.ScrollToBottom();
+                        root.UpdateLayout();
+                        root.Dispatcher.Invoke(() => { }, DispatcherPriority.Render);
+                        root.UpdateLayout();
+                        bodyScrolled = body.ScrollableHeight > 0 && body.VerticalOffset > 0;
+                        actionsStayedFixed = safeBounds == safe.TransformToAncestor(root).TransformBounds(new Rect(safe.RenderSize)) &&
+                            yesBounds == yes.TransformToAncestor(root).TransformBounds(new Rect(yes.RenderSize));
+                    }
+                    consentObservations.Add(new {
+                        image = file, includeConfiguredAudio = includeAudio,
+                        sourceNameCharacters = vm.SelectedTarget!.DisplayName.Length,
+                        safeAction = safe.Content.ToString(), safeActionVisible, yesActionVisible,
+                        safeActionBounds = new { x = safeBounds.X, y = safeBounds.Y, width = safeBounds.Width, height = safeBounds.Height },
+                        yesActionBounds = new { x = yesBounds.X, y = yesBounds.Y, width = yesBounds.Width, height = yesBounds.Height },
+                        body.ViewportHeight, body.ExtentHeight, body.ScrollableHeight, body.VerticalOffset,
+                        bodyFinite, bodyScrolled, actionsStayedFixed,
+                        captureHostRunning = vm.CaptureHost.IsRunning, diagnosticsInitialized = vm.DiagnosticsInitialized
+                    });
+                    File.WriteAllText(Path.Combine(output, "consent-observations.json"),
+                        JsonSerializer.Serialize(consentObservations, new JsonSerializerOptions { WriteIndented = true }));
+                    if (!safeActionVisible || !yesActionVisible || !bodyFinite || !bodyScrolled || !actionsStayedFixed ||
+                        vm.CaptureHost.IsRunning || vm.DiagnosticsInitialized)
+                        throw new InvalidOperationException("Consent must fit and remain free of recording/journal side effects.");
+                    Render(file, 720, 480);
+                }
+                catch (Exception error) { failure = error; }
+                finally
+                {
+                    // Programmatically decline the actual modal. Never approve
+                    // consent or invoke the recorder in a rendering fixture.
+                    if (safe?.Content?.ToString() == "No")
+                        safe.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                }
+            }), DispatcherPriority.Normal);
+            Invoke("BtnRunRecordingDiagnostic_Click", Find<Button>("BtnRunRecordingDiagnostic"), new RoutedEventArgs());
+            if (failure != null) throw new InvalidOperationException("Recording consent rendering failed.", failure);
+            if (!observed || vm.IsRecordingDiagnosticRunning || vm.CaptureHost.IsRunning || vm.DiagnosticsInitialized)
+                throw new InvalidOperationException("Recording consent was not safely declined without capture.");
+        }
+
+        void SetRecordingTestFixture(bool running, bool cancelling, string status, string details)
+        {
+            typeof(MainViewModel).GetField("_isRecordingDiagnosticRunning", Private)!.SetValue(vm, running);
+            typeof(MainViewModel).GetField("_recordingDiagnosticCancelling", Private)!.SetValue(vm, cancelling);
+            typeof(MainViewModel).GetField("_diagnosticTestStatus", Private)!.SetValue(vm, status);
+            typeof(MainViewModel).GetField("_diagnosticTestDetails", Private)!.SetValue(vm, details);
+            typeof(MainViewModel).GetMethod("PublishDiagnosticTest", Private)!.Invoke(vm, null);
+            Invoke("UpdateStatusBadgeColor");
+        }
+        vm.CaptureStatus = "Off";
+        var consentTarget = new TargetItem {
+            Type = "Monitor", MonitorIndex = 0, MonitorDevice = "SYNTHETIC_DISPLAY_ID",
+            DisplayName = "Synthetic overflow source: " + string.Join(" ", Enumerable.Repeat("exact retained recording test source", 96))
+        };
+        vm.Targets.Add(consentTarget);
+        typeof(MainViewModel).GetField("_selectedTarget", Private)!.SetValue(vm, consentTarget);
+        typeof(MainViewModel).GetMethod("OnPropertyChanged", Private)!.Invoke(vm, new object[] { nameof(vm.SelectedTarget) });
+        SetRecordingTestFixture(false, false, "Confirm the source and audio before recording a short test.", "");
+        app.MainWindow = main;
+        byte[] preferencesBeforeConsent = File.ReadAllBytes(profile);
+        bool previousMicrophone = vm.Settings.EnableMicrophone;
+        RenderDeclinedRecordingConsent("31-recording-consent-no-audio-minimum.png", false, requireOverflow: true);
+        var ordinaryConsentTarget = new TargetItem {
+            Type = "Monitor", MonitorIndex = 0, MonitorDevice = "SYNTHETIC_DISPLAY_ID", DisplayName = "Sample display (synthetic)"
+        };
+        vm.Targets.Add(ordinaryConsentTarget);
+        typeof(MainViewModel).GetField("_selectedTarget", Private)!.SetValue(vm, ordinaryConsentTarget);
+        typeof(MainViewModel).GetMethod("OnPropertyChanged", Private)!.Invoke(vm, new object[] { nameof(vm.SelectedTarget) });
+        vm.Settings.EnableMicrophone = true; // In-memory fixture only; no endpoint access.
+        RenderDeclinedRecordingConsent("32-recording-consent-configured-audio-minimum.png", true);
+        vm.Settings.EnableMicrophone = previousMicrophone;
+        Find<CheckBox>("ChkDiagnosticAudio").IsChecked = false;
+        if (!preferencesBeforeConsent.SequenceEqual(File.ReadAllBytes(profile)))
+            throw new InvalidOperationException("Declining test consent must not persist recording preferences.");
+
+        SetRecordingTestFixture(true, false, "Synthetic fixture: waiting for a decodable replay buffer…",
+            "Simulated progress only. No helper, audio endpoint or recording is active in this renderer.");
+        Render("33-recording-test-running-minimum.png", 720, 480);
+        if (!Find<Button>("BtnRunRecordingDiagnostic").IsEnabled || Find<CheckBox>("ChkDiagnosticAudio").IsEnabled)
+            throw new InvalidOperationException("A running test must permit Cancel while locking its audio choice.");
+        SetRecordingTestFixture(true, true, "Synthetic fixture: cancelling the test and releasing its helper…",
+            "Simulated cleanup only. A new test must remain unavailable until its owned helper exits.");
+        Render("34-recording-test-cancelling-minimum.png", 720, 480);
+        SetRecordingTestFixture(false, false, "Synthetic result: test passed · 3.2s clip kept in Your Clips.",
+            "Synthetic result only; no clip was recorded or validated.\n" +
+            "Audio: computer audio Off · microphone Off.\n" +
+            "Actual profile (simulated): Intel Quick Sync H.264 · 1920×1080 · 60 FPS\n" +
+            "Start: 1.20s · Ready: 3.10s · Save: 0.25s · Validation: 0.18s · Cleanup: 0.30s\n" +
+            "Test helper exited: Confirmed (simulated)");
+        Find<ScrollViewer>("RecordingHealthScroll").ScrollToBottom();
+        Render("35-recording-test-success-compact.png", 800, 600);
+        SetRecordingTestFixture(false, false, "Synthetic result: test did not pass. See details above.",
+            "Simulated failure: no decodable replay became ready before the test deadline.\n" +
+            "Actual profile: Not negotiated. Start/ready/save/validation: not completed.\n" +
+            "Test helper exited: Confirmed (simulated). Existing clips and recording preferences were kept.");
+        Find<ScrollViewer>("RecordingHealthScroll").ScrollToBottom();
+        Render("36-recording-test-failure-minimum.png", 720, 480);
         string applicationVersion = typeof(MainWindow).Assembly
             .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? "unknown";
         File.WriteAllText(Path.Combine(output, "PROVENANCE.txt"),
@@ -261,6 +399,7 @@ internal static class Program
             "The VM polling timer is stopped for fixture isolation. Binding/render dispatcher work and recursive visual-tree measure invalidation settle changed labels before rasterization; no control widths or pixels are substituted. layout-observations.json records actual Save button geometry and an unconstrained caption measurement; clipped captions fail this renderer.\n" +
             "The health disclosure is rendered as part of the actual same-window WPF visual; native focus, keyboard and physical placement acceptance are separate.\n" +
             "Diagnostics views simulate only status/busy fields through actual bindings, including long errors at720x480DIPs. No diagnostics journal is initialized, no save dialog opens, and no ZIP is exported. Fixed header/footer/Close/Export containment and the finite middle scroll viewport are checked in layout-observations.json.\n" +
+            "Recording-test consent uses the real Run button and same-window FlickDialog; both prompts are programmatically declined with No. A synthetic overflowing source verifies positive body scrolling with No/Yes fixed inside the minimum viewport; the ordinary synthetic source is restored afterward. Source names and audio choices are synthetic. Running/cancelling/success/failure views simulate only bound VM state. No test helper, audio endpoint, saved test clip, timing measurement or media validation is claimed.\n" +
             "Brand samples: actual shared Image style rasterized by WPF at 96/120/144/192 DPI; not a physical per-monitor DPI session.\n" +
             "No gameplay, media decoder, OS titlebar, real recording, updater network request, or full UI acceptance claimed.\n");
         vm.Dispose();
@@ -320,12 +459,15 @@ internal static class Program
                 var footer = Find<StackPanel>("RecordingDiagnosticsFooter");
                 var close = Find<Button>("BtnCloseRecordingHealth");
                 var export = Find<Button>("BtnExportDiagnostics");
+                var runTest = Find<Button>("BtnRunRecordingDiagnostic");
+                var includeAudio = Find<CheckBox>("ChkDiagnosticAudio");
                 var scroll = Find<ScrollViewer>("RecordingHealthScroll");
                 Rect panelBounds = Bounds(healthPanel), headerBounds = Bounds(header), footerBounds = Bounds(footer);
                 Rect closeBounds = Bounds(close), exportBounds = Bounds(export), scrollBounds = Bounds(scroll);
                 bool fixedControlsFit = Contains(new Rect(root.RenderSize), panelBounds) &&
                     Contains(panelBounds, headerBounds) && Contains(panelBounds, footerBounds) &&
                     Contains(headerBounds, closeBounds) && Contains(footerBounds, exportBounds) &&
+                    Contains(footerBounds, Bounds(runTest)) && Contains(footerBounds, Bounds(includeAudio)) &&
                     headerBounds.Bottom <= scrollBounds.Top + roundingTolerance &&
                     scrollBounds.Bottom <= footerBounds.Top + roundingTolerance &&
                     double.IsFinite(scroll.ViewportHeight) && scroll.ViewportHeight > 0;
@@ -333,7 +475,9 @@ internal static class Program
                     panel = Coordinates(panelBounds), header = Coordinates(headerBounds), footer = Coordinates(footerBounds),
                     close = Coordinates(closeBounds), export = Coordinates(exportBounds), scroll = Coordinates(scrollBounds),
                     scroll.ViewportHeight, scroll.ExtentHeight, scroll.ScrollableHeight, scroll.VerticalOffset,
-                    diagnosticsInitialized = vm.DiagnosticsInitialized, exportEnabled = export.IsEnabled, fixedControlsFit
+                    diagnosticsInitialized = vm.DiagnosticsInitialized, exportEnabled = export.IsEnabled,
+                    recordingTestAction = runTest.Content?.ToString(), recordingTestActionEnabled = runTest.IsEnabled,
+                    includeAudio = includeAudio.IsChecked, includeAudioEnabled = includeAudio.IsEnabled, fixedControlsFit
                 };
                 if (!fixedControlsFit)
                     healthLayoutFailure = $"Fixed diagnostics controls or scroll viewport do not fit in {file}.";

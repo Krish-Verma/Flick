@@ -58,7 +58,7 @@
                 </Grid.ColumnDefinitions>
                 <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,12,0">
                     <TextBlock Text="Capture Source" Style="{StaticResource Flick.Text.Caption}" FontWeight="SemiBold" Margin="0,0,0,2"/>
-                    <ComboBox x:Name="CmbTargets" Style="{StaticResource Flick.Input.Combo}" MinWidth="0" Width="235" Height="32" DisplayMemberPath="DisplayName" ToolTip="Choose a window or monitor. Display capture can include notifications." ItemsSource="{Binding Targets}" SelectedItem="{Binding SelectedTarget, Mode=TwoWay}"/>
+                    <ComboBox x:Name="CmbTargets" Style="{StaticResource Flick.Input.Combo}" MinWidth="0" Width="235" Height="32" DisplayMemberPath="DisplayName" ToolTip="Choose a window or monitor. Display capture can include notifications." IsEnabled="{Binding CanChangeCaptureSource}" ItemsSource="{Binding Targets}" SelectedItem="{Binding SelectedTarget, Mode=TwoWay}"/>
                 </StackPanel>
                 <Button Grid.Column="1" Style="{StaticResource Flick.Button.Icon}" Click="BtnRefreshTargets_Click" AutomationProperties.Name="Refresh Capture Sources" ToolTip="Refresh Capture Sources" Margin="0,0,12,0" VerticalAlignment="Center">
                     <Path Style="{StaticResource Flick.Icon.Symbol}" Data="{StaticResource Flick.Icon.Geometry.Refresh}" Width="16" Height="16"/>
@@ -465,7 +465,12 @@
                 </Grid>
                 <StackPanel x:Name="RecordingDiagnosticsFooter" DockPanel.Dock="Bottom" Margin="0,12,0,0">
                     <TextBlock x:Name="TxtDiagnosticPrivacy" Text="Diagnostics stay on this PC. Exports exclude videos, titles, paths and credentials." TextWrapping="Wrap" Style="{StaticResource Flick.Text.Caption}" Margin="0,0,0,8"/>
-                    <Button x:Name="BtnExportDiagnostics" Content="Export Diagnostics" HorizontalAlignment="Left" Click="BtnExportDiagnostics_Click" IsEnabled="{Binding CanExportDiagnostics}" Style="{StaticResource Flick.Button.Secondary}" AutomationProperties.Name="Export redacted diagnostics" AutomationProperties.HelpText="Save a local troubleshooting ZIP with recording states and numeric health details. No videos, titles, paths or credentials."/>
+                    <WrapPanel>
+                        <Button x:Name="BtnRunRecordingDiagnostic" Content="{Binding DiagnosticTestActionText}" Click="BtnRunRecordingDiagnostic_Click" IsEnabled="{Binding CanInvokeRecordingDiagnostic}" Margin="0,0,8,0" Style="{StaticResource Flick.Button.Secondary}" AutomationProperties.Name="Run or cancel recording test" AutomationProperties.HelpText="Confirm the exact capture source and audio before recording a short test. A validated test clip is kept in Your Clips."/>
+                        <Button x:Name="BtnExportDiagnostics" Content="Export Diagnostics" HorizontalAlignment="Left" Click="BtnExportDiagnostics_Click" IsEnabled="{Binding CanExportDiagnostics}" Style="{StaticResource Flick.Button.Secondary}" AutomationProperties.Name="Export redacted diagnostics" AutomationProperties.HelpText="Save a local troubleshooting ZIP with recording states and numeric health details. No videos, titles, paths or credentials."/>
+                    </WrapPanel>
+                    <CheckBox x:Name="ChkDiagnosticAudio" Content="Include configured audio in test" IsChecked="False" IsEnabled="{Binding CanRunRecordingDiagnostic}" Margin="0,7,0,0" AutomationProperties.Name="Include configured audio in recording test" AutomationProperties.HelpText="Off by default. Confirmation names system audio and microphone separately. Your normal recording preferences are kept."/>
+                    <TextBlock x:Name="TxtRecordingDiagnosticStatus" Text="{Binding DiagnosticTestStatusText}" TextWrapping="Wrap" MaxHeight="32" TextTrimming="CharacterEllipsis" Style="{StaticResource Flick.Text.Caption}" Margin="0,7,0,0" AutomationProperties.LiveSetting="Polite"/>
                     <TextBlock x:Name="TxtDiagnosticStatus" Text="{Binding DiagnosticStatusText}" TextWrapping="Wrap" Style="{StaticResource Flick.Text.Caption}" Margin="0,7,0,0" AutomationProperties.LiveSetting="Polite"/>
                 </StackPanel>
                 <ScrollViewer x:Name="RecordingHealthScroll" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
@@ -475,6 +480,7 @@
                         <TextBlock Text="{Binding HealthLastFailureText}" TextWrapping="Wrap" Margin="0,0,0,14"/>
                         <TextBlock Text="{Binding HealthLastSavedText}" TextWrapping="Wrap" Margin="0,0,0,14"/>
                         <TextBlock Text="{Binding HealthHotkeysText}" TextWrapping="Wrap" Foreground="{DynamicResource Flick.Brush.TextSecondary}"/>
+                        <TextBlock x:Name="TxtRecordingDiagnosticDetails" Text="{Binding DiagnosticTestDetailsText}" TextWrapping="Wrap" Margin="0,14,0,0"/>
                     </StackPanel>
                 </ScrollViewer>
             </DockPanel>

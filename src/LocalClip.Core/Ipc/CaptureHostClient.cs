@@ -13,6 +13,7 @@ namespace LocalClip.Core.Ipc;
 
 public class CaptureHostClient : IDisposable
 {
+    private readonly object _lifecycleGate = new();
     private System.Diagnostics.Process? _process;
     private StreamWriter? _writer;
     private JobObject? _jobObject;
@@ -21,6 +22,7 @@ public class CaptureHostClient : IDisposable
     private CancellationTokenSource? _cts;
     private readonly string _hostExePath;
     private readonly string _workingDir;
+    private CaptureHostCapabilities? _capabilities;
 
     public event Action<string, JsonElement?>? EventReceived;
     public event Action<string>? StateChanged;
@@ -47,6 +49,7 @@ public class CaptureHostClient : IDisposable
         }
     }
     public int? HostProcessId => IsRunning ? _process?.Id : null;
+    internal bool HostExitConfirmed => _hostExitConfirmed;
 
     public CaptureHostClient(string? hostExePath = null)
     {
@@ -73,11 +76,17 @@ public class CaptureHostClient : IDisposable
 
     public void Start()
     {
+        lock (_lifecycleGate) StartCore();
+    }
+
+    private void StartCore()
+    {
         if (IsRunning) return;
         if (_process != null) Dispose();
         if (!_hostExitConfirmed)
             throw new InvalidOperationException("The previous capture helper has not confirmed its exit.");
         _expectedShutdown = false;
+        _capabilities = null;
 
         if (!File.Exists(_hostExePath))
         {
@@ -385,38 +394,69 @@ public class CaptureHostClient : IDisposable
         return result;
     }
 
-    public static object CreateStartParameters(AppSettings settings)
+    public static object CreateStartParameters(AppSettings settings, CaptureStartOptions? options = null)
     {
         ArgumentNullException.ThrowIfNull(settings);
-        return new
+        options ??= new();
+        options.Validate(settings);
+        var values = new Dictionary<string, object>
         {
-            target_type = settings.TargetType.ToLowerInvariant(),
-            monitor_index = settings.MonitorIndex,
-            window_hwnd = settings.WindowHwnd,
-            fps = settings.VideoFps,
-            width = settings.VideoWidth,
-            height = settings.VideoHeight,
-            bitrate_kbps = settings.VideoBitrateKbps,
-            encoder = settings.VideoEncoder,
-            allow_software_fallback = settings.AllowSoftwareFallback,
-            duration_sec = settings.ReplayDurationSeconds,
-            buffer_mb = settings.BufferMemoryLimitMb,
-            output_dir = settings.OriginalsFolder,
-            audio_mode = settings.AudioMode.ToLowerInvariant(),
-            enable_mic = settings.EnableMicrophone,
-            mic_device_id = settings.MicrophoneDeviceId,
-            system_device_id = settings.SystemAudioDeviceId
+            ["target_type"] = settings.TargetType.ToLowerInvariant(), ["monitor_index"] = settings.MonitorIndex,
+            ["window_hwnd"] = settings.WindowHwnd, ["fps"] = settings.VideoFps, ["width"] = settings.VideoWidth,
+            ["height"] = settings.VideoHeight, ["bitrate_kbps"] = settings.VideoBitrateKbps,
+            ["encoder"] = settings.VideoEncoder, ["allow_software_fallback"] = settings.AllowSoftwareFallback,
+            ["duration_sec"] = settings.ReplayDurationSeconds, ["buffer_mb"] = settings.BufferMemoryLimitMb,
+            ["output_dir"] = settings.OriginalsFolder, ["audio_mode"] = settings.AudioMode.ToLowerInvariant(),
+            ["enable_mic"] = settings.EnableMicrophone, ["mic_device_id"] = settings.MicrophoneDeviceId,
+            ["system_device_id"] = settings.SystemAudioDeviceId, ["enable_system_audio"] = options.EnableSystemAudio
         };
-
+        if (options.ExpectedWindow is { } window)
+        {
+            values["expected_window_pid"] = window.ProcessId;
+            values["expected_window_title"] = window.Title;
+            values["expected_window_exe"] = window.Executable;
+        }
+        if (options.ExpectedMonitorId != null) values["monitor_id"] = options.ExpectedMonitorId;
+        return values;
     }
 
-    public async Task<bool> StartCaptureAsync(AppSettings settings)
+    public async Task<CaptureHostCapabilities> GetCapabilitiesAsync()
+    {
+        Task<IpcResponse> reply;
+        System.Diagnostics.Process? helper;
+        lock (_lifecycleGate)
+        {
+            if (!IsRunning) StartCore();
+            helper = _process;
+            reply = SendCommandAsync("get_capabilities");
+        }
+        var capabilities = CaptureHostCapabilities.FromResponse(await reply.ConfigureAwait(false));
+        lock (_lifecycleGate)
+        {
+            if (!ReferenceEquals(helper, _process) || !IsRunning)
+                throw new IOException("The recording test helper changed during capability verification.");
+            _capabilities = capabilities;
+        }
+        return capabilities;
+    }
+
+    public async Task<bool> StartCaptureAsync(AppSettings settings, CaptureStartOptions? options = null)
     {
         CurrentProfile = null;
         LastStartError = "";
         // Hardware discovery can try multiple vendor plugins before bounded CPU fallback.
         IpcResponse response;
-        try { response = await SendCommandAsync("start_capture", CreateStartParameters(settings), 60000); }
+        try
+        {
+            Task<IpcResponse> reply;
+            lock (_lifecycleGate)
+            {
+                if (options?.RequiresCapabilities == true && (!IsRunning || _capabilities?.SupportsSafeDiagnostics != true))
+                    throw new InvalidOperationException("Verify capture helper capabilities before starting a consented recording test.");
+                reply = SendCommandAsync("start_capture", CreateStartParameters(settings, options), 60000);
+            }
+            response = await reply.ConfigureAwait(false);
+        }
         catch
         {
             // A timed-out native startup must not later begin an unacknowledged
@@ -516,8 +556,14 @@ public class CaptureHostClient : IDisposable
 
     public void Dispose()
     {
+        lock (_lifecycleGate) DisposeCore();
+    }
+
+    private void DisposeCore()
+    {
         _expectedShutdown = true;
         CurrentProfile = null;
+        _capabilities = null;
         _cts?.Cancel();
         foreach (var entry in _pendingRequests)
             if (_pendingRequests.TryRemove(entry.Key, out var request))

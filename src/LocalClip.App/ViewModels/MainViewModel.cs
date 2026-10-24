@@ -24,7 +24,9 @@ public class TargetItem
 {
     public string Type { get; set; } = "Monitor"; // "Monitor" or "Window"
     public int MonitorIndex { get; set; }
+    public string MonitorDevice { get; set; } = "";
     public ulong WindowHwnd { get; set; }
+    public uint WindowPid { get; set; }
     public string DisplayName { get; set; } = "";
     public string Title { get; set; } = "";
     public string Exe { get; set; } = "";
@@ -59,6 +61,191 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
     public bool DiagnosticsInitialized => _diagnosticJournal != null;
     public bool CanExportDiagnostics => !_isExportingDiagnostics && !_diagnosticsDisposed;
     public string DiagnosticStatusText => _diagnosticStatusMessage;
+
+    private bool _isRecordingDiagnosticRunning;
+    private bool _recordingDiagnosticCancelling;
+    private bool _isPreparingToQuit;
+    private bool _refreshingTargets;
+    private bool _diagnosticCleanupUnconfirmed;
+    private string _diagnosticTestStatus = "Test recording and saving after confirmation.";
+    private string _diagnosticTestDetails = "";
+    private CancellationTokenSource? _recordingDiagnosticCancellation;
+    private Task? _recordingDiagnosticCancellationDispatch;
+    private TaskCompletionSource? _recordingDiagnosticCompletion;
+    public bool IsRecordingDiagnosticRunning => _isRecordingDiagnosticRunning;
+    public bool DiagnosticHelperNeedsRestart => _diagnosticCleanupUnconfirmed;
+    public bool CanChangeCaptureSource => !_isRecordingDiagnosticRunning && !_isPreparingToQuit && !_diagnosticCleanupUnconfirmed;
+    public bool CanControlReplay => CanChangeCaptureSource && !_refreshingTargets;
+    public Func<bool>? DiagnosticReservationAllowed { get; set; }
+    public bool CanRunRecordingDiagnostic => !_diagnosticsDisposed && !_isPreparingToQuit &&
+        !_isRecordingDiagnosticRunning && !_diagnosticCleanupUnconfirmed && !_refreshingTargets && !CaptureActive && _stopCaptureTask == null &&
+        !IsReplaySavePending && !IsImporting && !IsExporting && !_isExportingDiagnostics &&
+        Volatile.Read(ref _discordUploadOperations) == 0 && Volatile.Read(ref _libraryRescanOperations) == 0 &&
+        !_pollInProgress && SelectedTarget != null && Targets.Contains(SelectedTarget) &&
+        DiagnosticReservationAllowed?.Invoke() != false;
+    public bool CanInvokeRecordingDiagnostic => _isRecordingDiagnosticRunning
+        ? !_recordingDiagnosticCancelling : CanRunRecordingDiagnostic;
+    public string DiagnosticTestActionText => _isRecordingDiagnosticRunning
+        ? (_recordingDiagnosticCancelling ? "Finishing Test…" : "Cancel Test") : "Run Recording Test";
+    public string DiagnosticTestStatusText => _diagnosticTestStatus;
+    public string DiagnosticTestDetailsText => _diagnosticTestDetails;
+
+    private void PublishDiagnosticTest()
+    {
+        OnPropertyChanged(nameof(IsRecordingDiagnosticRunning));
+        OnPropertyChanged(nameof(DiagnosticHelperNeedsRestart));
+        OnPropertyChanged(nameof(CanRunRecordingDiagnostic));
+        OnPropertyChanged(nameof(CanInvokeRecordingDiagnostic));
+        OnPropertyChanged(nameof(CanChangeCaptureSource));
+        OnPropertyChanged(nameof(CanControlReplay));
+        OnPropertyChanged(nameof(DiagnosticTestActionText));
+        OnPropertyChanged(nameof(DiagnosticTestStatusText));
+        OnPropertyChanged(nameof(DiagnosticTestDetailsText));
+        OnPropertyChanged(nameof(IsCaptureActive));
+        OnPropertyChanged(nameof(IsBackgroundWorkActive));
+        OnPropertyChanged(nameof(CanStartExport));
+    }
+
+    public RecordingDiagnosticPlan? CreateRecordingDiagnosticPlan(bool includeConfiguredAudio)
+    {
+        if (!CanRunRecordingDiagnostic || SelectedTarget is not { } target)
+        {
+            _diagnosticTestStatus = "Finish replay or background work and select a source before testing.";
+            PublishDiagnosticTest();
+            return null;
+        }
+        try
+        {
+            return RecordingDiagnosticPlan.Create(_settings,
+                new RecordingDiagnosticTarget(target.Type, target.DisplayName,
+                    target.MonitorIndex, target.MonitorDevice, target.WindowHwnd,
+                    target.WindowPid, target.Title, target.Exe),
+                enableSystemAudio: includeConfiguredAudio,
+                enableMicrophone: includeConfiguredAudio && _settings.EnableMicrophone);
+        }
+        catch (ArgumentException)
+        {
+            _diagnosticTestStatus = "Refresh and select the source again, then review the recording profile.";
+            PublishDiagnosticTest();
+            return null;
+        }
+    }
+
+    public void CancelRecordingDiagnostic()
+    {
+        if (!_isRecordingDiagnosticRunning || _recordingDiagnosticCancelling) return;
+        _recordingDiagnosticCancelling = true;
+        _diagnosticTestStatus = "Cancelling test and releasing its recording helper…";
+        if (_recordingDiagnosticCancellation is { } cancellation)
+            _recordingDiagnosticCancellationDispatch = DispatchDiagnosticCancellationAsync(cancellation);
+        PublishDiagnosticTest();
+    }
+
+    private static async Task DispatchDiagnosticCancellationAsync(CancellationTokenSource cancellation)
+    {
+        try { await cancellation.CancelAsync().ConfigureAwait(false); }
+        catch (Exception) { /* The runner still owns and verifies helper cleanup. */ }
+    }
+
+    public async Task<bool> CancelRecordingDiagnosticAndWaitAsync()
+    {
+        CancelRecordingDiagnostic();
+        if (_recordingDiagnosticCompletion is { } test)
+        {
+            try { await test.Task.WaitAsync(TimeSpan.FromSeconds(40)); }
+            catch (TimeoutException) { return false; }
+        }
+        return !_isRecordingDiagnosticRunning && !_diagnosticCleanupUnconfirmed;
+    }
+
+    public async Task RunRecordingDiagnosticAsync(RecordingDiagnosticPlan plan, Guid confirmedPlanId)
+    {
+        // Recheck after the consent dialog's nested dispatcher. A hotkey, quit
+        // or another operation may have run while that dialog was visible.
+        if (!CanRunRecordingDiagnostic || plan.PlanId != confirmedPlanId || SelectedTarget is not { } selected ||
+            plan.Target.Kind != selected.Type || plan.Target.WindowHwnd != selected.WindowHwnd ||
+            plan.Target.WindowPid != selected.WindowPid || plan.Target.MonitorId != selected.MonitorDevice ||
+            plan.Target.WindowTitle != selected.Title || plan.Target.WindowExecutable != selected.Exe)
+        {
+            _diagnosticTestStatus = "The source or app state changed. Review the test again before recording.";
+            PublishDiagnosticTest();
+            return;
+        }
+        _isRecordingDiagnosticRunning = true; // Reserve before the first await.
+        _recordingDiagnosticCancelling = false;
+        _diagnosticTestStatus = "Starting the confirmed recording test…";
+        _diagnosticTestDetails = "Audio is captured only as described in the confirmed test.";
+        _thumbnailCancellation?.Cancel();
+        using var cancellation = new CancellationTokenSource();
+        _recordingDiagnosticCancellation = cancellation;
+        var completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        _recordingDiagnosticCompletion = completion;
+        PublishDiagnosticTest();
+        try
+        {
+            var runner = new RecordingDiagnosticRunner(_ => new NativeRecordingDiagnosticLease(),
+                async (frozen, replay, token) => await _storage.RegisterNewOriginalAsync(
+                    replay.FilePath, frozen.Source.Name, replay.TrackNames, token).ConfigureAwait(false));
+            var progress = new Progress<RecordingDiagnosticProgress>(p => {
+                if (_recordingDiagnosticCancelling || !_isRecordingDiagnosticRunning ||
+                    !ReferenceEquals(_recordingDiagnosticCompletion, completion)) return;
+                _diagnosticTestStatus = p.Stage switch {
+                    RecordingDiagnosticStage.Starting => "Starting the test helper…",
+                    RecordingDiagnosticStage.WaitingForReady => "Waiting for a decodable replay buffer…",
+                    RecordingDiagnosticStage.Saving => "Saving the test clip…",
+                    RecordingDiagnosticStage.Validating => "Validating and indexing the test clip…",
+                    RecordingDiagnosticStage.Stopping => "Releasing the test helper…",
+                    _ => "Finishing recording test…"
+                };
+                OnPropertyChanged(nameof(DiagnosticTestStatusText));
+            });
+            var result = await Task.Run(() => runner.RunAsync(plan, confirmedPlanId, progress, cancellation.Token));
+            _diagnosticCleanupUnconfirmed = !result.HelperExitConfirmed;
+            _diagnosticTestStatus = _diagnosticCleanupUnconfirmed
+                ? "Helper exit was not confirmed. Quit and reopen Flick before recording."
+                : result.Succeeded
+                ? $"Test passed · {result.ValidatedClip!.DurationSeconds:F1}s clip kept in Your Clips."
+                : result.Outcome == RecordingDiagnosticOutcome.Cancelled ? "Test cancelled. Any recorded original was kept."
+                : "Test did not pass. See the details above.";
+            string Phase(string label, TimeSpan? elapsed) => elapsed is { } duration ? $"{label}: {duration.TotalSeconds:F2}s" : $"{label}: not completed";
+            _diagnosticTestDetails = $"Last recording test: {result.LocalMessage}\n{plan.AudioSummary}\n" +
+                $"Actual profile: {result.ActualProfile?.DisplayText ?? "Not negotiated"}\n" +
+                string.Join(" · ", Phase("Start", result.Timings.Startup), Phase("Ready", result.Timings.Readiness),
+                    Phase("Save", result.Timings.Save), Phase("Validation", result.Timings.Validation), Phase("Cleanup", result.Timings.Cleanup)) +
+                $"\nTest helper exited: {(result.HelperExitConfirmed ? "Confirmed" : "Not confirmed")}";
+            _diagnosticJournal?.TryRecord(new DiagnosticObservation(DiagnosticEventKind.DiagnosticTestCompleted,
+                SourceKind: plan.Target.Kind == "Window" ? DiagnosticSourceKind.Window : DiagnosticSourceKind.Monitor,
+                Encoder: DiagnosticPolicy.KnownEncoder(result.ActualProfile?.EncoderId),
+                Error: result.Succeeded ? DiagnosticErrorCode.None : DiagnosticErrorCode.Unknown,
+                Width: result.ActualProfile?.Width, Height: result.ActualProfile?.Height, Fps: result.ActualProfile?.Fps,
+                DurationMilliseconds: result.ValidatedClip is { } validated ? (long)(validated.DurationSeconds * 1000) : null,
+                LatencyMilliseconds: result.Timings.Total is { } total ? (long)total.TotalMilliseconds : null));
+            if (result.ValidatedClip != null)
+            {
+                var editing = SelectedClip;
+                ReloadClips();
+                SelectedClip = editing == null ? result.ValidatedClip
+                    : FilteredClips.FirstOrDefault(c => c.Id == editing.Id) ?? editing;
+            }
+        }
+        catch (Exception)
+        {
+            _diagnosticTestStatus = "The test could not finish. Your existing clips and preferences were kept.";
+            _diagnosticTestDetails = "Review the selected source, recording profile and storage access before trying again.";
+        }
+        finally
+        {
+            if (_recordingDiagnosticCancellationDispatch is { } dispatched)
+                await dispatched;
+            _isRecordingDiagnosticRunning = false;
+            _recordingDiagnosticCancelling = false;
+            _recordingDiagnosticCancellation = null;
+            _recordingDiagnosticCancellationDispatch = null;
+            _recordingDiagnosticCompletion = null;
+            completion.TrySetResult();
+            PublishDiagnosticTest();
+        }
+    }
 
     private Task InitializeDiagnosticsAsync() => _diagnosticInitialization ??= InitializeDiagnosticsCoreAsync();
 
@@ -257,6 +444,8 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
         OnPropertyChanged(nameof(HealthLastFailureText));
         OnPropertyChanged(nameof(HealthLastSavedText));
         OnPropertyChanged(nameof(HealthHotkeysText));
+        OnPropertyChanged(nameof(CanRunRecordingDiagnostic));
+        OnPropertyChanged(nameof(CanInvokeRecordingDiagnostic));
     }
 
     private void RecordCaptureFailure(string code, string message, bool faulted = true)
@@ -329,10 +518,10 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
     // These operations outlive their initiating page. The updater also checks
     // the separate capture/save/import/export flags before closing the app.
     public bool IsBackgroundWorkActive => Volatile.Read(ref _discordUploadOperations) > 0
-        || Volatile.Read(ref _libraryRescanOperations) > 0 || _isExportingDiagnostics;
-    public bool IsCaptureActive => CaptureActive;
+        || Volatile.Read(ref _libraryRescanOperations) > 0 || _isExportingDiagnostics || _isRecordingDiagnosticRunning;
+    public bool IsCaptureActive => CaptureActive || _isRecordingDiagnosticRunning || _diagnosticCleanupUnconfirmed;
     public bool CanEditClip => SelectedClip?.IsAvailable == true && !IsExporting;
-    public bool CanStartExport => CanEditClip && !IsImporting;
+    public bool CanStartExport => CanEditClip && !IsImporting && !_isRecordingDiagnosticRunning && !_isPreparingToQuit && !_diagnosticCleanupUnconfirmed;
     // WPF shell supplies consent before an active source change discards replay.
     public Func<bool>? ConfirmTargetReset { get; set; }
     public CaptureHostClient CaptureHost => _captureHost;
@@ -481,6 +670,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
         {
             if (_selectedTarget != value)
             {
+                if (!CanChangeCaptureSource) { OnPropertyChanged(); return; }
                 bool active = CaptureStatus is "Starting" or "Buffering" or "Armed" or "Stopping";
                 if (_selectedTarget != null && active)
                 {
@@ -497,6 +687,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
                 _selectedTarget = value;
                 OnPropertyChanged();
                 OnTargetChanged();
+                PublishDiagnosticTest();
             }
         }
     }
@@ -648,6 +839,9 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
 
     public async Task RefreshTargetsAsync()
     {
+        if (!CanChangeCaptureSource || _refreshingTargets) return;
+        _refreshingTargets = true;
+        PublishDiagnosticTest();
         try
         {
             var targets = await _captureHost.GetTargetsAsync();
@@ -659,6 +853,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
                 {
                     Type = "Monitor",
                     MonitorIndex = m.Index,
+                    MonitorDevice = m.Device,
                     DisplayName = m.DisplayName
                 });
             }
@@ -669,6 +864,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
                 {
                     Type = "Window",
                     WindowHwnd = w.Hwnd,
+                    WindowPid = w.Pid,
                     DisplayName = w.DisplayName,
                     Title = w.Title,
                     Exe = w.Exe
@@ -697,8 +893,11 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
         finally
         {
             // Target discovery must not leave an idle native helper running.
-            if (CaptureStatus == "Off")
-                await _captureHost.ShutdownAsync();
+            try
+            {
+                if (CaptureStatus == "Off") await _captureHost.ShutdownAsync();
+            }
+            finally { _refreshingTargets = false; PublishDiagnosticTest(); }
         }
     }
 
@@ -745,6 +944,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
 
     public async Task StartCaptureAsync()
     {
+        if (_isRecordingDiagnosticRunning || _isPreparingToQuit || _diagnosticCleanupUnconfirmed || _refreshingTargets) return;
         if (CaptureActive || _stopCaptureTask != null) return;
         if (SelectedTarget is null || !Targets.Contains(SelectedTarget))
         {
@@ -793,7 +993,11 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
         var stop = StopCaptureCoreAsync();
         _stopCaptureTask = stop;
         try { await stop; }
-        finally { if (ReferenceEquals(_stopCaptureTask, stop)) _stopCaptureTask = null; }
+        finally
+        {
+            if (ReferenceEquals(_stopCaptureTask, stop)) _stopCaptureTask = null;
+            PublishDiagnosticTest();
+        }
     }
 
     private async Task StopCaptureCoreAsync()
@@ -819,11 +1023,19 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
 
     public async Task<bool> PrepareToQuitAsync()
     {
+        _isPreparingToQuit = true;
+        PublishDiagnosticTest();
         // A timer tick must not restart an exited helper during finalization.
         _pollTimer.Stop();
         bool ready = false;
         try
         {
+            CancelRecordingDiagnostic();
+            if (_recordingDiagnosticCompletion is { } test)
+            {
+                try { await test.Task.WaitAsync(TimeSpan.FromSeconds(40)); }
+                catch (TimeoutException) { return false; }
+            }
             // An active ZIP owns a temporary file. Cancel and await its cleanup
             // before allowing the process to exit; a slow I/O cancellation
             // refuses this quit attempt rather than abandoning that operation.
@@ -846,11 +1058,15 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
             }
             return ready;
         }
-        finally { if (!ready) _pollTimer.Start(); }
+        finally
+        {
+            if (!ready) { _isPreparingToQuit = false; _pollTimer.Start(); PublishDiagnosticTest(); }
+        }
     }
 
     public async Task SaveReplayAsync()
     {
+        if (_isRecordingDiagnosticRunning || _isPreparingToQuit) return;
         if (CaptureStatus != "Armed" || !IsArmed || _health.Snapshot.EngineState != RecordingEngineState.Ready)
         {
             StatusDetails = CaptureStatus switch
@@ -1081,6 +1297,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
 
     private async void OnPollTick(object? sender, EventArgs e)
     {
+        if (_isRecordingDiagnosticRunning || _isPreparingToQuit) return;
         if (_pollInProgress || CaptureStatus is "Starting" or "Stopping") return;
         if (!_captureHost.IsRunning)
         {
@@ -1150,13 +1367,18 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
                 RecordCaptureFailure("host-unresponsive", "Capture health unavailable: " + ex.Message, false);
             }
         }
-        finally { _pollInProgress = false; }
+        finally
+        {
+            _pollInProgress = false;
+            OnPropertyChanged(nameof(CanRunRecordingDiagnostic));
+            OnPropertyChanged(nameof(CanInvokeRecordingDiagnostic));
+        }
     }
 
     public async Task<ClipImportSummary> ImportFolderAsync(
         string folderPath, bool includeSubfolders = true)
     {
-        if (CaptureActive || IsExporting)
+        if (IsCaptureActive || IsExporting)
             throw new InvalidOperationException("Finish the active replay or export before importing. Gameplay and sharing take priority.");
         if (IsImporting)
             throw new InvalidOperationException("An import is already in progress.");
@@ -1167,7 +1389,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
 
     public async Task<ClipImportSummary> RescanConnectedFolderAsync(string folderId)
     {
-        if (CaptureActive || IsExporting)
+        if (IsCaptureActive || IsExporting)
             throw new InvalidOperationException("Finish the active replay or export before scanning external clips.");
         if (IsImporting)
             throw new InvalidOperationException("A folder is already being scanned.");
@@ -1223,7 +1445,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
 
     public async Task RescanLibraryAsync()
     {
-        if (CaptureActive || IsExporting)
+        if (IsCaptureActive || IsExporting)
         {
             StatusDetails = "Finish replay or export before a full library rescan.";
             return;
@@ -1420,7 +1642,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
             return;
         }
 
-        if (SelectedClip.IsAvailable && !CaptureActive &&
+        if (SelectedClip.IsAvailable && !IsCaptureActive &&
             (string.IsNullOrWhiteSpace(SelectedClip.ThumbnailPath) ||
              !File.Exists(SelectedClip.ThumbnailPath)))
             _ = EnsureSelectedThumbnailAsync(SelectedClip);
@@ -1453,7 +1675,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
         {
             await _thumbnailGate.WaitAsync(cancellation.Token);
             acquired = true;
-            if (CaptureActive || SelectedClip?.Id != clip.Id) return;
+            if (IsCaptureActive || SelectedClip?.Id != clip.Id) return;
             await _storage.EnsureThumbnailAsync(clip.Id, cancellation.Token);
         }
         catch (OperationCanceledException) { }
@@ -1710,6 +1932,8 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
         _captureHost.EventReceived -= OnHostEventReceived;
         _captureHost.Dispose();
         _diagnosticsDisposed = true;
+        if (_recordingDiagnosticCancellation is { } testCancellation)
+            _recordingDiagnosticCancellationDispatch = DispatchDiagnosticCancellationAsync(testCancellation);
         _diagnosticExportCancellation?.Cancel();
         // Normal quit flushes asynchronously. Disposal is also used by unshown
         // fixtures, which never open a journal. The writer owns no UI context.
@@ -1720,5 +1944,10 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
     protected void OnPropertyChanged([CallerMemberName] string? name = null)
     {
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
+        if (name is nameof(IsBackgroundWorkActive) or nameof(IsReplaySavePending) or nameof(IsImporting) or nameof(IsExporting))
+        {
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CanRunRecordingDiagnostic)));
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CanInvokeRecordingDiagnostic)));
+        }
     }
 }

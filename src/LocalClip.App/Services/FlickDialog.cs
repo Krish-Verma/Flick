@@ -45,13 +45,16 @@ public static class FlickDialog
         bool confirmation = buttons != MessageBoxButton.OK;
         var frame = new DispatcherFrame();
         MessageBoxResult result = MessageBoxResult.Cancel;
-        var panel = new StackPanel { Margin = new Thickness(22) };
-        panel.Children.Add(new TextBlock { Text = caption,
+        var layout = new DockPanel { Margin = new Thickness(22), LastChildFill = true };
+        var heading = new TextBlock { Text = caption,
             Style = (Style)main.FindResource("Flick.Text.Section"),
-            TextWrapping = TextWrapping.Wrap });
+            TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 12) };
+        DockPanel.SetDock(heading, Dock.Top);
+        layout.Children.Add(heading);
+        var panel = new StackPanel();
         panel.Children.Add(new TextBlock { Text = message,
             Style = (Style)main.FindResource("Flick.Text.Control"),
-            TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 12, 0, 18) });
+            TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 18) });
         TextBox? input = null;
         if (initial != null)
         {
@@ -81,14 +84,18 @@ public static class FlickDialog
                 buttons is MessageBoxButton.YesNo or MessageBoxButton.YesNoCancel ? MessageBoxResult.Yes : MessageBoxResult.OK, true);
         }
         else safe = Add("OK", MessageBoxResult.OK, true);
-        panel.Children.Add(actions);
-        var surface = new Border { Child = panel,
-            Style = (Style)main.FindResource("Flick.Surface.Panel") };
-        var scroll = new ScrollViewer { Content = surface,
+        // Exact window/device names can be long. Keep safe consent actions
+        // visible while the message scrolls inside the available window.
+        DockPanel.SetDock(actions, Dock.Bottom);
+        layout.Children.Add(actions);
+        var scroll = new ScrollViewer { Content = panel,
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
             HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
             Focusable = false };
-        KeyboardNavigation.SetTabNavigation(scroll, KeyboardNavigationMode.Cycle);
+        layout.Children.Add(scroll);
+        var surface = new Border { Child = layout,
+            Style = (Style)main.FindResource("Flick.Surface.Panel") };
+        KeyboardNavigation.SetTabNavigation(surface, KeyboardNavigationMode.Cycle);
         KeyEventHandler keys = (_, e) =>
         {
             if (e.Key == Key.Escape) { Finish(MessageBoxResult.Cancel); e.Handled = true; }
@@ -98,7 +105,7 @@ public static class FlickDialog
         {
             IsOpen = true;
             main.InteractionSurface.IsEnabled = false;
-            main.DialogHost.Content = scroll;
+            main.DialogHost.Content = surface;
             main.ModalLayer.Visibility = Visibility.Visible;
             main.ModalLayer.PreviewKeyDown += keys;
             main.Closed += closed;
