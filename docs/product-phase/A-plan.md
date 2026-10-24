@@ -91,3 +91,12 @@ Health models, CaptureHostClient, MainViewModel, MainWindow, HotkeyManager, Diag
 **Completion evidence:** Source commit + reviewed diff + exact test run/log counts + applicable render/interaction receipts in evidence ledger; check the tracker only after these pass.
 
 **Known limitations:** Physical GPU, real audio endpoint and Discord desktop checks require an accessible authorized Windows PC. Mark individual unverified gates separately from implemented or CI-tested behavior.
+
+
+## A3 accepted integration
+
+PR47 source `49625aa728edd85bcf78773447db71d6a7bbba01`, merged `74ac9240a86740ad23c2a270325a71090001a3f0`. Windows CI40093508148: Core413 + App5 pass,14 explicit hardware/media skips; separate synthetic media5/5, native/policy/source/publish pass. Render40093508171:33 caption /17 panel checks pass, eight frames reviewed; artifact12560001175 SHA256 `70775b9fd77ff1245d0e443b163335f5a473f3d80d0b243370b34d5c59446369`, exact source/render tree `a3fda7b3607426f5d6945113c14be3c90f29bb01`. Installer40093508154 passes install, exact-parent upgrade wait, package hash, data retention and restart. Local63 focused /409 portable pass;14 expected skips and four Windows-only exclusions.
+
+Owner-PC Core TRX:413 passed /0 failed /14 expected skips, runtime10.0.13 / Windows11 build26300, source8f73ef7 (Core/test inputs unchanged in49625aa). TRX SHA256 `50bc6329eedcedf4debc1ce025fa97c227bf6dbe6f532938a4520348f2dd1890`. The launcher stalled after tests exited, so its exit code and initial numeric admission observations are unavailable; no exit0 is asserted. Both exact owned launchers were closed, no owned test processes remain, installed Flick19396 stayed unchanged. A repeat stalled before tests and is recorded as no second execution. No capture/audio/GPU/Discord qualification follows from these Core tests.
+
+A4 adds the isolated harness described in [A4-RECORDING-QUALIFICATION.md](A4-RECORDING-QUALIFICATION.md), keeping physical gates separate from synthetic fixtures.
