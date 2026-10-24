@@ -44,11 +44,11 @@ Actual PE inspection of the verified A4 payload found all required C exports in 
 | --- | --- |
 | Focused Core policy, migration, suppression, source-wire and GPU preference tests | 38 passed, 0 failed, 0 skipped on macOS .NET 10.0.402; filter `GameDetectionTests` or `GpuCompatibilitySettingsTests` |
 | WPF application and App tests cross-build | Passed, 0 warnings/errors with Windows targeting; no WPF execution on macOS |
-| New STA staging/cancellation assertions | Authored in existing single-Application fixture; execution pending Windows batch |
+| New STA staging/cancellation assertions | Executed in final App9 suite40102045722 |
 | Native Windows x64 compile/link | Passed with llvm-mingw 20261020 against pinned OBS 32.2.2 `obs.dll`; no executable run. `-Wall -Wextra` reports six existing unused-parameter warnings in main.cpp, none in new headers |
 | Exact DLL export availability | PE table inspected, no code loaded; hash above |
 | Broader existing settings recovery fixture | Its literal `C:\Videos` path is invalid under macOS path semantics and fails there; unchanged Windows fixture awaits Windows batch. No production workaround was added for the host-only test limitation |
-| Full integration, WPF pixels, media, installer/upgrade, cross-feature races | Pending integration lead's single batch |
+| Full integration, WPF pixels, media, installer/upgrade, cross-feature races | Passed final CI/media/render/installer batch; see FINAL-REPORT.md |
 | Physical exact-window capture and overhead | Pending; no Windows PC execution by B lane |
 
 The checkboxes in B-plan remain unqualified until their Windows interaction/recording evidence is recorded. Local compilation and pure policy tests do not establish real game/anti-cheat support, correct WGC frames, hotkey delivery or device-loss behavior.
