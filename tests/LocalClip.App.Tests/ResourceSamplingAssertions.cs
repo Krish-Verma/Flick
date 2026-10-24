@@ -35,6 +35,15 @@ internal static class ResourceSamplingAssertions
         try
         {
             Assert.True(OwnedTask().IsCompleted);
+            Assert.False(vm.CaptureHost.IsRunning);
+            // Earlier assertions deliberately complete a successful quit on
+            // this shared VM. Restore this isolated fixture's idle lifecycle,
+            // without starting the real timer or any resource/process read.
+            ((DispatcherTimer)Get("_pollTimer")!).Stop();
+            Set("_captureStatus", "Off");
+            Set("_isPreparingToQuit", false);
+            Invoke("ResumeResourceSampling");
+            Assert.False((bool)Get("_resourceSamplingPaused")!);
             // Exercise the same initialization path used by the constructor with
             // the saved preference off. It must create no optional read task.
             vm.Settings.ShowResourceUsage = false;

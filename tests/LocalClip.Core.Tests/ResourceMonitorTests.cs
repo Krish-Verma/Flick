@@ -359,7 +359,9 @@ public class ResourceMonitorTests
         new(reader, clock, AppId, processorCount);
 
     private static ProcessResourceReading Reading(int id, long start = 1, double cpuSeconds = 10) =>
-        new(id, start, 1024, 2048, 10, TimeSpan.FromSeconds(cpuSeconds));
+        new(id, start, 1024, 2048, 10,
+            TimeSpan.FromTicks(checked((long)Math.Round(cpuSeconds * TimeSpan.TicksPerSecond,
+                MidpointRounding.AwayFromZero))));
 
     private static void AssertFinite(ResourceSample sample)
     {
