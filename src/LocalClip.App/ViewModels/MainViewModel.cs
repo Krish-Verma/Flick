@@ -565,7 +565,15 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
     {
         if (CaptureStatus != "Buffering" && CaptureStatus != "Armed")
         {
-            StatusDetails = "Turn replay capture on before saving a clip.";
+            StatusDetails = CaptureStatus switch
+            {
+                "Off" => $"Replay is off. Start replay ({_settings.CaptureToggleHotkey}) before saving a clip.",
+                "Starting" => "Replay is starting. Wait until Replay Ready before saving.",
+                "Faulted" when !string.IsNullOrWhiteSpace(StatusDetails) => StatusDetails,
+                "Faulted" => "Replay capture failed. Review the capture error and start replay again.",
+                _ => "Replay is not ready to save. Start replay and wait until Replay Ready."
+            };
+            ReplaySaveFailed?.Invoke(StatusDetails);
             return;
         }
 
