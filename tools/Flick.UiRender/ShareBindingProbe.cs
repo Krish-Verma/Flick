@@ -126,10 +126,25 @@ internal static partial class Program
         for (DependencyObject? node = VisualTreeHelper.GetParent(share); node is Visual; node = VisualTreeHelper.GetParent(node))
             if (node is ScrollViewer scroller) ancestors.Add(scroller);
         var descendants = ProductVisuals(share).OfType<ScrollViewer>().Where(Visible).ToArray();
+        bool NativeSingleLineEditor(ScrollViewer scroll)
+        {
+            // A TextBox requires its normal PART_ContentHost for caret and
+            // selection editing. It is not the Share card's content scroller.
+            // Identify only the actual Custom input's one-line template part;
+            // its own scroll ranges must still be zero for these small values.
+            if (scroll.Name != "PART_ContentHost") return false;
+            for (DependencyObject? node = VisualTreeHelper.GetParent(scroll); node is Visual && node != share;
+                 node = VisualTreeHelper.GetParent(node))
+                if (node is TextBox text) return ReferenceEquals(text, Find<TextBox>("TxtCustomMb")) &&
+                    !text.AcceptsReturn && text.TextWrapping == TextWrapping.NoWrap;
+            return false;
+        }
+        var nativeEditors = descendants.Where(NativeSingleLineEditor).ToArray();
+        var contentScrollers = descendants.Where(scroll => !NativeSingleLineEditor(scroll)).ToArray();
         var allScrollers = ancestors.Concat(descendants).ToArray();
         double scrollHeight = allScrollers.Select(scroll => scroll.ScrollableHeight).DefaultIfEmpty(0).Max();
         double scrollWidth = allScrollers.Select(scroll => scroll.ScrollableWidth).DefaultIfEmpty(0).Max();
-        if (ancestors.Count != 0 || descendants.Length != 0 || scrollHeight > .5 || scrollWidth > .5)
+        if (ancestors.Count != 0 || contentScrollers.Length != 0 || scrollHeight > .5 || scrollWidth > .5)
             failures.Add("Share content participates in scrolling.");
         if (Find<ScrollViewer>("EditorContextScroll").Visibility != Visibility.Collapsed)
             failures.Add("The separate Trim/Audio scroll host is not collapsed during Share.");
@@ -191,6 +206,8 @@ internal static partial class Program
         }
         return (failures.Count == 0, new { controlsFit = failures.Count == 0, NoScrollViewerAncestor = ancestors.Count == 0,
             ScrollableHeight = scrollHeight, ScrollableWidth = scrollWidth,
+            NativeSingleLineEditingHosts = nativeEditors.Select(scroll => new { scroll.Name, scroll.ScrollableHeight, scroll.ScrollableWidth }),
+            ShareContentScrollers = contentScrollers.Select(scroll => scroll.Name),
             ContextBounds = Coordinates(Bounds(context)), BodyBounds = Coordinates(Bounds(share)), FooterBounds = Coordinates(Bounds(footer)),
             Rows = rows, Text = textObservations, Failures = failures });
     }
