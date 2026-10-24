@@ -5,6 +5,7 @@ using System.Windows;
 using System.Windows.Controls;
 using LocalClip.App;
 using LocalClip.App.Services;
+using LocalClip.App.ViewModels;
 using LocalClip.App.Views;
 using LocalClip.Core.Models;
 using Xunit;
@@ -83,6 +84,37 @@ public class SettingsStagingTests
                 using var notification = new FlickNotificationService(page.Dispatcher);
                 notification.NotifySaved(30, false, false, "Custom", @"Z:\missing.wav");
                 Assert.False(FlickDialog.IsOpen);
+
+                // Exercise the real capture controls in the same WPF Application.
+                // WPF permits only one Application instance per AppDomain; avoid
+                // a second test creating its own competing Application singleton.
+                var window = new MainWindow(); // Never shown; no native recording started.
+                var vm = Assert.IsType<MainViewModel>(window.DataContext);
+                try
+                {
+                    vm.Settings.ShowClipSavedOverlay = false; // No test desktop toast.
+                    var saveButton = Assert.IsType<Button>(window.FindName("BtnSaveReplay"));
+                    var updateCaptureUi = typeof(MainWindow).GetMethod(
+                        "UpdateStatusBadgeColor", BindingFlags.NonPublic | BindingFlags.Instance)!;
+
+                    vm.CaptureStatus = "Buffering";
+                    updateCaptureUi.Invoke(window, null);
+                    Assert.False(saveButton.IsEnabled);
+                    vm.CaptureStatus = "Armed";
+                    updateCaptureUi.Invoke(window, null);
+                    Assert.True(saveButton.IsEnabled);
+                    vm.CaptureStatus = "Off";
+                    updateCaptureUi.Invoke(window, null);
+                    Assert.False(saveButton.IsEnabled);
+
+                    string? reported = null;
+                    vm.ReplaySaveFailed += reason => reported = reason;
+                    vm.SaveReplayAsync().GetAwaiter().GetResult();
+                    Assert.NotNull(reported);
+                    Assert.Contains("Replay is off", reported);
+                    Assert.Contains(vm.Settings.CaptureToggleHotkey, reported);
+                }
+                finally { vm.Dispose(); }
                 app.Shutdown();
             }
             catch (Exception ex) { failure = ex; }
