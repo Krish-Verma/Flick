@@ -14,12 +14,12 @@ The still loader owns one serialized cancellable operation, accepts only a local
 
 ## Authored and locally checked
 
-- App, App-test and renderer Mac crossbuilds pass with SDK10.0.402, zero warnings/errors. Windows execution is pending the combined batch; this is not an actual WPF runtime pass.
+- App, App-test and renderer Mac crossbuilds pass with SDK10.0.402, zero warnings/errors. Final Windows CI40102045722 executes App9/Core467 and8 real media cases; renderer40102045791 executes67 actual WPF states.
 - An STA test exercises production file-data construction, real clipboard roundtrip, Unicode paths, missing-file refusal, bounded preview dimensions, handle release, corrupt/oversized images and cancellation. Its sentinel file tests transport format only; it is not represented as codec-valid video.
 - Additional actual WPF fixtures create real synthetic H.264/AAC input, register it through storage, run the production MP4 exporter/full decode and then bind a genuine Ready export. Original hashes are checked. Renders cover Ready at1280×720/1920×1080/2560×1440/720×480, raster96/120/144/192DPI, accessible palette, empty/offline/stale/failure and simulated exporting/cancelling. Exact provenance distinguishes real media preparation from simulated visual states.
 
-## Pending combined acceptance
+## Combined acceptance
 
 Run the integrated Windows app/STA tests, native/media matrix, real WPF render and installer checks. Review actual pixels and fix geometry, contrast, clipping or affordance failures before acceptance. Compare to retained1.0.6 WPF baseline. Raster scaling is not a physical display change; accessible-palette fixtures do not prove actual Windows High Contrast toggling. Native drag and actual Discord desktop/browser attachment previews remain physical gates. The available SSH session cannot create an interactive test child (Windows error1314); no security bypass is permitted. Do not send messages or upload clips to another person without explicit authorization.
 
-No public Release, tag reuse, published binary replacement or GitHub Latest change occurred. All E2–E4 acceptance remains pending integrated execution/visual review.
+No public Release, tag reuse, published binary replacement or GitHub Latest change occurred. Integrated automated/visual acceptance passes, including current-value binding checks, native clipboard, offline Export, minimum geometry and original/profile preservation. Actual Discord and OS display interaction remain open; see FINAL-REPORT.md.

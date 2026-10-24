@@ -1,6 +1,6 @@
 # Flick 1.0.7-preview.1 candidate readiness
 
-Status: **unreleased, unsigned, not yet qualified for shipment**. This document prepares a unique version for the combined A–E implementation. It records required gates, not a claim that they passed. Publishing any new release or replacing GitHub Latest requires fresh explicit owner approval after review of the concrete final artifacts.
+Status: **unreleased, unsigned, not yet qualified for shipment**. This document prepares a unique version for the combined A–E implementation. Available code, media, visual and installer gates now pass; physical/trust/publication gates remain open. See [the final report](product-phase/FINAL-REPORT.md). Publishing any new release or replacing GitHub Latest requires fresh explicit owner approval after review of the concrete final artifacts.
 
 ## Version and preservation boundary
 
@@ -27,14 +27,14 @@ Manual replay starts off. Approved-game replay is a separate opt-in that may sta
 
 The first PR49 integration batch and earlier per-lane focused passes are discovery evidence. Any runtime/UI fix or this version change produces a different source; record a fresh final candidate and applicable same-source results before approval.
 
-| Gate | Status at version preparation | Evidence required before publication consideration |
+| Gate | Verified status | Evidence required before publication consideration |
 | --- | --- | --- |
-| Final source commit/tree | Pending final integration and version commit | Immutable full commit/tree; clean executable input inventory |
-| Windows warnings-as-errors build and native link | Pending on this final candidate | Successful .NET/WPF build and GCC native build including COM link dependency; correct four-owned-PE product/version metadata |
-| Independent/Core/App tests | Pending combined batch | Expected executed counts with 0 failures; skipped hardware cases explicitly separated; single-Application WPF assertion helpers actually invoked |
-| Synthetic media | Pending combined batch | Exactly 8 expected generated-media cases execute/pass with pinned FFmpeg; full MP4 decode, contribution/mute/gain/no double mix, aspect/trim/cancellation and unchanged original bytes |
-| WPF visuals/interactions | Pending final rendering | Actual controls at compact/split/minimum layouts; Audio/Games/organization/Share; keyboard, overflow, high contrast; raster scaling distinguished from real DPI acceptance |
-| Installer/package | Pending final candidate | Complete pinned runtime inventory, checksums, Setup/ZIP/host hashes, upgrade wait/restart, retained user data and uninstall allowlist behavior |
+| Final source commit/tree | Merged70e6076; tree65de858c equals tested38ab994f | Immutable full commit/tree; clean executable input inventory |
+| Windows warnings-as-errors build and native link | Passed CI40102045722 and package40102045726 | Successful .NET/WPF build and GCC native build including COM link dependency; correct four-owned-PE product/version metadata |
+| Independent/Core/App tests | Passed Core467/App9;17 explicit unit gates;8/8 separate media cases | Expected executed counts with 0 failures; skipped hardware cases explicitly separated; single-Application WPF assertion helpers actually invoked |
+| Synthetic media | Passed Core467/App9;17 explicit unit gates;8/8 separate media cases | Exactly 8 expected generated-media cases execute/pass with pinned FFmpeg; full MP4 decode, contribution/mute/gain/no double mix, aspect/trim/cancellation and unchanged original bytes |
+| WPF visuals/interactions | Passed67 states40102045791; physical interactions remain separate | Actual controls at compact/split/minimum layouts; Audio/Games/organization/Share; keyboard, overflow, high contrast; raster scaling distinguished from real DPI acceptance |
+| Installer/package | Passed40102045726; lifecycle evidence independently rehashed | Complete pinned runtime inventory, checksums, Setup/ZIP/host hashes, upgrade wait/restart, retained user data and uninstall allowlist behavior |
 | Physical capture/audio | Not qualified | Authorized unlocked owner session; selected synthetic window/processes, real saved/decoded media and confirmed owned-process cleanup; no private microphone/audio substitution |
 | Performance/endurance | Not measured for combined candidate | Repeatable startup/readiness/save/export latency, idle/recording CPU/RAM/GPU, equivalent gameplay FPS/1% lows and 2-hour/8-hour runs with exact hardware/driver/profile |
 | Signing/Store | Separate and pending | Approved signing identity, trusted signatures/SAC acceptance or separate Store certification; no security bypass |
