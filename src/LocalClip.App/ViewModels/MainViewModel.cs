@@ -45,6 +45,77 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
     private ClipMetadata? _pendingAudioClip;
     private readonly System.Collections.Generic.List<AudioTrackInfo> _subscribedAudioTracks = new();
 
+    // Engine health and save completion are independent: a stopped engine may
+    // still have a real save being validated. Source identity is fixed at request.
+    private readonly RecordingHealthLedger _health = new();
+    private Guid _healthSession;
+    private int _captureEpoch;
+    private bool _pollInProgress;
+    private readonly System.Collections.Generic.Dictionary<string, (Guid Session, string Target, bool Validating)> _saveContexts = new(StringComparer.Ordinal);
+
+    public RecordingHealthSnapshot RecordingHealth => _health.Snapshot;
+    public string HealthStatusText => _health.Snapshot.StatusText;
+    public string HealthDetailsText
+    {
+        get
+        {
+            var h = _health.Snapshot;
+            string source = h.Source?.Name ?? SelectedTarget?.DisplayName ?? "No source selected";
+            string profile = h.Profile?.DisplayText ?? "Not recording";
+            string previous = h.LastProfile is null || h.Profile != null ? "" : $"\nLast recording: {h.LastProfile.DisplayText}";
+            string buffer = h.EngineState is RecordingEngineState.Ready or RecordingEngineState.Buffering
+                ? $"{(h.BufferedDurationEstimated ? "~" : "")}{h.BufferedSeconds:F1}s / {h.MaximumBufferSeconds:F0}s{(h.BufferTrackingLimited ? " · limited tracking" : "")}" : "No active replay buffer";
+            return $"Engine: {h.EngineState} · Save: {h.SaveState}\nSource: {source}\nEncoder / profile: {profile}{previous}\nBuffer: {buffer}\nHost: {(_healthSession == Guid.Empty ? (_captureHost.IsRunning ? "Helper available · Replay Off" : "Stopped") : h.HostHealth.ToString())}";
+        }
+    }
+    public string HealthLastFailureText
+    {
+        get
+        {
+            var h = _health.Snapshot;
+            return $"Last recording error: {h.LastRecordingIssue?.Message ?? "None reported"}\nLast save error: {h.LastSaveIssue?.Message ?? "None reported"}";
+        }
+    }
+    public string HealthLastSavedText => _health.Snapshot.LastValidatedClip is { } clip
+        ? $"Last validated clip: {clip.DurationSeconds:F1} sec · {clip.SavedAt.ToLocalTime():g}"
+        : "No clip validated in this session";
+    public string HealthHotkeysText => _health.Snapshot.Hotkeys.Count == 0
+        ? "Shortcuts register when the window opens."
+        : string.Join("\n", _health.Snapshot.Hotkeys.Select(h =>
+            $"{h.Action}: {(h.IsRegistered ? h.RegisteredChord : "Unavailable")} · {h.Message}"));
+
+    public void ReportHotkeyHealth(string action, string requested, string? registered, string message = "")
+    {
+        _health.SetHotkeyHealth(new RecordingHotkeyHealth(action, requested, registered, registered != null, Message: message));
+        PublishHealth();
+    }
+
+    private void PublishHealth()
+    {
+        OnPropertyChanged(nameof(RecordingHealth));
+        OnPropertyChanged(nameof(HealthStatusText));
+        OnPropertyChanged(nameof(HealthDetailsText));
+        OnPropertyChanged(nameof(HealthLastFailureText));
+        OnPropertyChanged(nameof(HealthLastSavedText));
+        OnPropertyChanged(nameof(HealthHotkeysText));
+    }
+
+    private void RecordCaptureFailure(string code, string message, bool faulted = true)
+    {
+        _health.RecordRecordingIssue(_healthSession, code, message, faulted);
+        StatusDetails = message;
+        PublishHealth();
+    }
+
+    private void RecordSaveFailure(string saveId, string reason)
+    {
+        if (_saveContexts.Remove(saveId, out var context))
+            _health.RecordSaveFailure(context.Session, saveId, "save-failed", reason);
+        else _health.RecordSaveIssue("save-failed", reason);
+        StatusDetails = reason;
+        PublishHealth();
+    }
+
     // Capture state
     private string _captureStatus = "Off";
     private string _bufferedDurationText = "0.0s / 30.0s";
@@ -161,8 +232,18 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
         set
         {
             _captureStatus = value;
+            IsArmed = value == "Armed";
             if (value is "Off" or "Faulted" or "Paused") SetCaptureProfile(null);
+            _health.ObserveEngine(_healthSession, value switch {
+                "Starting" => RecordingEngineState.Starting,
+                "Buffering" => RecordingEngineState.Buffering,
+                "Armed" => RecordingEngineState.Ready,
+                "Stopping" => RecordingEngineState.Stopping,
+                "Faulted" => RecordingEngineState.Faulted,
+                _ => RecordingEngineState.Off
+            });
             OnPropertyChanged();
+            PublishHealth();
         }
     }
 
@@ -173,14 +254,21 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
     {
         if (_captureProfile == profile) return;
         _captureProfile = profile;
+        if (profile != null) _health.ObserveProfile(_healthSession, profile);
+        PublishHealth();
         OnPropertyChanged(nameof(CaptureEncodingText));
         OnPropertyChanged(nameof(SoftwareFallbackWarning));
     }
 
     private void OnCaptureConfigured(CaptureEncodingProfile profile)
     {
+        var observedSession = _health.Snapshot.SessionId;
+        int observedEpoch = _captureEpoch;
+        int? observedHost = _captureHost.HostProcessId;
         Application.Current?.Dispatcher.Invoke(() =>
         {
+            if (observedSession != _healthSession || observedEpoch != _captureEpoch ||
+                observedHost != _captureHost.HostProcessId) return;
             if (CaptureStatus is "Starting" or "Buffering" or "Armed") SetCaptureProfile(profile);
         });
     }
@@ -484,33 +572,41 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
 
     public async Task StartCaptureAsync()
     {
-        if (CaptureStatus == "Starting" || CaptureStatus == "Stopping") return;
+        if (CaptureActive || _stopCaptureTask != null) return;
         if (SelectedTarget is null || !Targets.Contains(SelectedTarget))
         {
             // Reject an absent or stale selection before invoking the native
             // recorder, including when triggered by the global hotkey.
             CaptureStatus = "Off";
-            StatusDetails = "Select an available window or monitor before starting replay.";
+            RecordCaptureFailure("missing-source", "Select an available window or monitor before starting replay.", false);
             return;
         }
         // Never let folder indexing compete with the live gameplay encoder.
         _importCancellation?.Cancel();
         _thumbnailCancellation?.Cancel();
+        _captureEpoch++;
+        _healthSession = _health.BeginSession(new RecordingSource(SelectedTarget.Type,
+            SelectedTarget.DisplayName, SelectedTarget.Exe));
         SetCaptureProfile(null);
         CaptureStatus = "Starting";
         StatusDetails = "Initializing capture encoder and audio...";
+        int startingEpoch = _captureEpoch;
+        Guid startingSession = _healthSession;
         try
         {
-            if (!await _captureHost.StartCaptureAsync(_settings))
+            bool started = await _captureHost.StartCaptureAsync(_settings);
+            if (startingEpoch != _captureEpoch || startingSession != _healthSession) return;
+            if (!started)
             {
                 CaptureStatus = "Faulted";
-                StatusDetails = _captureHost.LastStartError;
+                RecordCaptureFailure("startup-refused", _captureHost.LastStartError);
             }
         }
         catch (Exception ex)
         {
+            if (startingEpoch != _captureEpoch || startingSession != _healthSession) return;
             CaptureStatus = "Faulted";
-            StatusDetails = "Capture startup failed: " + ex.Message;
+            RecordCaptureFailure("startup-failed", "Capture startup failed: " + ex.Message);
         }
     }
 
@@ -529,18 +625,22 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
 
     private async Task StopCaptureCoreAsync()
     {
+        _captureEpoch++;
         CaptureStatus = "Stopping";
         bool stopped = false;
         try { stopped = await _captureHost.StopCaptureAsync(); }
-        catch (Exception ex) { StatusDetails = "Capture stop error: " + ex.Message; }
+        catch (Exception ex) { RecordCaptureFailure("stop-failed", "Capture stop error: " + ex.Message); }
         finally
         {
             await _captureHost.ShutdownAsync();
             CaptureStatus = "Off";
             IsArmed = false;
+            _health.ObserveEngine(_healthSession, RecordingEngineState.Stopped);
+            _health.ObserveHost(_healthSession, CaptureHostHealth.Exited);
             BufferedDurationText = $"0.0s / {_settings.ReplayDurationSeconds}.0s";
-            StatusDetails = stopped ? "Capture stopped; native helper exited." :
-                "Capture was force-terminated. Check the previous clip before restarting.";
+            if (stopped) StatusDetails = "Capture stopped; native helper exited.";
+            else RecordCaptureFailure("forced-stop", "Capture was force-terminated. Check the previous clip before restarting.", false);
+            PublishHealth();
         }
     }
 
@@ -563,7 +663,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
 
     public async Task SaveReplayAsync()
     {
-        if (CaptureStatus != "Buffering" && CaptureStatus != "Armed")
+        if (CaptureStatus != "Armed" || !IsArmed || _health.Snapshot.EngineState != RecordingEngineState.Ready)
         {
             StatusDetails = CaptureStatus switch
             {
@@ -573,28 +673,52 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
                 "Faulted" => "Replay capture failed. Review the capture error and start replay again.",
                 _ => "Replay is not ready to save. Start replay and wait until Replay Ready."
             };
+            _health.RecordSaveIssue("not-ready", StatusDetails);
+            PublishHealth();
             ReplaySaveFailed?.Invoke(StatusDetails);
             return;
         }
 
+        string saveId = "clip_" + DateTime.UtcNow.ToString("yyyyMMdd_HHmmss") + "_" + Guid.NewGuid().ToString("N");
+        var saveSession = _healthSession;
+        if (!_health.BeginSave(saveSession, saveId))
+        {
+            _health.RecordSaveIssue("health-not-ready", "Replay health is not ready. Restart replay before saving.");
+            PublishHealth();
+            ReplaySaveFailed?.Invoke("Replay health is not ready. Restart replay before saving.");
+            return;
+        }
+        _saveContexts.Add(saveId, (saveSession, _health.Snapshot.Source?.Name ?? SelectedTarget?.DisplayName ?? "Screen", false));
         _saveRequestOperations++;
         OnPropertyChanged(nameof(IsReplaySavePending));
         StatusDetails = "Snapshotting replay buffer to original MKV...";
-        string saveId = "clip_" + DateTime.UtcNow.ToString("yyyyMMdd_HHmmss") + "_" + Guid.NewGuid().ToString("N");
+        PublishHealth();
         try
         {
             if (!await _captureHost.SaveReplayAsync(saveId, "Clip"))
             {
-                StatusDetails = _captureHost.LastSaveError;
-                ReplaySaveFailed?.Invoke(StatusDetails);
+                // A real terminal file may have overtaken its command ACK.
+                if (_saveContexts.TryGetValue(saveId, out var pending) && !pending.Validating)
+                {
+                    RecordSaveFailure(saveId, _captureHost.LastSaveError);
+                    ReplaySaveFailed?.Invoke(StatusDetails);
+                }
             }
+            else { _health.AcknowledgeSave(saveSession, saveId, true); PublishHealth(); }
         }
         catch (Exception ex)
         {
-            StatusDetails = _captureHost.HasPendingReplaySaves
-                ? "Replay save status could not be confirmed. Flick is still tracking the save: " + ex.Message
-                : "Replay save failed: " + ex.Message;
-            ReplaySaveFailed?.Invoke(StatusDetails);
+            // Once a real terminal file reaches validation, a late/missing ACK
+            // cannot remove its health context or turn success into a failure.
+            if (_saveContexts.TryGetValue(saveId, out var pending) && !pending.Validating)
+            {
+                StatusDetails = _captureHost.HasPendingReplaySaves
+                    ? "Replay save status could not be confirmed. Flick is still tracking the save: " + ex.Message
+                    : "Replay save failed: " + ex.Message;
+                if (!_captureHost.HasPendingReplaySaves) RecordSaveFailure(saveId, StatusDetails);
+                else { _health.RecordSaveIssue("save-unconfirmed", StatusDetails); PublishHealth(); }
+                ReplaySaveFailed?.Invoke(StatusDetails);
+            }
         }
         finally
         {
@@ -617,7 +741,8 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
         {
             void ReportFailure()
             {
-                StatusDetails = reason;
+                foreach (var pending in _saveContexts.Where(p => !p.Value.Validating).Select(p => p.Key).ToArray())
+                    RecordSaveFailure(pending, reason);
                 ReplaySaveFailed?.Invoke(reason);
             }
             if (dispatcher.CheckAccess()) ReportFailure();
@@ -627,9 +752,18 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
 
     private void OnHostStateChanged(string state)
     {
+        var observedSession = _health.Snapshot.SessionId;
+        int observedEpoch = _captureEpoch;
+        int? observedHost = _captureHost.HostProcessId;
         Application.Current?.Dispatcher.Invoke(() =>
         {
+            if (observedSession != _healthSession || observedEpoch != _captureEpoch ||
+                observedHost != _captureHost.HostProcessId) return;
+            if (CaptureStatus == "Stopping" ||
+                (state is "Armed" or "Buffering" && CaptureStatus is not ("Starting" or "Armed" or "Buffering"))) return;
             CaptureStatus = state;
+            _health.ObserveHost(_healthSession, CaptureHostHealth.Responsive);
+            PublishHealth();
             if (state == "Armed")
             {
                 IsArmed = true;
@@ -655,13 +789,16 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
             OnPropertyChanged(nameof(IsReplaySavePending));
             try
             {
-                StatusDetails = $"Saved original clip: {Path.GetFileName(filePath)}";
+                if (!_saveContexts.TryGetValue(saveId, out var context)) return;
+                _saveContexts[saveId] = (context.Session, context.Target, true);
+                _health.MarkSaveValidating(context.Session, saveId);
+                StatusDetails = "Validating saved clip…";
+                PublishHealth();
                 if (File.Exists(filePath))
                 {
                     try
                     {
-                        string targetName = SelectedTarget?.DisplayName ?? "Screen";
-                        var clip = await _storage.RegisterNewOriginalAsync(filePath, targetName, trackNames);
+                        var clip = await _storage.RegisterNewOriginalAsync(filePath, context.Target, trackNames);
                         // Reloading an ObservableCollection can temporarily clear the
                         // ListBox selection through its TwoWay binding. Snapshot the
                         // edit context BEFORE rebuilding the gallery.
@@ -670,17 +807,25 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
                         SelectedClip = editing is null
                             ? clip
                             : FilteredClips.FirstOrDefault(c => c.Id == editing.Id) ?? editing;
-                        ClipSavedConfirmed?.Invoke(clip);
+                        _health.RecordValidatedClip(context.Session, saveId, clip.Id, clip.DurationSeconds);
+                        _saveContexts.Remove(saveId);
+                        StatusDetails = "Clip Saved";
+                        PublishHealth();
+                        try { ClipSavedConfirmed?.Invoke(clip); }
+                        catch (Exception notificationError)
+                        {
+                            StatusDetails = "Clip Saved. A notification could not be shown: " + notificationError.Message;
+                        }
                     }
                     catch (Exception ex)
                     {
-                        StatusDetails = "Saved clip could not be indexed: " + ex.Message;
+                        RecordSaveFailure(saveId, "Saved clip could not be validated or indexed: " + ex.Message);
                         ReplaySaveFailed?.Invoke(StatusDetails);
                     }
                 }
                 else
                 {
-                    StatusDetails = "The capture helper reported a saved clip, but its original file is unavailable.";
+                    RecordSaveFailure(saveId, "The capture helper reported a saved clip, but its original file is unavailable.");
                     ReplaySaveFailed?.Invoke(StatusDetails);
                 }
             }
@@ -702,7 +847,8 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
         if (dispatcher != null)
             _ = dispatcher.BeginInvoke(new Action(() =>
             {
-                StatusDetails = "Replay save failed: " + reason;
+                string saveId = data.HasValue && data.Value.TryGetProperty("save_id", out var id) ? id.GetString() ?? "" : "";
+                RecordSaveFailure(saveId, "Replay save failed: " + reason);
                 ReplaySaveFailed?.Invoke(reason);
             }));
         // Save errors leave an otherwise healthy replay buffer armed.
@@ -710,53 +856,92 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
 
     private void OnHostFaultOccurred(string reason)
     {
+        var observedSession = _health.Snapshot.SessionId;
+        int observedEpoch = _captureEpoch;
+        int? observedHost = _captureHost.HostProcessId;
         Application.Current?.Dispatcher.Invoke(() =>
         {
+            if (observedSession != _healthSession || observedEpoch != _captureEpoch ||
+                observedHost != _captureHost.HostProcessId) return;
             CaptureStatus = "Faulted";
             IsArmed = false;
-            StatusDetails = "Capture Fault: " + reason;
+            _health.ObserveHost(_healthSession, _captureHost.IsRunning ? CaptureHostHealth.Responsive : CaptureHostHealth.Exited);
+            RecordCaptureFailure("capture-fault", "Capture Fault: " + reason);
         });
     }
 
     private async void OnPollTick(object? sender, EventArgs e)
     {
-        if (_captureHost.IsRunning)
+        if (_pollInProgress || CaptureStatus is "Starting" or "Stopping") return;
+        if (!_captureHost.IsRunning)
         {
-            try
+            _health.ObserveHost(_healthSession, CaptureHostHealth.Exited);
+            if (CaptureActive)
             {
-                var st = await _captureHost.GetStatusAsync();
-                if (st.Profile != null && CaptureStatus is ("Buffering" or "Armed"))
-                    SetCaptureProfile(st.Profile);
-                if (st.State == "Buffering" || st.State == "Armed")
-                {
-                    BufferedDurationText = $"~{st.BufferedSec:F1}s / {st.MaxSec:F0}s";
-                }
-
-                if (!st.TargetValid && CaptureStatus != "Faulted")
-                {
-                    CaptureStatus = "Faulted";
-                    StatusDetails = "Selected target window was closed or lost.";
-                }
-
-                // Sample resource usage
-                var sample = _resourceMonitor.Sample();
-                double hostMb = st.PrivateBytes / (1024.0 * 1024.0);
-                double appMb = sample.AppPrivateBytes / (1024.0 * 1024.0);
-                ResourceStatsText = $"App RAM: {appMb:F0} MB | Host RAM: {hostMb:F0} MB | CPU: {sample.AppCpuPercent:F1}%";
-
-                if (st.PrivateBytes > 805_306_368L)
-                {
-                    await StopCaptureAsync();
-                    StatusDetails = "Capture stopped: native host exceeded the 768 MiB safety limit.";
-                    return;
-                }
-                if (sample.IsLowSystemMemory)
-                {
-                    StatusDetails = "Warning: System available physical memory < 1 GB!";
-                }
+                CaptureStatus = "Faulted";
+                RecordCaptureFailure("host-exited", "The recording helper exited. Review the source and restart replay.");
             }
-            catch { }
+            return;
         }
+        _pollInProgress = true;
+        int epoch = _captureEpoch;
+        int? hostPid = _captureHost.HostProcessId;
+        try
+        {
+            var st = await _captureHost.GetStatusAsync();
+            // A query started before stop/restart must not rewrite the new session.
+            if (epoch != _captureEpoch || hostPid != _captureHost.HostProcessId) return;
+            _health.ObserveHost(_healthSession, CaptureHostHealth.Responsive);
+            if (st.State == "Faulted" || !string.IsNullOrWhiteSpace(st.FaultReason) || !st.TargetValid)
+            {
+                bool alreadyFaulted = CaptureStatus == "Faulted";
+                CaptureStatus = "Faulted";
+                if (!alreadyFaulted || _health.Snapshot.LastRecordingIssue == null)
+                    RecordCaptureFailure("target-or-engine-fault", st.FaultReason switch {
+                        "capture_target_lost" => "Selected capture source was lost. Choose an available window or monitor and restart replay.",
+                        "capture_buffer_tracking_failed" => "Replay buffer tracking failed. Restart replay before saving.",
+                        "capture_save_timed_out" => "Replay save timed out. Check the previous clip and restart replay.",
+                        _ => "The recording engine reported a fault. Check the selected source and encoder, then restart replay."
+                    });
+            }
+            else if (CaptureStatus != "Faulted" && st.State is ("Buffering" or "Armed"))
+            {
+                // Inconsistent readiness is not permission to save.
+                CaptureStatus = st.State == "Armed" && st.IsArmed ? "Armed" : "Buffering";
+                if (st.Profile != null) SetCaptureProfile(st.Profile);
+                BufferedDurationText = $"{(st.BufferedDurationEstimated ? "~" : "")}{st.BufferedSec:F1}s / {st.MaxSec:F0}s";
+                _health.ObserveBuffer(_healthSession, st.BufferedSec, st.MaxSec,
+                    st.BufferedDurationEstimated, st.BufferTrackingLimited);
+            }
+            else if (CaptureActive && st.State == "Off")
+            {
+                CaptureStatus = "Faulted";
+                RecordCaptureFailure("unexpected-stop", "The recording engine stopped unexpectedly. Review the source and restart replay.");
+            }
+            var sample = _resourceMonitor.Sample();
+            double hostMb = st.PrivateBytes / (1024.0 * 1024.0);
+            double appMb = sample.AppPrivateBytes / (1024.0 * 1024.0);
+            ResourceStatsText = $"App RAM: {appMb:F0} MB | Host RAM: {hostMb:F0} MB | CPU: {sample.AppCpuPercent:F1}%";
+            if (st.PrivateBytes > 805_306_368L)
+            {
+                await StopCaptureAsync();
+                RecordCaptureFailure("host-memory-limit", "Capture stopped: native host exceeded the 768 MiB safety limit.", false);
+                return;
+            }
+            if (sample.IsLowSystemMemory) StatusDetails = "Warning: System available physical memory < 1 GB!";
+            PublishHealth();
+        }
+        catch (Exception ex)
+        {
+            if (epoch == _captureEpoch && hostPid == _captureHost.HostProcessId)
+            {
+                // Disable saves until the engine responds with valid readiness.
+                IsArmed = false;
+                _health.ObserveHost(_healthSession, CaptureHostHealth.Unresponsive);
+                RecordCaptureFailure("host-unresponsive", "Capture health unavailable: " + ex.Message, false);
+            }
+        }
+        finally { _pollInProgress = false; }
     }
 
     public async Task<ClipImportSummary> ImportFolderAsync(

@@ -8,6 +8,7 @@ using System.Windows.Threading;
 using LocalClip.App;
 using LocalClip.App.ViewModels;
 using LocalClip.App.Views.Components;
+using LocalClip.Core.Diagnostics;
 using LocalClip.Core.Ipc;
 using LocalClip.Core.Models;
 using LocalClip.Core.Rules;
@@ -142,6 +143,66 @@ internal static class Program
         });
         Render("18-cpu-warning-compact.png", 800, 600);
         Render("19-cpu-warning-wide.png", 1240, 720);
+        // A1 health fixtures drive the real ledger/bindings, never a capture
+        // helper or a media validator. Success below is a simulated health
+        // observation; none of the placeholder MKVs is treated as valid media.
+        var health = (RecordingHealthLedger)typeof(MainViewModel).GetField("_health", Private)!.GetValue(vm)!;
+        void PublishHealth()
+        {
+            typeof(MainViewModel).GetMethod("PublishHealth", Private)!.Invoke(vm, null);
+            Invoke("UpdateStatusBadgeColor");
+        }
+        Guid BeginHealthFixture(string source)
+        {
+            Guid session = health.BeginSession(new RecordingSource("Monitor", source));
+            typeof(MainViewModel).GetField("_healthSession", Private)!.SetValue(vm, session);
+            vm.CaptureStatus = "Armed";
+            typeof(MainViewModel).GetMethod("SetCaptureProfile", Private)!.Invoke(vm, new object[] {
+                new CaptureEncodingProfile("obs_qsv11_v2", "Intel Quick Sync H.264", false, 1920, 1080, 60)
+            });
+            health.ObserveHost(session, CaptureHostHealth.Responsive);
+            health.ObserveBuffer(session, 30, 30, estimated: false);
+            vm.BufferedDurationText = "30.0s / 30s";
+            return session;
+        }
+        void RenderHealthPair(string wide, string compact)
+        {
+            typeof(MainWindow).GetField("_layoutMode", Private)!.SetValue(main, WorkspaceLayoutMode.Split);
+            Invoke("ApplyWorkspaceLayout");
+            PublishHealth();
+            Render(wide, 1240, 720);
+            typeof(MainWindow).GetField("_layoutMode", Private)!.SetValue(main, WorkspaceLayoutMode.Compact);
+            Invoke("ShowCompactEditor");
+            PublishHealth();
+            Render(compact, 800, 600);
+        }
+        vm.ReportHotkeyHealth("Toggle replay", settings.CaptureToggleHotkey,
+            settings.CaptureToggleHotkey, "Synthetic registration fixture");
+        vm.ReportHotkeyHealth("Save replay", settings.SaveReplayHotkey, null,
+            "Synthetic conflict: choose another shortcut in Settings.");
+        Guid faultSession = BeginHealthFixture("Sample display (synthetic)");
+        health.BeginSave(faultSession, "render-failed-save");
+        health.RecordSaveFailure(faultSession, "render-failed-save", "fixture-save-failed",
+            "Simulated: the originals folder is unavailable. Choose an accessible folder in Settings and try again.");
+        health.RecordRecordingIssue(faultSession, "fixture-target-lost",
+            "Simulated: the selected window closed. Choose an available source and start replay again.");
+        vm.CaptureStatus = "Faulted";
+        vm.StatusDetails = "Synthetic recording-health fixture · no capture performed";
+        Invoke("BtnRecordingHealth_Click", Find<Button>("BtnRecordingHealth"), new RoutedEventArgs());
+        RenderHealthPair("20-health-fault-wide.png", "21-health-fault-compact.png");
+
+        Guid saveSession = BeginHealthFixture("Second sample display (synthetic)");
+        health.BeginSave(saveSession, "render-validating-save");
+        health.AcknowledgeSave(saveSession, "render-validating-save", true);
+        health.MarkSaveValidating(saveSession, "render-validating-save");
+        RenderHealthPair("22-health-validating-wide.png", "23-health-validating-compact.png");
+        health.RecordValidatedClip(saveSession, "render-validating-save", "synthetic-health-summary-only", 18.5);
+        RenderHealthPair("24-health-success-wide.png", "25-health-success-compact.png");
+        vm.CaptureStatus = "Off";
+        health.ObserveEngine(saveSession, RecordingEngineState.Stopped);
+        health.ObserveHost(saveSession, CaptureHostHealth.Exited);
+        PublishHealth();
+        Render("26-health-stopped-retained-compact.png", 800, 600);
         string applicationVersion = typeof(MainWindow).Assembly
             .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? "unknown";
         File.WriteAllText(Path.Combine(output, "PROVENANCE.txt"),
@@ -152,6 +213,8 @@ internal static class Program
             "Additional views: 1440x900 workspace; existing 800x600 compact library and editor branches.\n" +
             "Compact Share: default, Custom 250 MB and expanded optional posting; no export or post action invoked.\n" +
             "Encoder status: synthetic Intel/CPU profiles exercise real bindings and the persistent compatibility warning. No encoder or capture host started.\n" +
+            "Recording health: synthetic ledger observations exercise actual fault/retained-error, validating, success and stopped bindings at wide/compact sizes. Hotkey outcomes are simulated; no hotkeys registered and no clip validated by this renderer.\n" +
+            "The health disclosure is rendered as part of the actual same-window WPF visual; native focus, keyboard and physical placement acceptance are separate.\n" +
             "Brand samples: actual shared Image style rasterized by WPF at 96/120/144/192 DPI; not a physical per-monitor DPI session.\n" +
             "No gameplay, media decoder, OS titlebar, real recording, updater network request, or full UI acceptance claimed.\n");
         vm.Dispose();

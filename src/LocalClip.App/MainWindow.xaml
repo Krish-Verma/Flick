@@ -63,7 +63,8 @@
                 <Button Grid.Column="1" Style="{StaticResource Flick.Button.Icon}" Click="BtnRefreshTargets_Click" AutomationProperties.Name="Refresh Capture Sources" ToolTip="Refresh Capture Sources" Margin="0,0,12,0" VerticalAlignment="Center">
                     <Path Style="{StaticResource Flick.Icon.Symbol}" Data="{StaticResource Flick.Icon.Geometry.Refresh}" Width="16" Height="16"/>
                 </Button>
-                <StackPanel Grid.Column="2" VerticalAlignment="Center" HorizontalAlignment="Center" Margin="0,0,14,0" MinWidth="0">
+                <Button x:Name="BtnRecordingHealth" Grid.Column="2" VerticalAlignment="Center" HorizontalAlignment="Center" Margin="0,0,14,0" MinWidth="0" Padding="4" Style="{StaticResource Flick.Button.Ghost}" Click="BtnRecordingHealth_Click" AutomationProperties.Name="Recording health and recent errors" ToolTip="Recording health · source, shortcuts and recent errors">
+                <StackPanel>
                     <Border x:Name="StatusBadge" Background="Transparent" Padding="0" HorizontalAlignment="Left" Margin="0,0,0,4">
                         <StackPanel Orientation="Horizontal">
                             <Ellipse x:Name="CaptureStateDot" Width="7" Height="7" Fill="{DynamicResource Flick.Brush.TextMuted}" VerticalAlignment="Center" Margin="0,0,7,0"/>
@@ -72,6 +73,7 @@
                     </Border>
                     <TextBlock x:Name="TxtBufferedDuration" Text="{Binding BufferedDurationText}" Style="{StaticResource Flick.Text.Muted}" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap"/>
                 </StackPanel>
+                </Button>
                 <Button Grid.Column="3" x:Name="BtnToggleCapture" Click="BtnToggleCapture_Click" AutomationProperties.Name="Toggle Replay" Style="{StaticResource Flick.Button.Primary}" Content="Start Replay" Margin="0,0,8,0" VerticalAlignment="Center"/>
                 <Button Grid.Column="4" x:Name="BtnSaveReplay" Click="BtnSaveReplay_Click" AutomationProperties.Name="Save Last Replay" Style="{StaticResource Flick.Button.Secondary}" Content="Save Last 30 Seconds" IsEnabled="False" VerticalAlignment="Center"/>
             </Grid>
@@ -451,6 +453,26 @@
              Pages are created lazily and removed on navigation. -->
         <Border x:Name="WorkspacePageLayer" Grid.Row="1" Grid.Column="1" Visibility="Collapsed" Panel.ZIndex="10" Background="{DynamicResource Flick.Brush.Canvas}">
             <ContentControl x:Name="WorkspacePageHost" Focusable="False" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch"/>
+        </Border>
+
+        <!-- Same-window health disclosure: errors survive footer and host changes. -->
+        <Border x:Name="RecordingHealthPanel" Grid.Row="1" Grid.Column="1" Panel.ZIndex="30" Visibility="Collapsed" HorizontalAlignment="Right" VerticalAlignment="Top" MaxWidth="460" MaxHeight="470" Margin="12" Padding="18" Background="{DynamicResource Flick.Brush.Raised}" CornerRadius="12" KeyboardNavigation.TabNavigation="Cycle">
+            <DockPanel LastChildFill="True">
+                <Grid DockPanel.Dock="Top" Margin="0,0,0,12">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                    <TextBlock Text="Recording Health" Style="{StaticResource Flick.Text.Section}" VerticalAlignment="Center"/>
+                    <Button x:Name="BtnCloseRecordingHealth" Grid.Column="1" Content="Close" Style="{StaticResource Flick.Button.Ghost}" Click="BtnCloseRecordingHealth_Click" AutomationProperties.Name="Close recording health"/>
+                </Grid>
+                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                    <StackPanel>
+                        <TextBlock x:Name="TxtHealthStatus" Text="{Binding HealthStatusText}" FontWeight="SemiBold" Foreground="{DynamicResource Flick.Brush.BrandAccent}" Margin="0,0,0,10" AutomationProperties.LiveSetting="Polite"/>
+                        <TextBlock Text="{Binding HealthDetailsText}" TextWrapping="Wrap" Margin="0,0,0,14"/>
+                        <TextBlock Text="{Binding HealthLastFailureText}" TextWrapping="Wrap" Margin="0,0,0,14"/>
+                        <TextBlock Text="{Binding HealthLastSavedText}" TextWrapping="Wrap" Margin="0,0,0,14"/>
+                        <TextBlock Text="{Binding HealthHotkeysText}" TextWrapping="Wrap" Foreground="{DynamicResource Flick.Brush.TextSecondary}"/>
+                    </StackPanel>
+                </ScrollViewer>
+            </DockPanel>
         </Border>
 
         <!-- Bottom Status Bar -->

@@ -167,45 +167,7 @@ public class CaptureHostClient : IDisposable
                     {
                         string evName = evProp.GetString() ?? "";
                         JsonElement? evData = root.TryGetProperty("data", out var dataProp) ? dataProp.Clone() : null;
-
-                        if (evName == "capture_configured" && CaptureEncodingProfile.TryParse(evData, out var configured))
-                        {
-                            CurrentProfile = configured;
-                            CaptureConfigured?.Invoke(configured!);
-                        }
-                        EventReceived?.Invoke(evName, evData);
-
-                        if (evName == "state_changed" && evData.HasValue && evData.Value.TryGetProperty("state", out var stateProp))
-                        {
-                            StateChanged?.Invoke(stateProp.GetString() ?? "Unknown");
-                        }
-                        else if (evName == "replay_saved" && evData.HasValue)
-                        {
-                            string saveId = evData.Value.TryGetProperty("save_id", out var sid) ? sid.GetString() ?? "" : "";
-                            string path = evData.Value.TryGetProperty("path", out var pth) ? pth.GetString() ?? "" : "";
-                            var names = new List<string>();
-                            if (evData.Value.TryGetProperty("tracks", out var tracksProp) &&
-                                tracksProp.ValueKind == JsonValueKind.Array)
-                            {
-                                foreach (var item in tracksProp.EnumerateArray())
-                                    if (item.ValueKind == JsonValueKind.String)
-                                        names.Add(item.GetString() ?? "");
-                            }
-                            ReplaySavedWithTracks?.Invoke(saveId, path, names);
-                            ReplaySaved?.Invoke(saveId, path);
-                        }
-                        else if (evName == "fault" && evData.HasValue)
-                        {
-                            string reason = evData.Value.TryGetProperty("reason", out var rsn) ? rsn.GetString() ?? "Unknown fault" : "Unknown fault";
-                            FaultOccurred?.Invoke(reason);
-                        }
-
-                        // Indexing subscribers begin their work synchronously before
-                        // a successful native save stops protecting the updater gate.
-                        if ((evName is "replay_saved" or "save_failed") && evData is JsonElement terminal &&
-                            terminal.ValueKind == JsonValueKind.Object && terminal.TryGetProperty("save_id", out var savedId) &&
-                            savedId.ValueKind == JsonValueKind.String && _pendingSaves.Complete(savedId.GetString() ?? ""))
-                            PendingReplaySavesChanged?.Invoke();
+                        ProcessIncomingEvent(evName, evData);
                     }
                 }
                 catch (Exception ex)
@@ -231,6 +193,85 @@ public class CaptureHostClient : IDisposable
         }
     }
 
+    private void ProcessIncomingEvent(string eventName, JsonElement? data)
+    {
+        if (eventName is "replay_saved" or "save_failed")
+        {
+            if (data is not JsonElement terminal || terminal.ValueKind != JsonValueKind.Object ||
+                !terminal.TryGetProperty("save_id", out var identity) || identity.ValueKind != JsonValueKind.String ||
+                string.IsNullOrWhiteSpace(identity.GetString())) return;
+
+            string saveId = identity.GetString()!;
+            string path = "";
+            var names = new List<string>();
+            if (eventName == "replay_saved")
+            {
+                if (!terminal.TryGetProperty("path", out var savedPath) || savedPath.ValueKind != JsonValueKind.String ||
+                    string.IsNullOrWhiteSpace(savedPath.GetString())) return;
+                path = savedPath.GetString()!;
+                if (terminal.TryGetProperty("tracks", out var tracks))
+                {
+                    if (tracks.ValueKind != JsonValueKind.Array) return;
+                    foreach (var track in tracks.EnumerateArray())
+                    {
+                        if (track.ValueKind != JsonValueKind.String) return;
+                        names.Add(track.GetString()!);
+                    }
+                }
+            }
+
+            // Drop stale/duplicate terminal events before any subscriber can index
+            // a clip or change health. A claim still counts as a pending save.
+            if (!_pendingSaves.TryClaimCompletion(saveId)) return;
+            try
+            {
+                NotifySubscribers(EventReceived, handler => handler(eventName, data));
+                if (eventName == "replay_saved")
+                {
+                    IReadOnlyList<string> trackNames = names.AsReadOnly();
+                    NotifySubscribers(ReplaySavedWithTracks, handler => handler(saveId, path, trackNames));
+                    NotifySubscribers(ReplaySaved, handler => handler(saveId, path));
+                }
+            }
+            finally
+            {
+                // Indexing subscribers establish their own work guard synchronously
+                // before the native-save protection can be released.
+                if (_pendingSaves.FinishCompletion(saveId))
+                    NotifySubscribers(PendingReplaySavesChanged, handler => handler());
+            }
+            return;
+        }
+
+        if (eventName == "capture_configured" && CaptureEncodingProfile.TryParse(data, out var configured))
+        {
+            CurrentProfile = configured;
+            NotifySubscribers(CaptureConfigured, handler => handler(configured!));
+        }
+        NotifySubscribers(EventReceived, handler => handler(eventName, data));
+
+        if (eventName == "state_changed" && data is JsonElement stateData &&
+            stateData.ValueKind == JsonValueKind.Object && stateData.TryGetProperty("state", out var state))
+        {
+            NotifySubscribers(StateChanged, handler => handler(state.GetString() ?? "Unknown"));
+        }
+        else if (eventName == "fault" && data is JsonElement fault && fault.ValueKind == JsonValueKind.Object)
+        {
+            string reason = fault.TryGetProperty("reason", out var value) ? value.GetString() ?? "Unknown fault" : "Unknown fault";
+            NotifySubscribers(FaultOccurred, handler => handler(reason));
+        }
+    }
+
+    private static void NotifySubscribers<THandler>(THandler? subscribers, Action<THandler> notify) where THandler : Delegate
+    {
+        if (subscribers == null) return;
+        foreach (THandler subscriber in subscribers.GetInvocationList())
+        {
+            try { notify(subscriber); }
+            catch (Exception ex) { Debug.WriteLine($"[CaptureHost subscriber failure]: {ex.GetType().Name}"); }
+        }
+    }
+
     private void ReadStderrLoop(System.Diagnostics.Process process, StreamReader reader, CancellationToken token)
     {
         try
@@ -249,7 +290,7 @@ public class CaptureHostClient : IDisposable
     {
         if (!IsRunning)
         {
-            if (cmd is "save_replay" or "stop_capture" or "shutdown")
+            if (cmd is "get_status" or "save_replay" or "stop_capture" or "shutdown")
                 throw new InvalidOperationException("The capture helper is no longer running.");
             Start();
         }
@@ -430,26 +471,9 @@ public class CaptureHostClient : IDisposable
     public async Task<CaptureHostStatus> GetStatusAsync()
     {
         var resp = await SendCommandAsync("get_status", null, 3000);
-        if (!resp.Ok || !resp.Result.HasValue)
-        {
-            return new CaptureHostStatus { State = "Off" };
-        }
-
-        var r = resp.Result.Value;
-        CaptureEncodingProfile.TryParse(r, out var profile);
-        if (profile != null) CurrentProfile = profile;
-        return new CaptureHostStatus
-        {
-            State = r.TryGetProperty("state", out var s) ? s.GetString() ?? "Off" : "Off",
-            BufferedSec = r.TryGetProperty("buffered_sec", out var bs) ? bs.GetDouble() : 0.0,
-            MaxSec = r.TryGetProperty("max_sec", out var ms) ? ms.GetDouble() : 30.0,
-            IsArmed = r.TryGetProperty("is_armed", out var ia) && ia.GetBoolean(),
-            TargetType = r.TryGetProperty("target_type", out var tt) ? tt.GetString() ?? "" : "",
-            TargetValid = !r.TryGetProperty("target_valid", out var tv) || tv.GetBoolean(),
-            PrivateBytes = r.TryGetProperty("private_bytes", out var pb) ? pb.GetInt64() : 0,
-            WorkingSet = r.TryGetProperty("working_set", out var ws) ? ws.GetInt64() : 0,
-            Profile = profile
-        };
+        var status = CaptureHostStatus.FromResponse(resp);
+        CurrentProfile = status.Profile;
+        return status;
     }
 
     public async Task<bool> StopCaptureAsync()
