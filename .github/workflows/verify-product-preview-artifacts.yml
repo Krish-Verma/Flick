@@ -1,0 +1,222 @@
+# INACTIVE TEMPLATE: copy after review to .github/workflows/verify-product-preview-artifacts.yml.
+# Read/hash/extract data only. No checkout, candidate execution, release or Git ref writes.
+name: Review exact Flick 1.0.7 preview artifact bytes
+on:
+  pull_request:
+    types: [opened]
+    paths: ['.github/workflows/verify-product-preview-artifacts.yml']
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: flick-review-product-preview-artifacts-20261024
+  cancel-in-progress: false
+jobs:
+  verify:
+    if: github.repository == 'Krish-Verma/Flick' && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'release/review-product-preview-20261024' && github.event.pull_request.base.ref == 'main'
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - name: Verify pinned provenance, complete archive and all three files
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_PROMPT_DISABLED: '1'
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $true
+          $repo = 'Krish-Verma/Flick'
+          $runId = 40118162700L
+          $attempt = 1
+          $source = 'ac5a2fbd2db337dec27e5bda415c3cb8783bc7f5'
+          $tree = 'ac18a266d45df19730bcd704670b3d4db352efe1'
+          $build = '17e5fe0269c0f49fbda45d960e9ce4df405cc302'
+          $artifactId = 12569693603L
+          $archiveBytes = 598209066L
+          $archiveDigest = 'sha256:2fbf398126f30cf91b5af9a34ae258090d2515154b156c5d98b1f11dfcbf288f'
+          $expected = @{
+            'Flick-Setup.exe' = '9d2b4574cff0515ae464459a02d7eb8c8b041734d40c2fb1ac5d1c29fc3a8703'
+            'Flick-v1.0.7-win-x64.zip' = '9b9ca7fc0b071ee902dcec350b98c6c0eee2461a69722c189dc1b7feb0cda9a1'
+          }
+          function Get-Json([string]$Path) {
+            $json = gh api --method GET $Path
+            if ($LASTEXITCODE -ne 0) { throw 'GitHub read failed.' }
+            return $json | ConvertFrom-Json
+          }
+          $repository = Get-Json "repos/$repo"
+          if ($repository.full_name -cne $repo -or $repository.private -or $repository.default_branch -cne 'main') { throw 'Unexpected repository identity.' }
+          $run = Get-Json "repos/$repo/actions/runs/$runId"
+          if ($run.id -ne $runId -or $run.run_attempt -ne $attempt -or $run.status -cne 'completed' -or
+              $run.conclusion -cne 'success' -or $run.head_sha -cne $source -or
+              $run.head_repository.full_name -cne $repo -or $run.path -cne '.github/workflows/preview-installer.yml') {
+            throw 'Package run provenance/success mismatch.'
+          }
+          foreach ($sha in @($source, $build)) {
+            $commit = Get-Json "repos/$repo/git/commits/$sha"
+            if ($commit.sha -cne $sha -or $commit.tree.sha -cne $tree) { throw 'Source/build complete tree mismatch.' }
+          }
+          $artifact = Get-Json "repos/$repo/actions/artifacts/$artifactId"
+          if ($artifact.id -ne $artifactId -or $artifact.expired -or $artifact.digest -cne $archiveDigest -or
+              $artifact.size_in_bytes -ne $archiveBytes -or $artifact.name -cne "flick-unsigned-preview-$build" -or
+              $artifact.workflow_run.id -ne $runId -or $artifact.workflow_run.repository_id -ne $repository.id -or
+              $artifact.workflow_run.head_sha -cne $source) { throw 'Artifact identity/provenance mismatch.' }
+
+          $workspace = Join-Path $env:RUNNER_TEMP 'flick-exact-artifact-review'
+          if (Test-Path -LiteralPath $workspace) { throw 'Review staging directory already exists.' }
+          New-Item -ItemType Directory -Path $workspace | Out-Null
+          $archivePath = Join-Path $workspace 'original-artifact.zip'
+          $filesPath = Join-Path $workspace 'verified-files'
+          New-Item -ItemType Directory -Path $filesPath | Out-Null
+          function Assert-DownloadUri([uri]$Uri) {
+            if ($null -eq $Uri -or -not $Uri.IsAbsoluteUri -or $Uri.Scheme -cne 'https' -or
+                $Uri.Port -ne 443 -or $Uri.UserInfo -or $Uri.Fragment -or
+                $Uri.Host -notmatch '(^|\.)(actions\.githubusercontent\.com|blob\.core\.windows\.net|githubusercontent\.com|github\.com)$') {
+              throw 'Unapproved artifact download origin.'
+            }
+          }
+          $handler = [Net.Http.HttpClientHandler]::new()
+          $handler.AllowAutoRedirect = $false
+          $client = [Net.Http.HttpClient]::new($handler)
+          $client.Timeout = [TimeSpan]::FromSeconds(60)
+          try {
+            $client.DefaultRequestHeaders.Authorization = [Net.Http.Headers.AuthenticationHeaderValue]::new('Bearer', $env:GH_TOKEN)
+            $client.DefaultRequestHeaders.UserAgent.ParseAdd('Flick-read-only-artifact-review')
+            $client.DefaultRequestHeaders.Add('X-GitHub-Api-Version', '2022-11-28')
+            $response = $client.GetAsync("https://api.github.com/repos/$repo/actions/artifacts/$artifactId/zip",
+              [Net.Http.HttpCompletionOption]::ResponseHeadersRead).GetAwaiter().GetResult()
+            try {
+              if ([int]$response.StatusCode -notin @(302,307)) { throw 'Expected artifact archive redirect.' }
+              $location = $response.Headers.Location
+              Assert-DownloadUri $location
+            } finally { $response.Dispose() }
+          } finally { $client.Dispose(); $handler.Dispose() }
+
+          # A separate client has NO Authorization header; signed locations are never logged.
+          $handler = [Net.Http.HttpClientHandler]::new()
+          $handler.AllowAutoRedirect = $false
+          $client = [Net.Http.HttpClient]::new($handler)
+          $deadline = [Threading.CancellationTokenSource]::new([TimeSpan]::FromMinutes(5))
+          $client.Timeout = [TimeSpan]::FromMinutes(5)
+          $response = $null
+          try {
+            for ($redirects = 0; $redirects -le 6; $redirects++) {
+              Assert-DownloadUri $location
+              $response = $client.GetAsync($location, [Net.Http.HttpCompletionOption]::ResponseHeadersRead, $deadline.Token).GetAwaiter().GetResult()
+              if ([int]$response.StatusCode -in @(301,302,303,307,308)) {
+                $next = $response.Headers.Location
+                $response.Dispose(); $response = $null
+                Assert-DownloadUri $next
+                $location = $next
+                continue
+              }
+              if ([int]$response.StatusCode -ne 200) { throw 'Archive transfer returned an unexpected status.' }
+              break
+            }
+            if ($null -eq $response) { throw 'Too many archive redirects.' }
+            if ($null -ne $response.Content.Headers.ContentLength -and $response.Content.Headers.ContentLength -ne $archiveBytes) {
+              throw 'Archive response size mismatch.'
+            }
+            $archiveStream = $response.Content.ReadAsStreamAsync($deadline.Token).GetAwaiter().GetResult()
+            $archiveFile = [IO.File]::Open($archivePath, [IO.FileMode]::CreateNew, [IO.FileAccess]::Write, [IO.FileShare]::None)
+            try {
+              $buffer = [byte[]]::new(1048576)
+              $received = 0L
+              while (($count = $archiveStream.ReadAsync($buffer, 0, $buffer.Length, $deadline.Token).GetAwaiter().GetResult()) -gt 0) {
+                $received += $count
+                if ($received -gt $archiveBytes) { throw 'Archive exceeds pinned size.' }
+                $archiveFile.Write($buffer, 0, $count)
+              }
+              if ($received -ne $archiveBytes) { throw 'Archive was truncated.' }
+            } finally { $archiveFile.Dispose(); $archiveStream.Dispose() }
+          } catch { throw 'Pinned archive transfer failed; temporary URL withheld.' }
+          finally {
+            if ($null -ne $response) { $response.Dispose() }
+            $deadline.Dispose(); $client.Dispose(); $handler.Dispose()
+          }
+          if ((Get-Item -LiteralPath $archivePath).Length -ne $archiveBytes -or
+              (Get-FileHash -LiteralPath $archivePath -Algorithm SHA256).Hash.ToLowerInvariant() -cne $archiveDigest.Substring(7)) {
+            throw 'Complete original archive size/SHA256 mismatch; nothing was extracted.'
+          }
+
+          $names = @('Flick-Setup.exe','Flick-v1.0.7-win-x64.zip','SHA256SUMS.txt')
+          $zip = [IO.Compression.ZipFile]::OpenRead($archivePath)
+          try {
+            if ($zip.Entries.Count -ne 3) { throw 'Expected exactly three root files.' }
+            $seen = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+            foreach ($entry in $zip.Entries) {
+              # Reserve 1 MiB of artifact envelope below the connector's 512 MiB cap.
+              if ($entry.FullName -cnotin $names -or -not $seen.Add($entry.FullName) -or $entry.Length -le 0 -or
+                  $entry.Length -ge 535822336 -or ($entry.ExternalAttributes -band 0x410) -ne 0 -or
+                  (($entry.ExternalAttributes -shr 16) -band 0xF000) -eq 0xA000 -or
+                  ($entry.FullName -ceq 'SHA256SUMS.txt' -and $entry.Length -gt 16384)) {
+                throw 'Unexpected, duplicate, path-traversing, reparse or oversized ZIP entry.'
+              }
+            }
+            foreach ($entry in $zip.Entries) {
+              [IO.Compression.ZipFileExtensions]::ExtractToFile($entry, (Join-Path $filesPath $entry.FullName), $false)
+            }
+          } finally { $zip.Dispose() }
+          $files = foreach ($name in $names) {
+            $file = Get-Item -LiteralPath (Join-Path $filesPath $name)
+            [ordered]@{ name = $name; bytes = $file.Length; sha256 = (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash.ToLowerInvariant() }
+          }
+          foreach ($file in $files) {
+            if ($expected.ContainsKey($file.name) -and $file.sha256 -cne $expected[$file.name]) { throw 'Reviewed installer/portable SHA256 mismatch.' }
+          }
+          # The production manifest also hashes the apphost and native helper.
+          # Read those two members as data; never extract or execute them here.
+          $portable = [IO.Compression.ZipFile]::OpenRead((Join-Path $filesPath 'Flick-v1.0.7-win-x64.zip'))
+          try {
+            $members = @{
+              'Flick.exe' = 'Flick.exe'
+              'LocalClip.CaptureHost.exe' = 'tools/obs/runtime/bin/64bit/LocalClip.CaptureHost.exe'
+            }
+            foreach ($name in $members.Keys) {
+              $entries = @($portable.Entries | Where-Object { $_.FullName -ceq $members[$name] })
+              if ($entries.Count -ne 1 -or $entries[0].Length -le 0 -or $entries[0].Length -gt 67108864) { throw 'Expected unique bounded packaged binary.' }
+              $stream = $entries[0].Open()
+              try { $expected[$name] = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($stream)).ToLowerInvariant() }
+              finally { $stream.Dispose() }
+            }
+          } finally { $portable.Dispose() }
+          $lines = @(Get-Content -LiteralPath (Join-Path $filesPath 'SHA256SUMS.txt') | Where-Object { -not [string]::IsNullOrWhiteSpace($_) -and -not $_.StartsWith('#') })
+          if ($lines.Count -ne 4) { throw 'Checksum manifest must have exactly four binary entries.' }
+          $manifestNames = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+          foreach ($line in $lines) {
+            if ($line -cnotmatch '^([A-Fa-f0-9]{64}) [ *](Flick-Setup\.exe|Flick-v1\.0\.7-win-x64\.zip|Flick\.exe|LocalClip\.CaptureHost\.exe)$') { throw 'Unexpected checksum manifest entry.' }
+            $hash = $Matches[1].ToLowerInvariant(); $name = $Matches[2]
+            if (-not $manifestNames.Add($name) -or $hash -cne $expected[$name]) { throw 'Checksum manifest digest/identity mismatch.' }
+          }
+          [ordered]@{
+            completed = $true; repository = $repo; packageRun = $runId; runAttempt = $attempt
+            source = $source; sourceTree = $tree; buildCommit = $build; buildTree = $tree
+            originalArtifactId = $artifactId; originalArchiveBytes = $archiveBytes; originalArchiveDigest = $archiveDigest
+            files = @($files); manifestEntriesVerified = 4; candidateExecutablesRun = $false; checkoutPerformed = $false
+            releaseTagSettingsWrites = $false; tokenScope = 'contents:read actions:read'
+          } | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $filesPath 'review-receipt.json') -Encoding utf8
+      - name: Expose verified setup separately
+        uses: actions/upload-artifact@v4
+        with:
+          name: flick-reviewed-setup-${{ github.run_id }}
+          path: ${{ runner.temp }}/flick-exact-artifact-review/verified-files/Flick-Setup.exe
+          compression-level: 0
+          retention-days: 7
+          if-no-files-found: error
+      - name: Expose verified portable ZIP separately
+        uses: actions/upload-artifact@v4
+        with:
+          name: flick-reviewed-portable-${{ github.run_id }}
+          path: ${{ runner.temp }}/flick-exact-artifact-review/verified-files/Flick-v1.0.7-win-x64.zip
+          compression-level: 0
+          retention-days: 7
+          if-no-files-found: error
+      - name: Expose verified checksums and review receipt
+        uses: actions/upload-artifact@v4
+        with:
+          name: flick-reviewed-checksums-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/flick-exact-artifact-review/verified-files/SHA256SUMS.txt
+            ${{ runner.temp }}/flick-exact-artifact-review/verified-files/review-receipt.json
+          compression-level: 0
+          retention-days: 7
+          if-no-files-found: error
