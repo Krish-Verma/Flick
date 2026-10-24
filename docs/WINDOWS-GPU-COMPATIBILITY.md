@@ -2,9 +2,9 @@
 
 ## Release boundary
 
-The **v1.0.5-preview.1 unsigned compatibility preview** adds automatic H.264 selection and bounded CPU fallback. The previous 1.0.4 Design Preview was NVIDIA-only and is retained as a hidden draft for authenticated upgrade-test access. Historical RTX 5060 recordings describe that earlier baseline.
+The **v1.0.6-preview.1 unsigned replay-hotkey-fix preview** retains the automatic H.264 selection and bounded CPU fallback introduced in 1.0.5. The previous 1.0.4 Design Preview was NVIDIA-only and is retained as a hidden draft for authenticated upgrade-test access. Historical RTX 5060 recordings describe that earlier baseline.
 
-Source a6d2cd880c9716e96e9957279b4848eb8d3ca076 passed Windows compilation, deterministic policy/unit tests, five real synthetic-media workflows and WPF rendering. This does not qualify actual capture on NVIDIA, AMD, Intel, hybrid or CPU configurations. No row below has fresh physical acceptance for 1.0.5 yet. Record the exact package and tested machine/driver combination before marking any row qualified.
+Source a6d2cd880c9716e96e9957279b4848eb8d3ca076 passed Windows compilation, deterministic policy/unit tests, five real synthetic-media workflows and WPF rendering. This does not qualify actual capture on NVIDIA, AMD, Intel, hybrid or CPU configurations. No row below has fresh physical acceptance for 1.0.6 yet. Record the exact package and tested machine/driver combination before marking any row qualified.
 
 ## Candidate behavior and requirements
 
