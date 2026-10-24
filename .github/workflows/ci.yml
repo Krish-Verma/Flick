@@ -188,6 +188,7 @@ jobs:
           }
           dotnet run --project tools/Flick.RecordingHarness/Flick.RecordingHarness.csproj -c Release --no-build
           if ($LASTEXITCODE -ne 2) { throw 'Harness must refuse capture without explicit arguments and opt-in' }
+          exit 0 # The expected refusal is the assertion; do not propagate its exit2 as a CI failure.
       - name: Smoke-check self-contained Windows publish
         run: dotnet publish src/LocalClip.App/LocalClip.App.csproj -c Release -r win-x64 --self-contained true -o publish-smoke --nologo
       - name: Validate branded published app and generated icon
