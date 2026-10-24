@@ -101,7 +101,7 @@ if (-not (Test-Path -LiteralPath (Join-Path $PackageDir "Flick.exe"))) {
 
 # Generate User Readme
 $Readme = @"
-# Flick v1.0.6 Preview — Windows x64 compatibility candidate
+# Flick v1.0.6 Preview — unsigned replay-hotkey-fix candidate
 
 Fast, private, offline-first gameplay clipper replicating the SteelSeries Moments workflow.
 
@@ -143,7 +143,7 @@ $ExeHash = (Get-FileHash -Path (Join-Path $PackageDir "Flick.exe") -Algorithm SH
 $HostHash = (Get-FileHash -Path (Join-Path $PackageDir "tools\obs\runtime\bin\64bit\LocalClip.CaptureHost.exe") -Algorithm SHA256).Hash
 
 $ChecksumContent = @"
-# Flick v1.0.6 Preview (Windows x64 compatibility candidate) SHA-256 Checksums
+# Flick v1.0.6 Preview (unsigned Windows x64 replay-fix candidate) SHA-256 Checksums
 $ZipHash  Flick-v1.0.6-win-x64.zip
 $ExeHash  Flick.exe
 $HostHash  LocalClip.CaptureHost.exe
