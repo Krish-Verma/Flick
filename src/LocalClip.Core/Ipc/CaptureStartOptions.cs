@@ -4,7 +4,8 @@ using LocalClip.Core.Models;
 namespace LocalClip.Core.Ipc;
 
 /// <summary>Transient source consent, never persisted to application settings or diagnostic journals.</summary>
-public sealed record CaptureWindowIdentity(ulong Hwnd, uint ProcessId, string Title, string Executable);
+public sealed record CaptureWindowIdentity(ulong Hwnd, uint ProcessId, string Title, string Executable,
+    string ExecutablePath = "", ulong ProcessCreationFileTime = 0);
 
 public sealed record CaptureStartOptions(bool EnableSystemAudio = true,
     CaptureWindowIdentity? ExpectedWindow = null, string? ExpectedMonitorId = null)
@@ -20,13 +21,17 @@ public sealed record CaptureStartOptions(bool EnableSystemAudio = true,
             string.IsNullOrWhiteSpace(window.Title) || window.Title.Length > 32768 ||
             string.IsNullOrWhiteSpace(window.Executable) || window.Executable.Length > 4096))
             throw new ArgumentException("The consented window identity is incomplete or changed.");
+        if (ExpectedWindow is { } process && (process.ExecutablePath.Length != 0 || process.ProcessCreationFileTime != 0) &&
+            (!GameDetection.GameDetectionPolicy.TryNormalizePath(process.ExecutablePath, out _) || process.ProcessCreationFileTime == 0))
+            throw new ArgumentException("The approved executable process identity is incomplete.");
         if (ExpectedMonitorId != null && (!string.Equals(settings.TargetType, "Monitor", StringComparison.OrdinalIgnoreCase) ||
             string.IsNullOrWhiteSpace(ExpectedMonitorId) || ExpectedMonitorId.Length > 1024))
             throw new ArgumentException("The consented display identity is incomplete or changed.");
     }
 }
 
-public sealed record CaptureHostCapabilities(int ProtocolVersion, bool DiagnosticNoSystemAudio, bool SourceIdentityBinding)
+public sealed record CaptureHostCapabilities(int ProtocolVersion, bool DiagnosticNoSystemAudio, bool SourceIdentityBinding,
+    bool ExactProcessAudio = false, bool ExactWindowBinding = false)
 {
     public bool SupportsSafeDiagnostics => ProtocolVersion >= 2 && DiagnosticNoSystemAudio && SourceIdentityBinding;
 
@@ -38,6 +43,8 @@ public sealed record CaptureHostCapabilities(int ProtocolVersion, bool Diagnosti
             !value.TryGetProperty("diagnostic_no_system_audio", out var audio) || audio.ValueKind is not (JsonValueKind.True or JsonValueKind.False) ||
             !value.TryGetProperty("source_identity_binding", out var identity) || identity.ValueKind is not (JsonValueKind.True or JsonValueKind.False))
             throw new InvalidOperationException("This capture helper does not support the safe recording test. Update Flick and try again.");
-        return new(number, audio.GetBoolean(), identity.GetBoolean());
+        return new(number, audio.GetBoolean(), identity.GetBoolean(),
+            value.TryGetProperty("exact_process_audio", out var processAudio) && processAudio.ValueKind == JsonValueKind.True,
+            value.TryGetProperty("exact_window_binding", out var exact) && exact.ValueKind == JsonValueKind.True);
     }
 }

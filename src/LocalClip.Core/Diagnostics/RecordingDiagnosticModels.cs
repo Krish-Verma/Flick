@@ -5,7 +5,8 @@ namespace LocalClip.Core.Diagnostics;
 
 public sealed record RecordingDiagnosticTarget(string Kind, string Name,
     int MonitorIndex = 0, string MonitorId = "", ulong WindowHwnd = 0,
-    uint WindowPid = 0, string WindowTitle = "", string WindowExecutable = "");
+    uint WindowPid = 0, string WindowTitle = "", string WindowExecutable = "",
+    string WindowExecutablePath = "", ulong WindowProcessCreationFileTime = 0);
 
 public sealed record RecordingDiagnosticReplay(string SaveId, string FilePath, IReadOnlyList<string> TrackNames);
 

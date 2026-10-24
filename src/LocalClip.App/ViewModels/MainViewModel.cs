@@ -27,6 +27,8 @@ public class TargetItem
     public string MonitorDevice { get; set; } = "";
     public ulong WindowHwnd { get; set; }
     public uint WindowPid { get; set; }
+    public string ExecutablePath { get; set; } = "";
+    public ulong ProcessCreationFileTime { get; set; }
     public string DisplayName { get; set; } = "";
     public string Title { get; set; } = "";
     public string Exe { get; set; } = "";
@@ -34,7 +36,7 @@ public class TargetItem
     public override string ToString() => DisplayName;
 }
 
-public class MainViewModel : INotifyPropertyChanged, IDisposable
+public partial class MainViewModel : INotifyPropertyChanged, IDisposable
 {
     private readonly AppSettings _settings;
     private readonly CaptureHostClient _captureHost;
@@ -74,14 +76,17 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
     private TaskCompletionSource? _recordingDiagnosticCompletion;
     public bool IsRecordingDiagnosticRunning => _isRecordingDiagnosticRunning;
     public bool DiagnosticHelperNeedsRestart => _diagnosticCleanupUnconfirmed;
-    public bool CanChangeCaptureSource => !_isRecordingDiagnosticRunning && !_isPreparingToQuit && !_diagnosticCleanupUnconfirmed;
-    public bool CanControlReplay => CanChangeCaptureSource && !_refreshingTargets;
+    public bool CanChangeCaptureSource => !_isRecordingDiagnosticRunning && !_isPreparingToQuit && !_diagnosticCleanupUnconfirmed
+        && !_filmstripCleanupUnconfirmed && !_thumbnailCleanupUnconfirmed && !_thumbnailStopPending && !_audioPreviewOperation.CleanupFailed && !_gameAutomationBusy;
+    public bool CanControlReplay => CanChangeCaptureSource && !_refreshingTargets && _manualStopOperation == null;
+
     public Func<bool>? DiagnosticReservationAllowed { get; set; }
     public bool CanRunRecordingDiagnostic => !_diagnosticsDisposed && !_isPreparingToQuit &&
-        !_isRecordingDiagnosticRunning && !_diagnosticCleanupUnconfirmed && !_refreshingTargets && !CaptureActive && _stopCaptureTask == null &&
+        !_isRecordingDiagnosticRunning && !_diagnosticCleanupUnconfirmed && !_filmstripCleanupUnconfirmed && !_thumbnailCleanupUnconfirmed && !_thumbnailStopPending &&
+        !_isBuildingAudioPreview && !_audioPreviewOperation.CleanupFailed && !_refreshingTargets && !CaptureActive && _stopCaptureTask == null &&
         !IsReplaySavePending && !IsImporting && !IsExporting && !_isExportingDiagnostics &&
         Volatile.Read(ref _discordUploadOperations) == 0 && Volatile.Read(ref _libraryRescanOperations) == 0 &&
-        !_pollInProgress && SelectedTarget != null && Targets.Contains(SelectedTarget) &&
+        !_pollInProgress && !_gameAutomationBusy && SelectedTarget != null && Targets.Contains(SelectedTarget) &&
         DiagnosticReservationAllowed?.Invoke() != false;
     public bool CanInvokeRecordingDiagnostic => _isRecordingDiagnosticRunning
         ? !_recordingDiagnosticCancelling : CanRunRecordingDiagnostic;
@@ -119,7 +124,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
             return RecordingDiagnosticPlan.Create(_settings,
                 new RecordingDiagnosticTarget(target.Type, target.DisplayName,
                     target.MonitorIndex, target.MonitorDevice, target.WindowHwnd,
-                    target.WindowPid, target.Title, target.Exe),
+                    target.WindowPid, target.Title, target.Exe, target.ExecutablePath, target.ProcessCreationFileTime),
                 enableSystemAudio: includeConfiguredAudio,
                 enableMicrophone: includeConfiguredAudio && _settings.EnableMicrophone);
         }
@@ -165,13 +170,15 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
         if (!CanRunRecordingDiagnostic || plan.PlanId != confirmedPlanId || SelectedTarget is not { } selected ||
             plan.Target.Kind != selected.Type || plan.Target.WindowHwnd != selected.WindowHwnd ||
             plan.Target.WindowPid != selected.WindowPid || plan.Target.MonitorId != selected.MonitorDevice ||
-            plan.Target.WindowTitle != selected.Title || plan.Target.WindowExecutable != selected.Exe)
+            plan.Target.WindowTitle != selected.Title || plan.Target.WindowExecutable != selected.Exe ||
+            plan.Target.WindowExecutablePath != selected.ExecutablePath || plan.Target.WindowProcessCreationFileTime != selected.ProcessCreationFileTime)
         {
             _diagnosticTestStatus = "The source or app state changed. Review the test again before recording.";
             PublishDiagnosticTest();
             return;
         }
         _isRecordingDiagnosticRunning = true; // Reserve before the first await.
+        ClearFilmstrip();
         _recordingDiagnosticCancelling = false;
         _diagnosticTestStatus = "Starting the confirmed recording test…";
         _diagnosticTestDetails = "Audio is captured only as described in the confirmed test.";
@@ -183,6 +190,8 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
         PublishDiagnosticTest();
         try
         {
+            if (!await StopSelectedThumbnailAsync()) throw new InvalidOperationException("Thumbnail work is still stopping. Wait before testing recording.");
+            if (!await StopFilmstripAsync()) throw new InvalidOperationException("Preview frames are still stopping. Wait before testing recording.");
             var runner = new RecordingDiagnosticRunner(_ => new NativeRecordingDiagnosticLease(),
                 async (frozen, replay, token) => await _storage.RegisterNewOriginalAsync(
                     replay.FilePath, frozen.Source.Name, replay.TrackNames, token).ConfigureAwait(false));
@@ -490,6 +499,13 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
     private CancellationTokenSource? _importCancellation;
     private CancellationTokenSource? _thumbnailCancellation;
     private readonly SemaphoreSlim _thumbnailGate = new(1, 1);
+    private readonly HashSet<Task> _thumbnailOperations = [];
+    private bool _thumbnailCleanupUnconfirmed;
+    private bool _thumbnailStopPending;
+    private bool CanGenerateSelectedThumbnail => !IsCaptureActive && !IsExporting && !IsImporting &&
+        !_isLoadingFilmstrip && !_isBuildingAudioPreview && !_isExportingDiagnostics && !_isPreparingToQuit &&
+        !_thumbnailCleanupUnconfirmed && !_thumbnailStopPending && !_filmstripCleanupUnconfirmed && !_audioPreviewOperation.CleanupFailed &&
+        Volatile.Read(ref _libraryRescanOperations) == 0 && Volatile.Read(ref _discordUploadOperations) == 0;
     private readonly ObservableCollection<ConnectedClipFolder> _connectedFolders = new();
 
     // Export & Sharing
@@ -518,10 +534,13 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
     // These operations outlive their initiating page. The updater also checks
     // the separate capture/save/import/export flags before closing the app.
     public bool IsBackgroundWorkActive => Volatile.Read(ref _discordUploadOperations) > 0
-        || Volatile.Read(ref _libraryRescanOperations) > 0 || _isExportingDiagnostics || _isRecordingDiagnosticRunning;
-    public bool IsCaptureActive => CaptureActive || _isRecordingDiagnosticRunning || _diagnosticCleanupUnconfirmed;
-    public bool CanEditClip => SelectedClip?.IsAvailable == true && !IsExporting;
-    public bool CanStartExport => CanEditClip && !IsImporting && !_isRecordingDiagnosticRunning && !_isPreparingToQuit && !_diagnosticCleanupUnconfirmed;
+        || Volatile.Read(ref _libraryRescanOperations) > 0 || _isExportingDiagnostics || _isRecordingDiagnosticRunning
+        || _isBuildingAudioPreview || _audioPreviewOperation.CleanupFailed || _isLoadingFilmstrip || _filmstripCleanupUnconfirmed || _gameAutomationBusy || _thumbnailOperations.Count > 0 || _thumbnailCleanupUnconfirmed;
+    public bool IsCaptureActive => CaptureActive || _gameAutomationBusy || _isRecordingDiagnosticRunning || _diagnosticCleanupUnconfirmed;
+    public bool CanEditClip => SelectedClip?.IsAvailable == true && !IsExporting && !_isBuildingAudioPreview;
+    public bool CanStartExport => CanEditClip && !IsImporting && !_gameAutomationBusy && !_isRecordingDiagnosticRunning && !_isPreparingToQuit
+        && !_diagnosticCleanupUnconfirmed && !_filmstripCleanupUnconfirmed && !_thumbnailCleanupUnconfirmed && !_thumbnailStopPending && !_audioPreviewOperation.CleanupFailed;
+
     // WPF shell supplies consent before an active source change discards replay.
     public Func<bool>? ConfirmTargetReset { get; set; }
     public CaptureHostClient CaptureHost => _captureHost;
@@ -701,9 +720,13 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
         {
             if (_selectedClip != value)
             {
+                if (value == null && _applyingLibraryFilter) return;
+                if (_selectedClip != null && value != null && HasUnsavedOrganization && ConfirmDiscardEditorChanges?.Invoke() != true)
+                { OnPropertyChanged(); return; }
                 FlushPendingAudioEdits();
                 UnsubscribeAudioEvents();
                 _selectedClip = value;
+                OrganizationSelectionChanged();
                 SubscribeAudioEvents();
                 OnPropertyChanged();
                 OnPropertyChanged(nameof(CanEditClip));
@@ -759,9 +782,16 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
     public bool TryGetReadyShareFile(out string path)
     {
         path = "";
-        return !IsExporting && IsExportReady &&
+        bool ready = !IsExporting && IsExportReady &&
                ReadyShareFile.TryGet(SelectedClip, TargetSizeMb, out path, _settings.ExportsFolder) &&
                string.Equals(path, ReadyExportFilePath, StringComparison.OrdinalIgnoreCase);
+        if (!ready && !IsExporting && IsExportReady)
+        {
+            IsExportReady = false;
+            ReadyExportFilePath = "";
+            ExportStatusMessage = "The share file changed or is missing. Export this clip again.";
+        }
+        return ready;
     }
 
     public void CancelExport() => _exportCancellation?.Cancel();
@@ -835,6 +865,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
         // Optional log storage must not delay source discovery or replay.
         _ = InitializeDiagnosticsAsync();
         await RefreshTargetsAsync();
+        await ApplyGameDetectionPreferencesAsync();
     }
 
     public async Task RefreshTargetsAsync()
@@ -865,6 +896,8 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
                     Type = "Window",
                     WindowHwnd = w.Hwnd,
                     WindowPid = w.Pid,
+                    ExecutablePath = w.ExecutablePath,
+                    ProcessCreationFileTime = w.ProcessCreationFileTime,
                     DisplayName = w.DisplayName,
                     Title = w.Title,
                     Exe = w.Exe
@@ -931,6 +964,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
 
     public async Task ToggleCaptureAsync()
     {
+        if (_automaticGame != null) { await StopCaptureAsync(); return; }
         if (CaptureStatus == "Starting" || CaptureStatus == "Stopping") return;
         if (CaptureStatus == "Off" || CaptureStatus == "Faulted" || CaptureStatus == "Paused")
         {
@@ -944,7 +978,11 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
 
     public async Task StartCaptureAsync()
     {
-        if (_isRecordingDiagnosticRunning || _isPreparingToQuit || _diagnosticCleanupUnconfirmed || _refreshingTargets) return;
+        if (_manualStopOperation != null) return;
+        await QuiesceGameAutomationAsync();
+        if (_manualStopOperation != null || _automaticGame != null) return;
+        if (_isRecordingDiagnosticRunning || _isPreparingToQuit || _diagnosticCleanupUnconfirmed || _filmstripCleanupUnconfirmed || _thumbnailCleanupUnconfirmed || _audioPreviewOperation.CleanupFailed || _refreshingTargets) return;
+
         if (CaptureActive || _stopCaptureTask != null) return;
         if (SelectedTarget is null || !Targets.Contains(SelectedTarget))
         {
@@ -954,9 +992,12 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
             RecordCaptureFailure("missing-source", "Select an available window or monitor before starting replay.", false);
             return;
         }
+        _manualReplayReserved = true;
+        PublishGameAutomation("Manual replay owns recording. Automatic game replay waits until it stops.");
         // Never let folder indexing compete with the live gameplay encoder.
         _importCancellation?.Cancel();
         _thumbnailCancellation?.Cancel();
+        ClearFilmstrip();
         _captureEpoch++;
         _healthSession = _health.BeginSession(new RecordingSource(SelectedTarget.Type,
             SelectedTarget.DisplayName, SelectedTarget.Exe));
@@ -967,7 +1008,25 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
         Guid startingSession = _healthSession;
         try
         {
-            bool started = await _captureHost.StartCaptureAsync(_settings);
+            if (!await StopSelectedThumbnailAsync()) throw new InvalidOperationException("Thumbnail work is still stopping. Wait before starting replay.");
+            if (!await CancelAudioPreviewAndWaitAsync()) throw new InvalidOperationException("Audio preview cleanup is not finished; wait before starting replay.");
+            if (!await StopFilmstripAsync()) throw new InvalidOperationException("Preview frames are still stopping. Wait before starting replay.");
+            if (startingEpoch != _captureEpoch || startingSession != _healthSession || _isPreparingToQuit || _manualStopOperation != null) return;
+            await ReserveManualGameSessionsAsync();
+            if (startingEpoch != _captureEpoch || startingSession != _healthSession || _isPreparingToQuit || _manualStopOperation != null) return;
+            CaptureStartOptions? sourceOptions = null;
+            if (SelectedTarget.Type == "Window")
+            {
+                if (string.IsNullOrWhiteSpace(SelectedTarget.ExecutablePath) || SelectedTarget.ProcessCreationFileTime == 0 || SelectedTarget.WindowPid == 0)
+                    throw new InvalidOperationException("Refresh capture sources and reselect this window before recording.");
+                var capabilities = await _captureHost.GetCapabilitiesAsync();
+                if (startingEpoch != _captureEpoch || startingSession != _healthSession || _isPreparingToQuit || _manualStopOperation != null) return;
+                if (!capabilities.ExactWindowBinding) throw new InvalidOperationException("Update the capture helper before recording this exact window.");
+                sourceOptions = new(ExpectedWindow: new(SelectedTarget.WindowHwnd, SelectedTarget.WindowPid,
+                    SelectedTarget.Title, SelectedTarget.Exe, SelectedTarget.ExecutablePath, SelectedTarget.ProcessCreationFileTime));
+            }
+            bool started = await _captureHost.StartCaptureAsync(_settings, sourceOptions);
+
             if (startingEpoch != _captureEpoch || startingSession != _healthSession) return;
             if (!started)
             {
@@ -984,6 +1043,43 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
     }
 
     public async Task StopCaptureAsync()
+    {
+        if (_manualStopOperation is { } stopping) { await stopping; return; }
+        var completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        _manualStopOperation = completion.Task;
+        PublishGameAutomation();
+        try
+        {
+            if (CaptureStatus == "Starting") await Task.Run(() => _captureHost.Dispose());
+            await StopRequestedCaptureAsync();
+        }
+        finally { _manualStopOperation = null; completion.TrySetResult(); PublishGameAutomation(); }
+    }
+
+    private async Task StopRequestedCaptureAsync()
+    {
+        bool manualWasActive = _automaticGame == null && CaptureActive;
+        await QuiesceGameAutomationAsync();
+        if (manualWasActive && _gameSuppressionStore != null && _settings.GameDetectionEnabled)
+        {
+            try { await ReserveManualGameSessionsAsync(); }
+            catch
+            {
+                _gameStateUnavailable = true;
+                _gameTimer?.Stop();
+                PublishGameAutomation("Automatic replay is paused because the manual-stop state could not be saved. Review Games settings before restarting Flick.");
+            }
+        }
+        await StopCaptureManagedAsync();
+        _manualReplayReserved = false;
+        if (_automaticGame != null)
+        {
+            ClearAutomaticGame();
+            PublishGameAutomation("Automatic replay is paused for this game session. Start manually or restart the game.");
+        }
+    }
+
+    private async Task StopCaptureManagedAsync()
     {
         if (_stopCaptureTask is { } existingStop)
         {
@@ -1023,13 +1119,21 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
 
     public async Task<bool> PrepareToQuitAsync()
     {
+        ClearFilmstrip();
+        _thumbnailCancellation?.Cancel();
         _isPreparingToQuit = true;
         PublishDiagnosticTest();
         // A timer tick must not restart an exited helper during finalization.
         _pollTimer.Stop();
+        _gameTimer?.Stop();
+        await QuiesceGameAutomationAsync();
         bool ready = false;
         try
         {
+            if (!await StopSelectedThumbnailAsync(allowSettledShutdown: true)) return false;
+            if (!await CancelAudioPreviewAndWaitAsync(allowSettledShutdown: true)) return false;
+            if (!await StopFilmstripAsync(allowUnconfirmedShutdown: true)) return false;
+
             CancelRecordingDiagnostic();
             if (_recordingDiagnosticCompletion is { } test)
             {
@@ -1060,7 +1164,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
         }
         finally
         {
-            if (!ready) { _isPreparingToQuit = false; _pollTimer.Start(); PublishDiagnosticTest(); }
+            if (!ready) { _isPreparingToQuit = false; _pollTimer.Start(); if (_settings.GameDetectionEnabled) _gameTimer?.Start(); PublishDiagnosticTest(); }
         }
     }
 
@@ -1297,7 +1401,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
 
     private async void OnPollTick(object? sender, EventArgs e)
     {
-        if (_isRecordingDiagnosticRunning || _isPreparingToQuit) return;
+        if (_isRecordingDiagnosticRunning || _isPreparingToQuit || _gameAutomationBusy) return;
         if (_pollInProgress || CaptureStatus is "Starting" or "Stopping") return;
         if (!_captureHost.IsRunning)
         {
@@ -1317,6 +1421,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
             var st = await _captureHost.GetStatusAsync();
             // A query started before stop/restart must not rewrite the new session.
             if (epoch != _captureEpoch || hostPid != _captureHost.HostProcessId) return;
+            SetAudioCaptureStatus(st.Audio);
             _health.ObserveHost(_healthSession, CaptureHostHealth.Responsive);
             if (st.State == "Faulted" || !string.IsNullOrWhiteSpace(st.FaultReason) || !st.TargetValid)
             {
@@ -1523,11 +1628,14 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
             Math.Abs(SelectedClip.TrimEndSeconds - validated.ValidatedEnd) < 1e-6) return true;
         var oldStart = SelectedClip.TrimStartSeconds;
         var oldEnd = SelectedClip.TrimEndSeconds;
+        bool wasReady = SelectedClip.IsExportReady;
         SelectedClip.TrimStartSeconds = validated.ValidatedStart;
         SelectedClip.TrimEndSeconds = validated.ValidatedEnd;
         try
         {
             SaveClipEdits();
+            RememberTrim(oldStart, oldEnd);
+            EditorSaveState = "Trim saved · original unchanged";
             StatusDetails = "Trim Saved · The Original Video Is Unchanged";
             return true;
         }
@@ -1535,6 +1643,9 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
         {
             SelectedClip.TrimStartSeconds = oldStart;
             SelectedClip.TrimEndSeconds = oldEnd;
+            SelectedClip.IsExportReady = wasReady;
+            OnSelectedClipChanged();
+            EditorSaveState = "Couldn't save trim · previous range restored";
             StatusDetails = "Couldn't Save Trim: " + ex.Message;
             return false;
         }
@@ -1565,9 +1676,12 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
 
     public void ScheduleAudioEdit()
     {
+        _audioMixRevision++;
+        OnPropertyChanged(nameof(AudioMixRevision));
         if (SelectedClip is null || !SelectedClip.IsAvailable) return;
         InvalidateExportReady(); // Never let stale exported audio look ready.
         _pendingAudioClip = SelectedClip;
+        EditorSaveState = "Saving audio mix…";
         _audioEditCommitTimer.Stop();
         _audioEditCommitTimer.Start();
     }
@@ -1578,19 +1692,22 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
         var clip = _pendingAudioClip;
         _pendingAudioClip = null;
         if (clip is null) return;
-        try { _storage.AddOrUpdateClip(clip); }
-        catch (Exception ex) { StatusDetails = "Couldn't Save Audio Mix: " + ex.Message; }
+        try
+        {
+            _storage.AddOrUpdateClip(clip);
+            if (ReferenceEquals(clip, SelectedClip)) EditorSaveState = "Audio mix saved · original unchanged";
+        }
+        catch (Exception ex)
+        {
+            StatusDetails = "Couldn't Save Audio Mix: " + ex.Message;
+            if (ReferenceEquals(clip, SelectedClip)) EditorSaveState = StatusDetails;
+        }
     }
 
     public void ResetAudioMix()
     {
         if (SelectedClip == null || IsExporting || !SelectedClip.IsAvailable) return;
-        foreach (var track in SelectedClip.AudioTracks)
-        {
-            track.IsMuted = AudioMixDefaults.ShouldMute(
-                SelectedClip.IsImported, SelectedClip.AudioTracks.Count, track.TrackIndex);
-            track.Gain = 1.0;
-        }
+        LocalClip.Core.Audio.AudioTrackRoles.Reset(SelectedClip);
         ScheduleAudioEdit();
     }
 
@@ -1598,6 +1715,8 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
     {
         string? selectedId = SelectedClip?.Id;
         _allClips = _storage.GetAllClips();
+        foreach (var clip in _allClips) clip.RefreshAvailability();
+        RefreshOrganizationFacets();
         ApplyFilter();
         if (selectedId != null)
         {
@@ -1612,20 +1731,18 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
 
     public void ApplyFilter()
     {
-        var query = _searchQuery.Trim();
-        var visible = new System.Collections.Generic.List<ClipMetadata>();
-        foreach (var clip in _allClips)
+        DateTime? after = LibraryPeriod switch { "7 days" => DateTime.Now.AddDays(-7), "30 days" => DateTime.Now.AddDays(-30), _ => null };
+        var visible = ClipLibraryQuery.Apply(_allClips, _searchQuery, _clipSourceFilter, FavoritesOnly, GameFilter, LibrarySort, after);
+        if (LibrarySort == "Recently Exported") visible = visible.Where(clip => _recentExportIds.Contains(clip.Id)).ToList();
+        string? previousGame = null;
+        foreach (var clip in visible)
         {
-            if (_clipSourceFilter == "Flick" && clip.IsImported) continue;
-            if (_clipSourceFilter == "Imported" && !clip.IsImported) continue;
-            if (query.Length != 0 &&
-                !clip.Title.Contains(query, StringComparison.OrdinalIgnoreCase) &&
-                !clip.TargetName.Contains(query, StringComparison.OrdinalIgnoreCase) &&
-                !clip.LibrarySource.Contains(query, StringComparison.OrdinalIgnoreCase))
-                continue;
-            visible.Add(clip);
+            clip.ShowGameHeading = LibrarySort == "Game" && !string.Equals(previousGame, clip.GameGroup, StringComparison.OrdinalIgnoreCase);
+            previousGame = clip.GameGroup;
         }
-        _filteredClips.ReplaceAll(visible);
+        _applyingLibraryFilter = true;
+        try { _filteredClips.ReplaceAll(visible); }
+        finally { _applyingLibraryFilter = false; }
     }
 
     private void OnSelectedClipChanged()
@@ -1642,7 +1759,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
             return;
         }
 
-        if (SelectedClip.IsAvailable && !IsCaptureActive &&
+        if (SelectedClip.IsAvailable && CanGenerateSelectedThumbnail &&
             (string.IsNullOrWhiteSpace(SelectedClip.ThumbnailPath) ||
              !File.Exists(SelectedClip.ThumbnailPath)))
             _ = EnsureSelectedThumbnailAsync(SelectedClip);
@@ -1670,15 +1787,25 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
         var cancellation = new CancellationTokenSource();
         var previous = Interlocked.Exchange(ref _thumbnailCancellation, cancellation);
         previous?.Cancel();
+        var completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        _thumbnailOperations.Add(completion.Task);
+        OnPropertyChanged(nameof(IsBackgroundWorkActive));
         bool acquired = false;
         try
         {
             await _thumbnailGate.WaitAsync(cancellation.Token);
             acquired = true;
-            if (IsCaptureActive || SelectedClip?.Id != clip.Id) return;
+            if (!CanGenerateSelectedThumbnail || SelectedClip?.Id != clip.Id) return;
             await _storage.EnsureThumbnailAsync(clip.Id, cancellation.Token);
+            if (!cancellation.IsCancellationRequested && ReferenceEquals(clip, SelectedClip)) NotifyShareThumbnailAvailable(clip);
         }
         catch (OperationCanceledException) { }
+        catch (MediaWorkerExitUnconfirmedException)
+        {
+            _thumbnailCleanupUnconfirmed = true;
+            StatusDetails = "Thumbnail worker exit was not confirmed. Quit and reopen Flick before recording or exporting.";
+            PublishDiagnosticTest(); OnPropertyChanged(nameof(CanStartExport));
+        }
         catch (Exception) { /* Keep clip playable even without a thumbnail. */ }
         finally
         {
@@ -1686,7 +1813,23 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
             if (ReferenceEquals(_thumbnailCancellation, cancellation))
                 _thumbnailCancellation = null;
             cancellation.Dispose();
+            _thumbnailOperations.Remove(completion.Task);
+            if (_thumbnailOperations.Count == 0) _thumbnailStopPending = false;
+            completion.TrySetResult();
+            PublishDiagnosticTest(); OnPropertyChanged(nameof(CanStartExport));
+            OnPropertyChanged(nameof(IsBackgroundWorkActive));
         }
+    }
+
+    public async Task<bool> StopSelectedThumbnailAsync(bool allowSettledShutdown = false, TimeSpan? cleanupBudget = null)
+    {
+        _thumbnailCancellation?.Cancel();
+        var pending = _thumbnailOperations.ToArray();
+        _thumbnailStopPending = pending.Length != 0;
+        PublishDiagnosticTest(); OnPropertyChanged(nameof(CanStartExport));
+        try { await Task.WhenAll(pending).WaitAsync(cleanupBudget ?? TimeSpan.FromSeconds(6)); }
+        catch (TimeoutException) { return false; }
+        return _thumbnailOperations.Count == 0 && (allowSettledShutdown || !_thumbnailCleanupUnconfirmed);
     }
 
     public void InvalidateExportReady()
@@ -1696,13 +1839,16 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
         ExportStatusMessage = "Clip edited: Click 'Export for Discord' to create share file.";
         if (SelectedClip != null)
         {
+            bool hadReadyExport = SelectedClip.IsExportReady;
             SelectedClip.IsExportReady = false;
+            if (hadReadyExport) { RefreshRecentExports(); if (LibrarySort == "Recently Exported") ApplyFilter(); }
         }
     }
 
     public async Task ExportForDiscordAsync()
     {
         if (!CanStartExport || SelectedClip is null) return;
+        ClearFilmstrip();
         FlushPendingAudioEdits();
         _importCancellation?.Cancel();
         _thumbnailCancellation?.Cancel();
@@ -1730,6 +1876,8 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
 
         try
         {
+            if (!await StopSelectedThumbnailAsync()) throw new InvalidOperationException("Thumbnail work is still stopping. Wait before exporting.");
+            if (!await StopFilmstripAsync()) throw new InvalidOperationException("Preview frames are still stopping. Wait before exporting.");
             ExportResult result = await _exporter.ExportForDiscordAsync(
                 clip, snapshot, progress, cancellation.Token);
             if (result.Success)
@@ -1738,7 +1886,10 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
                 clip.ExportedFileSizeBytes = result.FileSizeBytes;
                 clip.LastExportFingerprint = result.Fingerprint;
                 clip.IsExportReady = true;
+                clip.LastExportedAtUtc = DateTimeOffset.UtcNow;
+                clip.LastExportTargetMb = snapshot.DiscordTargetSizeMb;
                 _storage.AddOrUpdateClip(clip);
+                RefreshRecentExports();
                 double mb = result.FileSizeBytes / 1_000_000d;
                 if (SelectedClip?.Id == clip.Id &&
                     _targetSizeMb == snapshot.DiscordTargetSizeMb)
@@ -1917,6 +2068,11 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
 
     public void Dispose()
     {
+        DisposeSharePresentation();
+        ClearFilmstrip();
+
+        DisposeGameAutomation();
+
         _exportCancellation?.Cancel();
         FlushPendingAudioEdits();
         UnsubscribeAudioEvents();
@@ -1944,6 +2100,13 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
     protected void OnPropertyChanged([CallerMemberName] string? name = null)
     {
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
+        OnShareDependencyChanged(name);
+        if (name is nameof(IsCaptureActive) or nameof(CaptureStatus) or nameof(CanEditClip) or nameof(IsExporting) or nameof(IsBackgroundWorkActive))
+        {
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CanLoadFilmstrip)));
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CanUndoTrim)));
+        }
+
         if (name is nameof(IsBackgroundWorkActive) or nameof(IsReplaySavePending) or nameof(IsImporting) or nameof(IsExporting))
         {
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CanRunRecordingDiagnostic)));

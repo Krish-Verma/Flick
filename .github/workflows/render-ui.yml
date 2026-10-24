@@ -22,7 +22,11 @@ jobs:
         with:
           dotnet-version: '10.0.402'
       - name: Render real WPF controls with synthetic fixtures
-        run: dotnet run --project tools/Flick.UiRender/Flick.UiRender.csproj -c Release -- ui-render
+        # The Share Ready fixture uses a real locally generated/exported MP4.
+        # No capture source, network upload or destination app is invoked.
+        run: |
+          ./scripts/setup_tools.ps1
+          dotnet run --project tools/Flick.UiRender/Flick.UiRender.csproj -c Release -- ui-render
       - name: Upload rendered client-area images and provenance
         if: always()
         uses: actions/upload-artifact@v4

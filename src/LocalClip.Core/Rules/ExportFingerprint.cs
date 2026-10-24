@@ -10,15 +10,17 @@ namespace LocalClip.Core.Rules;
 
 public static class ExportFingerprint
 {
-    public const int PROFILE_VERSION = 2;
+    public const int PROFILE_VERSION = 3;
 
     public static string Compute(
         string sourceFilePath,
         double startSec,
         double endSec,
         IEnumerable<AudioTrackInfo> tracks,
-        int targetSizeMb)
+        int targetSizeMb,
+        string aspectPreset = ExportAspectPresets.Original)
     {
+        if (!ExportAspectPresets.IsValid(aspectPreset)) throw new ArgumentException("Unsupported export aspect preset.", nameof(aspectPreset));
         long lastWriteTicks = 0;
         long sourceLength = 0;
         try
@@ -34,13 +36,13 @@ public static class ExportFingerprint
 
         var sb = new StringBuilder();
         sb.Append($"PATH:{sourceFilePath}|TICKS:{lastWriteTicks}|LEN:{sourceLength}|");
-        sb.Append($"START:{startSec.ToString("R", CultureInfo.InvariantCulture)}|END:{endSec.ToString("R", CultureInfo.InvariantCulture)}|TARGET_MB:{targetSizeMb}|V:{PROFILE_VERSION}|");
+        sb.Append($"START:{startSec.ToString("R", CultureInfo.InvariantCulture)}|END:{endSec.ToString("R", CultureInfo.InvariantCulture)}|TARGET_MB:{targetSizeMb}|ASPECT:{aspectPreset}|V:{PROFILE_VERSION}|");
 
         if (tracks != null)
         {
             foreach (var t in tracks)
             {
-                sb.Append($"T:{t.StreamIndex}:{t.IsMuted}:{t.Gain.ToString("R", CultureInfo.InvariantCulture)}|");
+                sb.Append($"T:{t.StreamIndex}:{t.TrackIndex}:{t.Role}:{t.IsMuted}:{t.Gain.ToString("R", CultureInfo.InvariantCulture)}|");
             }
         }
 

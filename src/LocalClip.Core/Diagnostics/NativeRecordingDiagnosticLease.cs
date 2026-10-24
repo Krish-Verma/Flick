@@ -37,7 +37,8 @@ public sealed class NativeRecordingDiagnosticLease : IRecordingDiagnosticLease
         var settings = plan.CreateCaptureSettings(outputDirectory);
         var target = plan.Target;
         var options = new CaptureStartOptions(plan.EnableSystemAudio,
-            target.Kind == "Window" ? new(target.WindowHwnd, target.WindowPid, target.WindowTitle, target.WindowExecutable) : null,
+            target.Kind == "Window" ? new(target.WindowHwnd, target.WindowPid, target.WindowTitle, target.WindowExecutable,
+                target.WindowExecutablePath, target.WindowProcessCreationFileTime) : null,
             target.Kind == "Monitor" ? target.MonitorId : null);
         options.Validate(settings);
         using var cancellation = cancellationToken.Register(AbortOwnedHelper);
@@ -57,6 +58,8 @@ public sealed class NativeRecordingDiagnosticLease : IRecordingDiagnosticLease
             var capabilities = await capabilitiesTask.ConfigureAwait(false);
             if (!capabilities.SupportsSafeDiagnostics)
                 throw new InvalidOperationException("The capture helper cannot safely run this recording test. Update Flick and try again.");
+            if (target.WindowProcessCreationFileTime != 0 && !capabilities.ExactWindowBinding)
+                throw new InvalidOperationException("The capture helper cannot bind this consented process instance. Update Flick and try again.");
             Task<bool> start;
             lock (_gate)
             {

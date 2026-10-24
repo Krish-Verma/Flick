@@ -192,7 +192,7 @@ public sealed class NativeRecordingDiagnosticLeaseTests
     public void TransientRequestBindsTheConsentedWindowWithoutMutatingPreferences()
     {
         var settings = new AppSettings { TargetType = "Window", WindowHwnd = 42, EnableMicrophone = false };
-        var options = new CaptureStartOptions(false, new(42, 23, "Synthetic fixture", "fixture.exe"));
+        var options = new CaptureStartOptions(false, new(42, 23, "Synthetic fixture", "fixture.exe", @"C:\Synthetic\fixture.exe", 123456));
 
         var request = JsonSerializer.SerializeToElement(CaptureHostClient.CreateStartParameters(settings, options));
 
@@ -201,6 +201,8 @@ public sealed class NativeRecordingDiagnosticLeaseTests
         Assert.Equal(23u, request.GetProperty("expected_window_pid").GetUInt32());
         Assert.Equal("Synthetic fixture", request.GetProperty("expected_window_title").GetString());
         Assert.Equal("fixture.exe", request.GetProperty("expected_window_exe").GetString());
+        Assert.Equal(@"C:\Synthetic\fixture.exe", request.GetProperty("expected_window_path").GetString());
+        Assert.Equal(123456ul, request.GetProperty("expected_window_creation_time").GetUInt64());
         Assert.Equal(42ul, settings.WindowHwnd);
         Assert.Equal("", settings.WindowTitle);
     }

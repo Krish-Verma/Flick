@@ -41,14 +41,14 @@ public partial class MainWindow : Window
     private ConnectedFoldersWindow? _foldersPage;
     private bool _foldersReturnToSettings;
     private bool _settingsMicrophoneWasEnabled;
+    private string _settingsAudioSnapshot = "";
     private bool _isDraggingSlider = false;
     private bool _isRealClosing = false;
     private System.Windows.Point? _shareDragStart;
     private bool _updatingExportCap;
-    private enum PlayerView { Original, Exported, LocalCopy }
+    private enum PlayerView { Original, Exported, LocalCopy, AudioMix }
     private PlayerView _playerView = PlayerView.Original;
     private CancellationTokenSource? _previewCancellation;
-    private MediaProber? _localPreviewProber;
     private bool _previewWasReencoded;
     private bool _playerIsPlaying;
     private WorkspaceLayoutMode _layoutMode = WorkspaceLayoutMode.Split;
@@ -70,8 +70,16 @@ public partial class MainWindow : Window
         InitializeComponent();
         _vm = new MainViewModel();
         DataContext = _vm;
+        ApplyShareAccessiblePalette(SystemParameters.HighContrast);
+        Loaded += (_, _) => {
+            ApplyShareAccessiblePalette(SystemParameters.HighContrast);
+            SystemParameters.StaticPropertyChanged -= ShareSystemParametersChanged;
+            SystemParameters.StaticPropertyChanged += ShareSystemParametersChanged;
+        };
+        Closed += (_, _) => SystemParameters.StaticPropertyChanged -= ShareSystemParametersChanged;
         _notificationService = new FlickNotificationService(Dispatcher);
         _vm.ConfirmTargetReset = ConfirmSourceReset;
+        _vm.ConfirmDiscardEditorChanges = ConfirmDiscardOrganization;
         _vm.DiagnosticReservationAllowed = () => !_updateInstallInProgress && !_quitInProgress && !_isRealClosing;
         _vm.ClipSavedConfirmed += OnClipSavedConfirmed;
         _vm.ReplaySaveFailed += OnReplaySaveFailed;
@@ -123,7 +131,7 @@ public partial class MainWindow : Window
         if (!string.IsNullOrWhiteSpace(_vm.Settings.LoadWarning))
             _vm.StatusDetails = _vm.Settings.LoadWarning;
 
-        // Startup from Windows Run is always disarmed; optionally hide the window.
+        // Manual replay starts off; explicitly approved game automation is separate.
         if (_vm.Settings.StartMinimizedToTray ||
             Environment.GetCommandLineArgs().Any(a =>
                 a.Equals("--minimized", StringComparison.OrdinalIgnoreCase)))
@@ -138,7 +146,8 @@ public partial class MainWindow : Window
         _vm.PropertyChanged += (s, ev) =>
         {
             if (ev.PropertyName is nameof(MainViewModel.CaptureStatus) or nameof(MainViewModel.HealthStatusText)
-                or nameof(MainViewModel.IsRecordingDiagnosticRunning))
+                or nameof(MainViewModel.IsRecordingDiagnosticRunning) or nameof(MainViewModel.CanControlReplay)
+                or nameof(MainViewModel.ActiveReplayDurationSeconds) or nameof(MainViewModel.IsAutomaticGameCapture))
             {
                 UpdateStatusBadgeColor();
                 if (_vm.CaptureStatus == "Starting" || _vm.IsRecordingDiagnosticRunning)
@@ -147,6 +156,11 @@ public partial class MainWindow : Window
                     _previewCancellation?.Cancel();
                     SuspendPlayback(clearSource: true);
                 }
+            }
+            else if (ev.PropertyName == nameof(MainViewModel.AudioMixRevision))
+            {
+                CancelPendingPreview();
+                if (_playerView is PlayerView.Exported or PlayerView.LocalCopy or PlayerView.AudioMix) ShowOriginalPreview(startPlaying: false);
             }
             else if (ev.PropertyName == nameof(MainViewModel.SelectedClip))
             {
@@ -383,13 +397,13 @@ public partial class MainWindow : Window
         BtnToggleCapture.Content = active || transitional ? "Stop Replay" : "Start Replay";
         BtnToggleCapture.Style = (Style)FindResource(
             active || transitional ? "Flick.Button.Secondary" : "Flick.Button.Primary");
-        BtnToggleCapture.IsEnabled = !transitional && _vm.CanControlReplay;
+        BtnToggleCapture.IsEnabled = (_vm.IsAutomaticGameCapture && _vm.CaptureStatus == "Starting") || (!transitional && _vm.CanControlReplay);
         BtnToggleCapture.ToolTip = $"Toggle Replay ({_vm.Settings.CaptureToggleHotkey})";
 
         string saveLabel = WorkspaceLayoutRules.SaveActionLabel(
-            _vm.Settings.ReplayDurationSeconds, compact: false);
+            _vm.ActiveReplayDurationSeconds, compact: false);
         BtnSaveReplay.Content = WorkspaceLayoutRules.SaveActionLabel(
-            _vm.Settings.ReplayDurationSeconds, _layoutMode == WorkspaceLayoutMode.Compact);
+            _vm.ActiveReplayDurationSeconds, _layoutMode == WorkspaceLayoutMode.Compact);
         BtnSaveReplay.ToolTip = $"Save a replay ({_vm.Settings.SaveReplayHotkey})";
         // A buffering encoder is not yet guaranteed to hold a decodable replay.
         BtnSaveReplay.IsEnabled = ready && !testing;
@@ -399,7 +413,7 @@ public partial class MainWindow : Window
         if (_trayReplayItem != null)
         {
             _trayReplayItem.Text = active || transitional ? "Stop Replay" : "Start Replay";
-            _trayReplayItem.Enabled = !transitional && _vm.CanControlReplay;
+            _trayReplayItem.Enabled = BtnToggleCapture.IsEnabled;
         }
         if (_traySaveItem != null)
         {
@@ -424,6 +438,7 @@ public partial class MainWindow : Window
     private async void RealQuit()
     {
         if (_quitInProgress || _isRealClosing) return;
+        if (!ConfirmDiscardOrganization()) return;
         _quitInProgress = true;
         bool wasEnabled = IsEnabled;
         IsEnabled = false;
@@ -479,6 +494,7 @@ public partial class MainWindow : Window
         _playerTimer.Stop();
         CancelPendingPreview();
         _vm.ConfirmTargetReset = null;
+        _vm.ConfirmDiscardEditorChanges = null;
         FlickBackdropService.Reset(this);
         _vm.ClipSavedConfirmed -= OnClipSavedConfirmed;
         _vm.ReplaySaveFailed -= OnReplaySaveFailed;
@@ -720,8 +736,9 @@ public partial class MainWindow : Window
             return;
         }
         _settingsMicrophoneWasEnabled = _vm.Settings.EnableMicrophone;
+        _settingsAudioSnapshot = AudioSettingsSnapshot();
         var settings = new SettingsWindow(_vm.Settings,
-            () => _vm.IsCaptureActive);
+            () => _vm.IsCaptureActive, _vm.GetAudioSourcesAsync);
         settings.CloseRequested += CloseSettingsPage;
         settings.InstallUpdateRequested += InstallUpdateAsync;
         settings.ShortcutEditingChanged += editing => _hotkeyManager.IsShortcutEditing = editing;
@@ -824,20 +841,26 @@ public partial class MainWindow : Window
         _notificationService.StopSound();
 
         RegisterHotkeys();
+        _ = _vm.ApplyGameDetectionPreferencesAsync();
         _vm.RefreshExportPreferences();
         UpdateSharePresetSelection();
         UpdateStatusBadgeColor();
         bool captureActive = _vm.IsCaptureActive;
-        if (captureActive && _settingsMicrophoneWasEnabled &&
-            !_vm.Settings.EnableMicrophone)
+        if (captureActive && (_settingsAudioSnapshot != AudioSettingsSnapshot() || (_settingsMicrophoneWasEnabled &&
+            !_vm.Settings.EnableMicrophone)))
         {
             _ = StopCaptureForMicPrivacyAsync();
             return;
         }
-        _vm.StatusDetails = captureActive
-            ? "Preferences saved. New capture profile takes effect on the next manual replay start."
+        _vm.StatusDetails = _vm.Settings.GameDetectionEnabled
+            ? "Preferences saved. Approved game replay follows Games settings; manual preferences are retained."
+            : captureActive ? "Preferences saved. New capture profile takes effect on the next manual replay start."
             : "Preferences saved. Replay remains off until manually started.";
     }
+
+    private string AudioSettingsSnapshot() => System.Text.Json.JsonSerializer.Serialize(new {
+        _vm.Settings.AudioMode, _vm.Settings.GameAudioSource, _vm.Settings.VoiceAudioSource,
+        _vm.Settings.EnableMicrophone, _vm.Settings.MicrophoneDeviceId, _vm.Settings.SystemAudioDeviceId });
 
     private async System.Threading.Tasks.Task StopCaptureForMicPrivacyAsync()
     {
@@ -853,7 +876,7 @@ public partial class MainWindow : Window
                 return;
             }
             await _vm.StopCaptureAsync();
-            _vm.StatusDetails = "Microphone disabled and capture stopped. Manually start replay when ready.";
+            _vm.StatusDetails = "Audio preferences saved and capture stopped. Manually start replay when ready.";
         }
         catch (Exception ex)
         {
@@ -896,6 +919,7 @@ public partial class MainWindow : Window
             return;
         }
         if (WorkspacePageLayer.Visibility == Visibility.Visible) return;
+        if (HandleEditorShortcut(e)) { e.Handled = true; return; }
         if (e.Key == Key.Escape && EditorContextLayer.Visibility == Visibility.Visible)
         {
             CloseEditorContext();
@@ -917,6 +941,7 @@ public partial class MainWindow : Window
 
     private void SuspendPlayback(bool clearSource)
     {
+        _vm.ClearFilmstrip();
         if (clearSource) CancelPendingPreview();
         _playerTimer.Stop();
         if (VideoPlayer is null) return;
@@ -993,6 +1018,7 @@ public partial class MainWindow : Window
         var clip = _vm.SelectedClip;
         TrimTimeline.SetRange(clip?.DurationSeconds ?? 0,
             clip?.TrimStartSeconds ?? 0, clip?.TrimEndSeconds ?? 0);
+        PlayerSlider.Maximum = Math.Max(.25, clip?.DurationSeconds ?? 0);
         BtnPlayPause.IsEnabled = clip?.IsAvailable == true;
         BtnPreviewMode.IsEnabled = clip?.IsAvailable == true;
         BtnBuildPreview.IsEnabled = clip?.IsAvailable == true;
@@ -1035,6 +1061,7 @@ public partial class MainWindow : Window
         {
             PlayerView.Exported => "Export Preview",
             PlayerView.LocalCopy => "Local Preview",
+            PlayerView.AudioMix => "Mix Preview",
             _ => "Original"
         };
         BtnPlayPause.Content = "Play";
@@ -1060,7 +1087,7 @@ public partial class MainWindow : Window
             SetPreviewSource(clip.OriginalFilePath, PlayerView.Original, startPlaying: true);
         else
             ResetPlayerForSelection(); // Inactive editor retains the cheap poster.
-        _vm.StatusDetails = "Original Preview · Edits Affect Only the Exported Copy";
+        _vm.StatusDetails = "Original preview · recorded audio · use Preview Mix for current edits";
     }
 
     private void VideoPlayer_MediaOpened(object sender, RoutedEventArgs e)
@@ -1109,6 +1136,8 @@ public partial class MainWindow : Window
 
     private void CloseEditorContext()
     {
+        _vm.DeactivateSharePresentation();
+        _vm.ClearFilmstrip();
         EditorContextLayer.Visibility = Visibility.Collapsed;
         TrimPanel.Visibility = AudioPanel.Visibility = SharePanel.Visibility = Visibility.Collapsed;
         AudioExpander.IsExpanded = false;
@@ -1124,7 +1153,7 @@ public partial class MainWindow : Window
     {
         // Drawers scroll inside the existing preview allocation: no minimum
         // editor height that pushes transport/actions out of a compact window.
-        EditorContextScroll.MaxHeight = Math.Max(32, PreviewSurface.ActualHeight - 100);
+        UpdateEditorContextHeight();
     }
 
     private void EditorTool_Click(object sender, RoutedEventArgs e)
@@ -1141,7 +1170,8 @@ public partial class MainWindow : Window
         if (tool == "Audio") AudioExpander.IsExpanded = true;
         System.Windows.Automation.AutomationProperties.SetHelpText(button, "Open");
         // Opening Share is navigation only; never starts export or posting.
-        if (tool == "Share") UpdateSharePresetSelection();
+        if (tool == "Share") { UpdateSharePresetSelection(); _vm.ActivateSharePresentation(); }
+        UpdateEditorContextHeight();
         CloseEditorTool.Focus();
         EditorContextScroll.ScrollToTop();
     }
@@ -1204,6 +1234,7 @@ public partial class MainWindow : Window
     {
         if (_isDraggingSlider || !VideoPlayer.NaturalDuration.HasTimeSpan) return;
         PlayerSlider.Value = VideoPlayer.Position.TotalSeconds;
+        TrimTimeline.SetPlayhead(OriginalPlayhead);
         var position = VideoPlayer.Position;
         var length = VideoPlayer.NaturalDuration.TimeSpan;
         TxtPlayerTime.Text = position.ToString(position.TotalHours >= 1 ? @"h\:mm\:ss" : @"m\:ss") +
@@ -1232,20 +1263,22 @@ public partial class MainWindow : Window
             ? Visibility.Visible : Visibility.Collapsed;
         BtnBuildPreview.Content = _playerView == PlayerView.LocalCopy
             ? "Try Compatible Preview" : "Create Local Preview";
-        TxtPreviewIssue.Text = _playerView == PlayerView.Exported
-            ? "Windows Couldn't Preview the Exported MP4"
-            : "Windows Couldn't Play This Original";
-        _vm.StatusDetails = _playerView == PlayerView.Exported
-            ? "Export preview unavailable. Open the validated MP4 externally."
-            : "Original MKV playback unsupported by Windows. Create a temporary local MP4 or open the original in another player.";
+        TxtPreviewIssue.Text = _playerView switch {
+            PlayerView.Exported => "Windows Couldn't Preview the Exported MP4",
+            PlayerView.AudioMix => "Windows Couldn't Play the Audio Mix Preview",
+            _ => "Windows Couldn't Play This Original" };
+        _vm.StatusDetails = _playerView switch {
+            PlayerView.Exported => "Export preview unavailable. Open the validated MP4 externally.",
+            PlayerView.AudioMix => "Mix playback unavailable. The original remains unchanged; export the mix to hear it in another player.",
+            _ => "Original MKV playback unsupported by Windows. Create a temporary local MP4 or open the original in another player." };
     }
 
     private async void BuildPlayablePreview_Click(object sender, RoutedEventArgs e)
     {
         var clip = _vm.SelectedClip;
-        if (clip?.IsAvailable != true || _vm.IsCaptureActive || _vm.IsExporting)
+        if (clip?.IsAvailable != true || _vm.IsCaptureActive || _vm.IsImporting || _vm.IsExporting || _vm.IsBackgroundWorkActive)
         {
-            _vm.StatusDetails = "Finish live capture or export before creating a local preview.";
+            _vm.StatusDetails = "Finish recording and background work before creating a local preview.";
             return;
         }
         bool forceTranscode = _playerView == PlayerView.LocalCopy;
@@ -1257,10 +1290,8 @@ public partial class MainWindow : Window
         _vm.StatusDetails = "Preparing a bounded, on-demand local playback copy…";
         try
         {
-            _localPreviewProber ??= new MediaProber();
-            string result = await _localPreviewProber.BuildPlaybackPreviewAsync(
-                clip.OriginalFilePath, cancellation.Token, forceTranscode);
-            if (cancellation.IsCancellationRequested || _vm.SelectedClip?.Id != clip.Id)
+            string result = await _vm.CreateLocalPlaybackPreviewAsync(clip, forceTranscode, cancellation.Token);
+            if (cancellation.IsCancellationRequested || !_vm.CanPresentAudioMixPreview || _vm.SelectedClip?.Id != clip.Id)
                 return;
             _previewWasReencoded = forceTranscode;
             SetPreviewSource(result, PlayerView.LocalCopy, startPlaying: true);
@@ -1271,7 +1302,7 @@ public partial class MainWindow : Window
         catch (OperationCanceledException) { }
         catch (Exception ex)
         {
-            if (_vm.SelectedClip?.Id == clip.Id)
+            if (_vm.SelectedClip?.Id == clip.Id && _vm.CanPresentAudioMixPreview)
             {
                 _vm.StatusDetails = "Couldn't Create Local Preview: " + ex.Message;
                 PreviewFallbackPanel.Visibility = Visibility.Visible;
@@ -1436,8 +1467,7 @@ public partial class MainWindow : Window
 
     private void BtnCancelExport_Click(object sender, RoutedEventArgs e)
     {
-        _vm.CancelExport();
-        _vm.ExportStatusMessage = "Cancelling Local Export…";
+        _vm.CancelShareExport();
     }
 
     private void DragHandle_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
@@ -1465,8 +1495,18 @@ public partial class MainWindow : Window
             _vm.ExportStatusMessage = "Share File No Longer Valid · Export This Clip Again";
             return;
         }
-        var data = new DataObject(DataFormats.FileDrop, new[] { path });
-        DragDrop.DoDragDrop(DragHandle, data, DragDropEffects.Copy);
+        try
+        {
+            var data = ShareFileTransfer.CreateFileData(path);
+            var result = DragDrop.DoDragDrop(DragHandle, data, DragDropEffects.Copy);
+            _vm.ExportStatusMessage = result == DragDropEffects.None
+                ? "Drag cancelled. Your MP4 is still ready."
+                : "File handed to Windows. Check the attachment in Discord.";
+        }
+        catch (System.Runtime.InteropServices.ExternalException)
+        { _vm.ExportStatusMessage = "Windows could not start the drag. Try Copy File instead."; }
+        catch (IOException)
+        { _vm.IsExportReady = false; _vm.ExportStatusMessage = "The MP4 is no longer available. Export it again."; }
     }
 
     private void BtnCopyFile_Click(object sender, RoutedEventArgs e) =>

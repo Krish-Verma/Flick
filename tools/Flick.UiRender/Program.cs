@@ -17,7 +17,7 @@ using LocalClip.Core.Storage;
 
 namespace Flick.UiRender;
 
-internal static class Program
+internal static partial class Program
 {
     private static readonly BindingFlags Private = BindingFlags.Instance | BindingFlags.NonPublic;
 
@@ -385,6 +385,8 @@ internal static class Program
             "Test helper exited: Confirmed (simulated). Existing clips and recording preferences were kept.");
         Find<ScrollViewer>("RecordingHealthScroll").ScrollToBottom();
         Render("36-recording-test-failure-minimum.png", 720, 480);
+        RenderShareFixtures(main, vm, settings, storage, fixtures, output, Render);
+        RenderProductPhaseFixtures(main, vm, settings, storage, fixtures, output, Render);
         string applicationVersion = typeof(MainWindow).Assembly
             .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? "unknown";
         File.WriteAllText(Path.Combine(output, "PROVENANCE.txt"),
@@ -401,7 +403,8 @@ internal static class Program
             "Diagnostics views simulate only status/busy fields through actual bindings, including long errors at720x480DIPs. No diagnostics journal is initialized, no save dialog opens, and no ZIP is exported. Fixed header/footer/Close/Export containment and the finite middle scroll viewport are checked in layout-observations.json.\n" +
             "Recording-test consent uses the real Run button and same-window FlickDialog; both prompts are programmatically declined with No. A synthetic overflowing source verifies positive body scrolling with No/Yes fixed inside the minimum viewport; the ordinary synthetic source is restored afterward. Source names and audio choices are synthetic. Running/cancelling/success/failure views simulate only bound VM state. No test helper, audio endpoint, saved test clip, timing measurement or media validation is claimed.\n" +
             "Brand samples: actual shared Image style rasterized by WPF at 96/120/144/192 DPI; not a physical per-monitor DPI session.\n" +
-            "No gameplay, media decoder, OS titlebar, real recording, updater network request, or full UI acceptance claimed.\n");
+            "Share views37-48 additionally generate real synthetic H.264/AAC media, register it, use the production MP4 exporter/full decode and verify original immutability. Ready is backed by actual bytes/fingerprint; exporting/cancelling/failure are labelled visual fixtures. See share-fixture-evidence.json for exact scope. Share scaling images are raster tests; accessible palette is forced through the real local palette path without changing Windows settings. No external drag, clipboard or Discord operation is performed by the renderer.\n" +
+            "No gameplay, live MediaElement playback, OS titlebar, real recording, updater network request, or full physical UI acceptance claimed.\n");
         vm.Dispose();
         app.Shutdown();
         return 0;
@@ -445,7 +448,29 @@ internal static class Program
             bool captionFits = saveButton.ActualWidth + roundingTolerance >= requiredWidth &&
                 presenter.ActualWidth + roundingTolerance >= captionWidth;
             object? healthLayout = null;
+            object? shareLayout = null;
             string? healthLayoutFailure = null;
+            if (Find<Border>("SharePanel").Visibility == Visibility.Visible &&
+                Find<Border>("EditorContextLayer").Visibility == Visibility.Visible)
+            {
+                Rect Bounds(FrameworkElement element) => element.TransformToAncestor(root).TransformBounds(new Rect(element.RenderSize));
+                bool Contains(Rect outer, Rect inner) => inner.Left >= outer.Left - 1 && inner.Top >= outer.Top - 1 &&
+                    inner.Right <= outer.Right + 1 && inner.Bottom <= outer.Bottom + 1;
+                var context = Find<Border>("EditorContextLayer");
+                var footer = Find<WrapPanel>("ShareActionFooter");
+                var scroll = Find<ScrollViewer>("EditorContextScroll");
+                bool controlsFit = Contains(Bounds(Find<Border>("PreviewSurface")), Bounds(context)) &&
+                    Contains(Bounds(context), Bounds(footer)) && Contains(Bounds(context), Bounds(Find<Button>("CloseEditorTool"))) &&
+                    Contains(Bounds(footer), Bounds(Find<Button>("BtnExport"))) &&
+                    Contains(Bounds(footer), Bounds(Find<Button>("BtnShareCopyFile"))) &&
+                    Contains(Bounds(footer), Bounds(Find<Button>("BtnShareOpenFolder"))) &&
+                    (Find<Button>("BtnShareCancel").Visibility != Visibility.Visible || Contains(Bounds(footer), Bounds(Find<Button>("BtnShareCancel")))) &&
+                    scroll.ViewportHeight > 0 && double.IsFinite(scroll.ViewportHeight);
+                shareLayout = new { controlsFit, scroll.ViewportHeight, scroll.ExtentHeight, scroll.ScrollableHeight,
+                    tileWidth = Find<Border>("DragHandle").ActualWidth, footerHeight = footer.ActualHeight,
+                    copyEnabled = Find<Button>("BtnShareCopyFile").IsEnabled, state = vm.ShareTileStateText };
+                if (!controlsFit) healthLayoutFailure = "Fixed Share actions or scroll viewport do not fit in " + file;
+            }
             var healthPanel = Find<Border>("RecordingHealthPanel");
             if (healthPanel.Visibility == Visibility.Visible)
             {
@@ -501,7 +526,8 @@ internal static class Program
                 requiredButtonWidth = requiredWidth,
                 roundingTolerance,
                 captionFits,
-                healthLayout
+                healthLayout,
+                shareLayout
             });
             File.WriteAllText(Path.Combine(output, "layout-observations.json"),
                 JsonSerializer.Serialize(layoutObservations, new JsonSerializerOptions { WriteIndented = true }));

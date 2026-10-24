@@ -37,14 +37,14 @@ public static class ReadyShareFile
             // A legacy same-name export may have been overwritten by a
             // different linked clip. Keep it on disk but require re-export.
             if (!string.Equals(Path.GetFileName(selected.ExportedFilePath),
-                ShareExportNaming.ForOriginal(selected.OriginalFilePath, targetMb),
+                ShareExportNaming.ForOriginal(selected.OriginalFilePath, targetMb, selected.ExportAspectPreset),
                 StringComparison.OrdinalIgnoreCase)) return false;
 
             string fingerprint = ExportFingerprint.Compute(
                 selected.OriginalFilePath, selected.TrimStartSeconds,
                 selected.TrimEndSeconds > 0
                     ? selected.TrimEndSeconds : selected.DurationSeconds,
-                selected.AudioTracks, targetMb);
+                selected.AudioTracks, targetMb, selected.ExportAspectPreset);
 
             if (!string.Equals(fingerprint, selected.LastExportFingerprint,
                 StringComparison.Ordinal)) return false;

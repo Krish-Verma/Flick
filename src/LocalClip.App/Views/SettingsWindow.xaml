@@ -37,6 +37,9 @@
                             Click="SettingsCategory_Click"
                             Style="{StaticResource Flick.Button.Ghost}"
                             HorizontalContentAlignment="Left" MinHeight="34" Padding="10,6" Margin="0,0,0,2"/>
+                    <Button x:Name="NavGames" Content="Games" Tag="Games" Click="SettingsCategory_Click"
+                            Style="{StaticResource Flick.Button.Ghost}" HorizontalContentAlignment="Left"
+                            MinHeight="34" Padding="10,6" Margin="0,0,0,2"/>
                     <Button x:Name="NavAudio" Content="Audio" Tag="Audio"
                             Click="SettingsCategory_Click"
                             Style="{StaticResource Flick.Button.Ghost}"
@@ -106,9 +109,53 @@
                               AutomationProperties.Name="Allow CPU compatibility fallback"/>
                     <TextBlock Text="Uses CPU encoding only if hardware encoding is unavailable. CPU mode is limited to 720p / 30 FPS and may reduce game performance. Turn this off to require hardware encoding."
                                Style="{StaticResource Flick.Text.Muted}" TextWrapping="Wrap"/>
-                    <TextBlock Text="Capture starts Off, even when Windows launches Flick. Recording changes take effect on the next manual replay start."
+                    <TextBlock Text="Manual replay starts Off. Optional approved-game automation is configured separately in Games. Recording changes take effect on the next replay start."
                                Style="{StaticResource Flick.Text.Muted}"
                                TextWrapping="Wrap" Margin="0,18,0,0"/>
+                </StackPanel>
+
+                <!-- Approved game automation: all edits stay staged until Save. -->
+                <StackPanel x:Name="PanelGames" Visibility="Collapsed">
+                    <TextBlock Text="Games" Style="{StaticResource Flick.Text.PageTitle}"/>
+                    <TextBlock Text="Automatically record only the games you approve. No desktop fallback."
+                               Style="{StaticResource Flick.Text.Caption}" TextWrapping="Wrap" Margin="0,5,0,18"/>
+                    <CheckBox x:Name="ChkGameDetectionEnabled" Content="Enable Automatic Game Replay"
+                              Style="{StaticResource Flick.Toggle}" AutomationProperties.Name="Enable Automatic Game Replay"/>
+                    <TextBlock Text="Off by default. Enabled detection checks every three seconds. Stop Replay pauses that game session, including after Flick restarts; restart the game or start replay manually to record again."
+                               Style="{StaticResource Flick.Text.Muted}" TextWrapping="Wrap" Margin="0,8,0,16"/>
+                    <TextBlock Text="{Binding GameDetectionStatus}" Style="{StaticResource Flick.Text.Caption}" TextWrapping="Wrap" Margin="0,0,0,16"/>
+                    <Button x:Name="BtnRefreshRunningGames" Content="Find Running Windows" HorizontalAlignment="Left"
+                            Click="RefreshRunningGames_Click" Style="{StaticResource Flick.Button.Secondary}"/>
+                    <ComboBox x:Name="CmbRunningGames" Style="{StaticResource Flick.Input.Combo}"
+                              AutomationProperties.Name="Running window to approve" Margin="0,10,0,8"/>
+                    <Button Content="Approve Selected Game" HorizontalAlignment="Left" Click="ApproveRunningGame_Click"
+                            Style="{StaticResource Flick.Button.Secondary}" Margin="0,0,0,16"/>
+                    <ListBox x:Name="LstApprovedGames" Height="112" SelectionChanged="ApprovedGame_SelectionChanged"
+                             Background="{DynamicResource Flick.Brush.Surface}" Foreground="{DynamicResource Flick.Brush.TextPrimary}"
+                             BorderBrush="{DynamicResource Flick.Brush.Divider}" AutomationProperties.Name="Approved Games"/>
+                    <StackPanel x:Name="GameProfileEditor" Visibility="Collapsed" Margin="0,12,0,0">
+                        <TextBlock Text="Game Name" Style="{StaticResource Flick.Text.Control}" Margin="0,0,0,5"/>
+                        <TextBox x:Name="TxtGameName" MaxLength="120" Style="{StaticResource Flick.Input.Text}" AutomationProperties.Name="Approved Game Name"/>
+                        <TextBlock x:Name="TxtGameExecutable" Style="{StaticResource Flick.Text.Muted}" TextWrapping="Wrap" Margin="0,6,0,12"/>
+                        <CheckBox x:Name="ChkGameProfileEnabled" Content="Use This Game Profile" Style="{StaticResource Flick.Toggle}" Margin="0,0,0,12"/>
+                        <TextBlock Text="Replay Quality" Style="{StaticResource Flick.Text.Control}" Margin="0,0,0,5"/>
+                        <ComboBox x:Name="CmbGameQuality" Style="{StaticResource Flick.Input.Combo}" HorizontalAlignment="Left" Width="240" AutomationProperties.Name="Game Replay Quality">
+                            <ComboBoxItem Content="Light · 720p / 30 FPS" Tag="Light"/>
+                            <ComboBoxItem Content="Balanced · 1080p / 30 FPS" Tag="Balanced"/>
+                            <ComboBoxItem Content="Smooth · 1080p / 60 FPS" Tag="Smooth"/>
+                        </ComboBox>
+                        <TextBlock Text="Replay Duration (15–120 seconds)" Style="{StaticResource Flick.Text.Control}" Margin="0,12,0,5"/>
+                        <TextBox x:Name="TxtGameDuration" Width="80" HorizontalAlignment="Left" Style="{StaticResource Flick.Input.Text}" AutomationProperties.Name="Game Replay Duration in Seconds"/>
+                        <CheckBox x:Name="ChkGameMicrophone" Content="Allow Microphone for This Game" Style="{StaticResource Flick.Toggle}" Margin="0,14,0,5"/>
+                        <TextBlock Text="Microphone stays off unless Record Microphone is also enabled in Audio. System audio follows your configured audio preferences. Automatic replay never changes your manual source or profile."
+                                   Style="{StaticResource Flick.Text.Muted}" TextWrapping="Wrap"/>
+                        <WrapPanel Margin="0,12,0,0">
+                            <Button Content="Apply Profile Edits" Click="ApplyGameProfile_Click" Style="{StaticResource Flick.Button.Secondary}" Margin="0,0,10,8"/>
+                            <Button Content="Remove Game" Click="RemoveGameProfile_Click" Style="{StaticResource Flick.Button.Ghost}" Margin="0,0,0,8"/>
+                        </WrapPanel>
+                    </StackPanel>
+                    <TextBlock x:Name="TxtGameMessage" Text="Only local executable paths observed in eligible running windows can be approved. Elevated, hidden and ambiguous windows are not recorded automatically."
+                               Style="{StaticResource Flick.Text.Caption}" TextWrapping="Wrap" Margin="0,12,0,0"/>
                 </StackPanel>
 
                 <!-- Audio -->
@@ -116,21 +163,27 @@
                     <TextBlock Text="Audio" Style="{StaticResource Flick.Text.PageTitle}"/>
                     <TextBlock Text="Capture only what you choose."
                                Style="{StaticResource Flick.Text.Caption}" Margin="0,5,0,24"/>
-                    <Border Margin="0,0,0,24" Padding="0">
-                        <StackPanel>
-                            <TextBlock Text="System Audio" Style="{StaticResource Flick.Text.Section}"/>
-                            <TextBlock Text="Current Windows default output · System loopback fallback"
-                                       Style="{StaticResource Flick.Text.Caption}"
-                                       TextWrapping="Wrap" Margin="0,6,0,0"/>
-                        </StackPanel>
-                    </Border>
+                    <ComboBox x:Name="CmbAudioMode" SelectionChanged="AudioMode_SelectionChanged" Style="{StaticResource Flick.Input.Combo}" SelectedIndex="0" Margin="0,0,0,16" AutomationProperties.Name="Audio capture mode">
+                        <ComboBoxItem Content="System Audio · whole output device"/>
+                        <ComboBoxItem Content="Separate App Audio · selected process trees"/>
+                    </ComboBox>
+                    <StackPanel x:Name="AppAudioSourcesPanel" Visibility="Collapsed">
+                    <TextBlock Text="Game app" Style="{StaticResource Flick.Text.Control}"/>
+                    <ComboBox x:Name="CmbGameAudio" DisplayMemberPath="Label" Style="{StaticResource Flick.Input.Combo}" Margin="0,5,0,12" AutomationProperties.Name="Game audio app"/>
+                    <TextBlock Text="Voice app" Style="{StaticResource Flick.Text.Control}"/>
+                    <ComboBox x:Name="CmbVoiceAudio" DisplayMemberPath="Label" Style="{StaticResource Flick.Input.Combo}" Margin="0,5,0,12" AutomationProperties.Name="Voice audio app"/>
+                    <Button x:Name="BtnRefreshAudioSources" Content="Refresh Running Apps" Click="RefreshAudioSources_Click" Style="{StaticResource Flick.Button.Secondary}" HorizontalAlignment="Left" Margin="0,0,0,8"/>
+                    <TextBlock x:Name="TxtAudioSources" Text="Separate App Audio requires Windows build 20348 or newer. Select current apps after a restart; unavailable app audio stops replay. System Audio is an explicit whole-device choice, never an automatic fallback."
+                               Style="{StaticResource Flick.Text.Caption}" TextWrapping="Wrap" Margin="0,0,0,20"/>
+                    </StackPanel>
+                    <TextBlock Text="System Audio records the whole selected output device. Separate App Audio records only the chosen process trees; neither choice records the microphone unless enabled below." Style="{StaticResource Flick.Text.Caption}" TextWrapping="Wrap" Margin="0,0,0,16"/>
                     <CheckBox x:Name="ChkMicrophone"
                               Style="{StaticResource Flick.Toggle}"
                               Content="Record Microphone"
                               Checked="Microphone_Changed" Unchecked="Microphone_Changed"/>
                     <TextBlock Text="Off by default · Windows default input device"
                                Style="{StaticResource Flick.Text.Caption}" Margin="0,7,0,15"/>
-                    <TextBlock Text="Game and Discord audio are not independently isolated in fallback mode. Disabling an active microphone requires stopping replay to release the device."
+                    <TextBlock Text="Microphone is independent and off by default. Changing audio routing stops active replay; manually restart after saving. App tracks include child processes and cannot separate voices within one app."
                                Style="{StaticResource Flick.Text.Muted}"
                                TextWrapping="Wrap"/>
                 </StackPanel>

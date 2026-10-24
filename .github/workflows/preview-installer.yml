@@ -7,6 +7,7 @@ on:
       - 'src/LocalClip.Core/**'
       - 'src/LocalClip.CaptureHost/**'
       - 'tools/Flick.RecordingHarness/**'
+      - 'tools/Flick.AudioQualification/**'
       - 'installer/**'
       - 'scripts/build_*.ps1'
       - 'scripts/setup_tools.ps1'
@@ -124,7 +125,7 @@ jobs:
             -Itools/obs/include/libobs -Isrc/LocalClip.CaptureHost \
             src/LocalClip.CaptureHost/main.cpp native-build/capture-version.o \
             -Ltools/obs/runtime/bin/64bit -Wl,-Bstatic -lwinpthread \
-            -Wl,-Bdynamic -lobs -ldwmapi \
+            -Wl,-Bdynamic -lobs -ldwmapi -lole32 \
             -o tools/obs/runtime/bin/64bit/LocalClip.CaptureHost.exe
           test -f tools/obs/runtime/bin/64bit/LocalClip.CaptureHost.exe
       - name: Run offline source/design contracts
@@ -191,6 +192,20 @@ jobs:
           path: |
             dist/recording-qualification-*.zip
             dist/recording-qualification-*.zip.sha256
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14
+
+      - name: Assemble separate generated-process audio qualification payload (no playback or capture)
+        shell: pwsh
+        run: ./scripts/build_audio_qualification.ps1
+      - name: Upload generated-process audio payload and source/file hashes
+        uses: actions/upload-artifact@v4
+        with:
+          name: flick-audio-qualification-${{ github.sha }}
+          path: |
+            dist/audio-qualification-*.zip
+            dist/audio-qualification-*.zip.sha256
           if-no-files-found: error
           compression-level: 0
           retention-days: 14

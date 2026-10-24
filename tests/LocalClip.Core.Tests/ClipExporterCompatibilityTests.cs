@@ -116,7 +116,7 @@ public class ClipExporterCompatibilityTests
         {
             ProbeCalls++;
             return Task.FromResult(new ProbeResult {
-                IsValid = true, DurationSeconds = 10, VideoCodec = "h264",
+                IsValid = true, DurationSeconds = 10, VideoCodec = "h264", Width = 1920, Height = 1080,
                 AudioTracks = [new AudioTrackInfo { Codec = "aac" }]
             });
         }

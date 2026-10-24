@@ -40,7 +40,7 @@ if (-not $SkipNativeBuild) {
     if ($LASTEXITCODE -ne 0) { throw "Failed to compile native capture product/version resources" }
     g++ -O2 -std=c++17 -static-libgcc -static-libstdc++ `
         -I "$ObsInc" -I "$HostInc" "$HostSrc" "$ResourceOut" `
-        -L "$ObsBin" "-Wl,-Bstatic" -lwinpthread "-Wl,-Bdynamic" -lobs -ldwmapi `
+        -L "$ObsBin" "-Wl,-Bstatic" -lwinpthread "-Wl,-Bdynamic" -lobs -ldwmapi -lole32 `
         -o "$HostOut"
     if ($LASTEXITCODE -ne 0) { throw "Failed to compile LocalClip.CaptureHost.exe" }
     Write-Host "CaptureHost compiled successfully to: $HostOut" -ForegroundColor Green
