@@ -1,4 +1,5 @@
 #include "../../src/LocalClip.CaptureHost/encoder_policy.hpp"
+#include "../../src/LocalClip.CaptureHost/diagnostic_policy.hpp"
 #include <iostream>
 
 using namespace flick::capture;
@@ -9,6 +10,24 @@ static void require(bool condition, const char *message) {
 
 int main() {
     try {
+        const auto silent = audio_routing(false, false);
+        require(silent.tracks == std::vector<std::string>{"Silent Diagnostic Audio"} &&
+                silent.system_mixers == 0 && silent.microphone_mixers == 0,
+                "A no-audio diagnostic keeps one silent AAC mix without a capture source");
+        const auto mic_only = audio_routing(false, true);
+        require(mic_only.tracks == std::vector<std::string>{"Combined Mix", "Microphone"} &&
+                mic_only.system_mixers == 0 && mic_only.microphone_mixers == 3,
+                "Mic-only capture routes to the actual second mix rather than absent mix two");
+        const auto normal = audio_routing(true, true);
+        require(normal.tracks == std::vector<std::string>{"Combined Mix", "System Audio", "Microphone"} &&
+                normal.system_mixers == 3 && normal.microphone_mixers == 5,
+                "Existing normal three-track routing remains unchanged");
+        require(expected_window_matches(23, "Test", "fixture.exe", 23, "Test", "fixture.exe") &&
+                !expected_window_matches(23, "Test", "fixture.exe", 24, "Test", "fixture.exe") &&
+                !expected_window_matches(23, "Test", "fixture.exe", 23, "Other", "fixture.exe") &&
+                !expected_window_matches(23, "Test", "fixture.exe", 23, "Test", "other.exe") &&
+                !expected_window_matches(0, "", "", 23, "Test", "fixture.exe"),
+                "Consented window identity rejects reused handles and incomplete expectations");
         const std::vector<std::string> registered{"obs_x264", "hevc_nvenc", "h264_texture_amf", "obs_qsv11_v2", "obs_nvenc_h264_tex"};
         auto automatic = candidates("auto", true, registered);
         require(automatic.size() == 4, "Only registered known H264 encoders are eligible");

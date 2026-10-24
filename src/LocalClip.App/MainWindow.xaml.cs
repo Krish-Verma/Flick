@@ -72,6 +72,7 @@ public partial class MainWindow : Window
         DataContext = _vm;
         _notificationService = new FlickNotificationService(Dispatcher);
         _vm.ConfirmTargetReset = ConfirmSourceReset;
+        _vm.DiagnosticReservationAllowed = () => !_updateInstallInProgress && !_quitInProgress && !_isRealClosing;
         _vm.ClipSavedConfirmed += OnClipSavedConfirmed;
         _vm.ReplaySaveFailed += OnReplaySaveFailed;
 
@@ -136,10 +137,11 @@ public partial class MainWindow : Window
         // Wire CaptureStatus badge color updates
         _vm.PropertyChanged += (s, ev) =>
         {
-            if (ev.PropertyName is nameof(MainViewModel.CaptureStatus) or nameof(MainViewModel.HealthStatusText))
+            if (ev.PropertyName is nameof(MainViewModel.CaptureStatus) or nameof(MainViewModel.HealthStatusText)
+                or nameof(MainViewModel.IsRecordingDiagnosticRunning))
             {
                 UpdateStatusBadgeColor();
-                if (_vm.CaptureStatus == "Starting")
+                if (_vm.CaptureStatus == "Starting" || _vm.IsRecordingDiagnosticRunning)
                 {
                     // A real gameplay session always outranks a preview decoder.
                     _previewCancellation?.Cancel();
@@ -207,6 +209,16 @@ public partial class MainWindow : Window
         };
         if (dialog.ShowDialog(this) == true)
             await _vm.ExportDiagnosticsAsync(dialog.FileName);
+    }
+
+    private async void BtnRunRecordingDiagnostic_Click(object sender, RoutedEventArgs e)
+    {
+        if (_vm.IsRecordingDiagnosticRunning) { _vm.CancelRecordingDiagnostic(); return; }
+        var plan = _vm.CreateRecordingDiagnosticPlan(ChkDiagnosticAudio.IsChecked == true);
+        if (plan == null) return;
+        if (FlickDialog.Show(plan.ConsentSummary, "Run Recording Test?", MessageBoxButton.YesNo,
+            MessageBoxImage.Question) != MessageBoxResult.Yes) return;
+        await _vm.RunRecordingDiagnosticAsync(plan, plan.PlanId);
     }
 
     private void BtnCloseRecordingHealth_Click(object sender, RoutedEventArgs e)
@@ -344,9 +356,10 @@ public partial class MainWindow : Window
         bool active = status is "Armed" or "Buffering";
         bool transitional = status == "Starting" || status == "Stopping";
         bool fault = status == "Faulted";
+        bool testing = _vm.IsRecordingDiagnosticRunning;
 
         bool compact = _layoutMode == WorkspaceLayoutMode.Compact;
-        TxtCaptureStatus.Text = _vm.RecordingHealth.SessionId != Guid.Empty || _vm.RecordingHealth.LastSaveIssue != null
+        TxtCaptureStatus.Text = testing ? "Testing Recording" : _vm.RecordingHealth.SessionId != Guid.Empty || _vm.RecordingHealth.LastSaveIssue != null
             ? _vm.HealthStatusText : status switch
         {
             "Armed" => compact ? "Ready" : "Replay Ready",
@@ -362,7 +375,7 @@ public partial class MainWindow : Window
         var green = (System.Windows.Media.Brush)FindResource("Flick.Brush.Success");
         var amber = (System.Windows.Media.Brush)FindResource("Flick.Brush.Warning");
         var danger = (System.Windows.Media.Brush)FindResource("Flick.Brush.Danger");
-        CaptureStateDot.Fill = ready ? green : buffering || transitional ? amber :
+        CaptureStateDot.Fill = testing ? amber : ready ? green : buffering || transitional ? amber :
             fault ? danger : neutral;
         // Badge surface is a DynamicResource so a Windows high-contrast
         // theme can override it without stale fixed-color rendering.
@@ -370,7 +383,7 @@ public partial class MainWindow : Window
         BtnToggleCapture.Content = active || transitional ? "Stop Replay" : "Start Replay";
         BtnToggleCapture.Style = (Style)FindResource(
             active || transitional ? "Flick.Button.Secondary" : "Flick.Button.Primary");
-        BtnToggleCapture.IsEnabled = !transitional;
+        BtnToggleCapture.IsEnabled = !transitional && _vm.CanControlReplay;
         BtnToggleCapture.ToolTip = $"Toggle Replay ({_vm.Settings.CaptureToggleHotkey})";
 
         string saveLabel = WorkspaceLayoutRules.SaveActionLabel(
@@ -379,19 +392,19 @@ public partial class MainWindow : Window
             _vm.Settings.ReplayDurationSeconds, _layoutMode == WorkspaceLayoutMode.Compact);
         BtnSaveReplay.ToolTip = $"Save a replay ({_vm.Settings.SaveReplayHotkey})";
         // A buffering encoder is not yet guaranteed to hold a decodable replay.
-        BtnSaveReplay.IsEnabled = ready;
+        BtnSaveReplay.IsEnabled = ready && !testing;
         BtnSaveReplay.Style = (Style)FindResource(
             active ? "Flick.Button.Primary" : "Flick.Button.Secondary");
 
         if (_trayReplayItem != null)
         {
             _trayReplayItem.Text = active || transitional ? "Stop Replay" : "Start Replay";
-            _trayReplayItem.Enabled = !transitional;
+            _trayReplayItem.Enabled = !transitional && _vm.CanControlReplay;
         }
         if (_traySaveItem != null)
         {
             _traySaveItem.Text = saveLabel;
-            _traySaveItem.Enabled = ready;
+            _traySaveItem.Enabled = ready && !testing;
         }
         if (_notifyIcon != null)
             _notifyIcon.Text = $"Flick — {TxtCaptureStatus.Text}";
@@ -708,7 +721,7 @@ public partial class MainWindow : Window
         }
         _settingsMicrophoneWasEnabled = _vm.Settings.EnableMicrophone;
         var settings = new SettingsWindow(_vm.Settings,
-            () => _vm.CaptureStatus is "Starting" or "Armed" or "Buffering");
+            () => _vm.IsCaptureActive);
         settings.CloseRequested += CloseSettingsPage;
         settings.InstallUpdateRequested += InstallUpdateAsync;
         settings.ShortcutEditingChanged += editing => _hotkeyManager.IsShortcutEditing = editing;
@@ -795,6 +808,11 @@ public partial class MainWindow : Window
         ReturnToClipWorkspace();
         if (uninstall)
         {
+            if (UpdateRequiresFinishingWork())
+            {
+                _vm.StatusDetails = "Stop recording and wait for clip saving and background work before uninstalling Flick.";
+                return;
+            }
             if (FlickUninstallLauncher.TryLaunch(out string error))
                 RealQuit();
             else
@@ -809,7 +827,7 @@ public partial class MainWindow : Window
         _vm.RefreshExportPreferences();
         UpdateSharePresetSelection();
         UpdateStatusBadgeColor();
-        bool captureActive = _vm.CaptureStatus is "Starting" or "Armed" or "Buffering";
+        bool captureActive = _vm.IsCaptureActive;
         if (captureActive && _settingsMicrophoneWasEnabled &&
             !_vm.Settings.EnableMicrophone)
         {
@@ -825,6 +843,15 @@ public partial class MainWindow : Window
     {
         try
         {
+            if (_vm.IsRecordingDiagnosticRunning || _vm.DiagnosticHelperNeedsRestart)
+            {
+                _vm.StatusDetails = "Disabling the microphone and stopping the recording test…";
+                bool exited = await _vm.CancelRecordingDiagnosticAndWaitAsync();
+                _vm.StatusDetails = exited
+                    ? "Microphone disabled and recording test stopped. Any produced original was kept."
+                    : "Microphone preference is off, but test helper exit was not confirmed. Quit Flick to release its recording resources.";
+                return;
+            }
             await _vm.StopCaptureAsync();
             _vm.StatusDetails = "Microphone disabled and capture stopped. Manually start replay when ready.";
         }

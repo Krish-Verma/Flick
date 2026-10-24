@@ -20,6 +20,7 @@
 #include "util/windows/window-helpers.h"
 #include "json.hpp"
 #include "encoder_policy.hpp"
+#include "diagnostic_policy.hpp"
 
 using json = nlohmann::json;
 
@@ -103,6 +104,7 @@ struct ActiveCapture {
     std::string output_dir;
     std::string audio_mode; // "separated" or "system_fallback"
     bool enable_mic = false;
+    bool enable_system_audio = true;
     std::string mic_device_id = "default";
     std::string system_device_id = "default";
 
@@ -508,6 +510,7 @@ static bool start_capture_attempt(const json &params, const flick::capture::Enco
     g_cap.output_dir = params.value("output_dir", std::string{});
     g_cap.audio_mode = params.value("audio_mode", "system_fallback");
     g_cap.enable_mic = params.value("enable_mic", false);
+    g_cap.enable_system_audio = params.value("enable_system_audio", true);
     g_cap.mic_device_id = params.value("mic_device_id", "default");
     g_cap.system_device_id = params.value("system_device_id", "default");
 
@@ -545,6 +548,15 @@ static bool start_capture_attempt(const json &params, const flick::capture::Enco
         const std::string selected_class = window_class.array ? window_class.array : "";
         const std::string selected_exe = executable.array ? executable.array : "";
         dstr_free(&title); dstr_free(&window_class); dstr_free(&executable);
+        const bool expected_window = params.contains("expected_window_pid") ||
+                                     params.contains("expected_window_title") || params.contains("expected_window_exe");
+        if (expected_window && (!params.contains("expected_window_pid") || !params.contains("expected_window_title") ||
+            !params.contains("expected_window_exe") || !flick::capture::expected_window_matches(
+                params.value("expected_window_pid", 0u), params.value("expected_window_title", ""),
+                params.value("expected_window_exe", ""), g_cap.window_pid, selected_title, selected_exe))) {
+            out_err = "The consented window changed; select it again before recording";
+            return false;
+        }
         const auto identity = flick::capture::window_identity(selected_title, selected_class, selected_exe);
         // Match OBS's own WGC resolver before accepting the request. A second
         // window with the same title must not silently replace the chosen HWND.
@@ -558,6 +570,9 @@ static bool start_capture_attempt(const json &params, const flick::capture::Enco
         obs_data_set_int(w_settings, "priority", WINDOW_PRIORITY_TITLE);
         obs_data_set_int(w_settings, "method", 2); // 2 = Windows Graphics Capture (non-injecting)
         obs_data_set_bool(w_settings, "cursor", true);
+        // Window capture has an optional nested process-audio source in OBS.
+        // Audio is routed explicitly below; never let this video source open it.
+        obs_data_set_bool(w_settings, "capture_audio", false);
         g_cap.video_source = obs_source_create("window_capture", "WindowSource", w_settings, nullptr);
         obs_data_release(w_settings);
     } else {
@@ -602,24 +617,21 @@ static bool start_capture_attempt(const json &params, const flick::capture::Enco
     obs_set_output_source(0, obs_scene_get_source(g_cap.video_scene));
 
     // 2. Audio Sources & Multi-Track Routing
-    g_cap.track_names.clear();
-    g_cap.track_names.push_back("Combined Mix");
+    const auto routing = flick::capture::audio_routing(g_cap.enable_system_audio, g_cap.enable_mic);
+    g_cap.track_names = routing.tracks;
 
     // System Audio
-    obs_data_t *sys_settings = obs_data_create();
-    obs_data_set_string(sys_settings, "device_id", g_cap.system_device_id.c_str());
-    g_cap.sys_audio_source = obs_source_create("wasapi_output_capture", "SystemAudio", sys_settings, nullptr);
-    obs_data_release(sys_settings);
-
-    if (!g_cap.sys_audio_source) {
-        out_err = "System audio loopback source could not be created";
-        return false;
-    }
-    if (g_cap.sys_audio_source) {
-        // Route to Track 1 (bit 0) and Track 2 (bit 1)
-        obs_source_set_audio_mixers(g_cap.sys_audio_source, (1 << 0) | (1 << 1));
+    if (g_cap.enable_system_audio) {
+        obs_data_t *sys_settings = obs_data_create();
+        obs_data_set_string(sys_settings, "device_id", g_cap.system_device_id.c_str());
+        g_cap.sys_audio_source = obs_source_create("wasapi_output_capture", "SystemAudio", sys_settings, nullptr);
+        obs_data_release(sys_settings);
+        if (!g_cap.sys_audio_source) {
+            out_err = "System audio loopback source could not be created";
+            return false;
+        }
+        obs_source_set_audio_mixers(g_cap.sys_audio_source, routing.system_mixers);
         obs_set_output_source(1, g_cap.sys_audio_source);
-        g_cap.track_names.push_back("System Audio");
     }
 
     // Microphone Audio (if enabled)
@@ -634,10 +646,8 @@ static bool start_capture_attempt(const json &params, const flick::capture::Enco
             return false;
         }
         if (g_cap.mic_audio_source) {
-            // Route to Track 1 (bit 0) and Track 3 (bit 2)
-            obs_source_set_audio_mixers(g_cap.mic_audio_source, (1 << 0) | (1 << 2));
+            obs_source_set_audio_mixers(g_cap.mic_audio_source, routing.microphone_mixers);
             obs_set_output_source(2, g_cap.mic_audio_source);
-            g_cap.track_names.push_back("Microphone");
         }
     }
 
@@ -747,7 +757,8 @@ static bool start_capture_attempt(const json &params, const flick::capture::Enco
 static json capture_configuration_json() {
     return {{"encoder", g_cap.encoder_id}, {"encoder_name", g_cap.encoder_name},
             {"software_fallback", g_cap.software_fallback}, {"width", g_cap.width},
-            {"height", g_cap.height}, {"fps", g_cap.fps}};
+            {"height", g_cap.height}, {"fps", g_cap.fps},
+            {"system_audio_enabled", g_cap.enable_system_audio}, {"microphone_enabled", g_cap.enable_mic}};
 }
 
 static bool start_capture_session(const json &params, std::string &out_err) {
@@ -1109,6 +1120,10 @@ int main(int argc, char **argv) {
 
             if (cmd == "ping") {
                 send_response(id, true, "pong");
+            }
+            else if (cmd == "get_capabilities") {
+                send_response(id, true, {{"protocol_version", 2}, {"diagnostic_no_system_audio", true},
+                                         {"source_identity_binding", true}});
             }
             else if (cmd == "enum_targets") {
                 // Windows

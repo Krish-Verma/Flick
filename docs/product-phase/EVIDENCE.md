@@ -6,8 +6,9 @@ Updated 2026-10-24. Planned work is not implementation evidence.
 |---|---|---|---|---|---|
 | Phase0 | audit and plans | live GitHub inventory; plan CI40087047146 passed | baseline WPF artifact recovered | initial SSH metadata only; later timeouts | PR43 merged842d3b9; no release |
 | A1 | health ledger, correlated IPC, immutable provenance and WPF disclosure | Core315 + App5 pass in Windows CI40089065601 and40089526932; media5/5; native/policy/publish pass; local311 portable passes | render40089527110 accepted;23/23 caption fits; wide/compact pixels reviewed; installer40089065499 upgrade/restart/data retention passes | Core attempt refused before launch at1525MiB available; GPU/audio/Discord not verified; SSHSession0 is notdesktopSession1 | PR44 merged01e501d2; PR45 merged8399070d; no release |
-| A2 | implementation in progress | pending | pending | not applicable to basic journal I/O; Windows filesystem execution pending | isolated branchfeat/recording-diagnostics-a2-20261024 |
-| A3–A4 | pending | pending | pending | pending | pending |
+| A2 | bounded private journal, local ZIP export, cancellation/shutdown protection | focused35/35; portable346 pass /14 skip, four Windows-only cases excluded; Windows CI40091123538 Core350 +App5; separate media5/5/native/policy/publish pass | render40091123529:27/27 caption checks; four A2 images reviewed, minimum720×480; artifact12559370417 digest verified; treef45c962c matches source2d969e0; installer40091123488 install/upgrade/restart/data retention pass | Windows hosted filesystem tests passed; standard Save dialog not physically operated | PR46 merged9704b91d; no release |
+| A3 | consented self-test implementation in progress | focused tests in progress | minimum-size consent/running/result fixtures authored; execution pending | owner authorized WSL cache reclaim: Windows available RAM4223→9219MiB, no processes stopped; no capture launched | isolated branchfeat/recording-test-a3-20261024 |
+| A4 | pending | pending | pending | controlled source/audio qualification harness pending | pending |
 | B1–B4 | pending | pending | pending | pending | pending |
 | C1–C4 | pending | pending | pending | pending | pending |
 | D1–D4 | pending | pending | pending | pending | pending |

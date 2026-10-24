@@ -323,6 +323,194 @@ public class SettingsStagingTests
                         Assert.Equal(footerBounds, ClientBounds(diagnosticFooter));
                     }
 
+                    // A3: build immutable consent without opening a helper,
+                    // changing preferences, or enabling the configured mic.
+                    var runRecordingTest = Assert.IsType<Button>(window.FindName("BtnRunRecordingDiagnostic"));
+                    var includeTestAudio = Assert.IsType<CheckBox>(window.FindName("ChkDiagnosticAudio"));
+                    Assert.False(includeTestAudio.IsChecked);
+                    syntheticTarget.MonitorDevice = "SYNTHETIC_DISPLAY_ID";
+                    vm.CaptureStatus = "Off";
+                    bool microphoneBeforePlan = vm.Settings.EnableMicrophone;
+                    vm.Settings.EnableMicrophone = true;
+                    var silentPlan = Assert.IsType<RecordingDiagnosticPlan>(vm.CreateRecordingDiagnosticPlan(false));
+                    Assert.False(silentPlan.EnableSystemAudio);
+                    Assert.False(silentPlan.EnableMicrophone);
+                    Assert.Equal(syntheticTarget.DisplayName, silentPlan.Target.Name);
+                    Assert.Contains("Computer audio: Off", silentPlan.ConsentSummary);
+                    Assert.Contains("Microphone: Off", silentPlan.ConsentSummary);
+                    var audioPlan = Assert.IsType<RecordingDiagnosticPlan>(vm.CreateRecordingDiagnosticPlan(true));
+                    Assert.True(audioPlan.EnableSystemAudio);
+                    Assert.True(audioPlan.EnableMicrophone);
+                    Assert.True(vm.Settings.EnableMicrophone); // Consent planning never commits an override.
+                    vm.Settings.EnableMicrophone = microphoneBeforePlan;
+                    object? epochBeforeDecline = epochField.GetValue(vm);
+                    Guid healthSessionBeforeDecline = vm.RecordingHealth.SessionId;
+                    vm.RunRecordingDiagnosticAsync(silentPlan, Guid.Empty).GetAwaiter().GetResult();
+                    Assert.Contains("changed", vm.DiagnosticTestStatusText);
+                    Assert.False(vm.IsRecordingDiagnosticRunning);
+                    Assert.Equal(epochBeforeDecline, epochField.GetValue(vm));
+                    Assert.False(host.IsRunning);
+                    foreach (string activeState in new[] { "Starting", "Buffering", "Armed", "Stopping" })
+                    {
+                        vm.CaptureStatus = activeState;
+                        page.Dispatcher.Invoke(() => { }, System.Windows.Threading.DispatcherPriority.DataBind);
+                        Assert.False(vm.CanRunRecordingDiagnostic);
+                        Assert.False(runRecordingTest.IsEnabled);
+                        Assert.Null(vm.CreateRecordingDiagnosticPlan(false));
+                    }
+                    vm.CaptureStatus = "Off";
+                    var saveOperationsField = typeof(MainViewModel).GetField("_saveRequestOperations", hidden)!;
+                    saveOperationsField.SetValue(vm, 1);
+                    try
+                    {
+                        Assert.False(vm.CanRunRecordingDiagnostic);
+                        Assert.Null(vm.CreateRecordingDiagnosticPlan(false));
+                    }
+                    finally { saveOperationsField.SetValue(vm, 0); }
+                    var runningTestField = typeof(MainViewModel).GetField("_isRecordingDiagnosticRunning", hidden)!;
+                    var cancellingTestField = typeof(MainViewModel).GetField("_recordingDiagnosticCancelling", hidden)!;
+                    void PublishRecordingTest()
+                    {
+                        typeof(MainViewModel).GetMethod("PublishDiagnosticTest", hidden)!.Invoke(vm, null);
+                        page.Dispatcher.Invoke(() => { }, System.Windows.Threading.DispatcherPriority.DataBind);
+                    }
+                    runningTestField.SetValue(vm, true);
+                    PublishRecordingTest();
+                    Assert.Equal("Cancel Test", runRecordingTest.Content);
+                    Assert.True(runRecordingTest.IsEnabled); // Running must not disable its own Cancel action.
+                    Assert.False(includeTestAudio.IsEnabled);
+                    vm.CancelRecordingDiagnostic();
+                    page.Dispatcher.Invoke(() => { }, System.Windows.Threading.DispatcherPriority.DataBind);
+                    Assert.True(vm.IsRecordingDiagnosticRunning); // Cleanup has not completed.
+                    Assert.False(runRecordingTest.IsEnabled);
+                    Assert.Equal("Finishing Test…", runRecordingTest.Content);
+                    runningTestField.SetValue(vm, false);
+                    cancellingTestField.SetValue(vm, false);
+                    PublishRecordingTest();
+
+                    // Exercise the actual same-window consent and decline No.
+                    // The queued observer runs inside FlickDialog's dispatcher
+                    // frame; neither the fixture nor the modal ever clicks Yes.
+                    app.MainWindow = window;
+                    Exception? declineFailure = null;
+                    bool observedConsent = false;
+                    string ordinarySyntheticName = syntheticTarget.DisplayName;
+                    syntheticTarget.DisplayName = "Synthetic overflow source: " +
+                        string.Join(" ", Enumerable.Repeat("exact retained recording test source", 96));
+                    window.Dispatcher.BeginInvoke(new Action(() =>
+                    {
+                        var modalHost = Assert.IsType<ContentControl>(window.FindName("DialogContentHost"));
+                        InvalidateVisualMeasure(client);
+                        client.Measure(new Size(720, 480));
+                        client.Arrange(new Rect(0, 0, 720, 480));
+                        client.UpdateLayout();
+                        var no = FindVisualDescendant<Button>(modalHost);
+                        try
+                        {
+                            Assert.True(FlickDialog.IsOpen);
+                            Assert.NotNull(no);
+                            Assert.Equal("No", no.Content);
+                            observedConsent = true;
+                            Assert.False(host.IsRunning);
+                            Assert.False(vm.IsRecordingDiagnosticRunning);
+                            Assert.False(vm.DiagnosticsInitialized);
+                            AssertContained(new Rect(0, 0, 720, 480), ClientBounds(no));
+                            var yes = Assert.Single(Assert.IsAssignableFrom<Panel>(no.Parent).Children.OfType<Button>(),
+                                button => button.Content?.ToString() == "Yes");
+                            AssertContained(new Rect(0, 0, 720, 480), ClientBounds(yes));
+                            var consentBody = FindVisualDescendant<ScrollViewer>(modalHost);
+                            Assert.NotNull(consentBody);
+                            Assert.True(double.IsFinite(consentBody.ViewportHeight) && consentBody.ViewportHeight > 0);
+                            Assert.True(consentBody.ScrollableHeight > 0);
+                            Rect noBeforeScroll = ClientBounds(no), yesBeforeScroll = ClientBounds(yes);
+                            consentBody.ScrollToBottom();
+                            client.UpdateLayout();
+                            page.Dispatcher.Invoke(() => { }, System.Windows.Threading.DispatcherPriority.Render);
+                            client.UpdateLayout();
+                            Assert.True(consentBody.VerticalOffset > 0);
+                            Assert.Equal(noBeforeScroll, ClientBounds(no));
+                            Assert.Equal(yesBeforeScroll, ClientBounds(yes));
+                        }
+                        catch (Exception error) { declineFailure = error; }
+                        finally
+                        {
+                            if (no?.Content?.ToString() == "No")
+                                no.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                        }
+                    }), System.Windows.Threading.DispatcherPriority.Normal);
+                    try
+                    {
+                        typeof(MainWindow).GetMethod("BtnRunRecordingDiagnostic_Click", hidden)!
+                            .Invoke(window, new object[] { runRecordingTest, new RoutedEventArgs() });
+                    }
+                    finally { syntheticTarget.DisplayName = ordinarySyntheticName; }
+                    if (declineFailure != null) ExceptionDispatchInfo.Capture(declineFailure).Throw();
+                    Assert.True(observedConsent);
+                    Assert.False(FlickDialog.IsOpen);
+                    Assert.False(vm.IsRecordingDiagnosticRunning);
+                    Assert.False(vm.DiagnosticsInitialized);
+                    Assert.Equal(epochBeforeDecline, epochField.GetValue(vm));
+                    Assert.Equal(healthSessionBeforeDecline, vm.RecordingHealth.SessionId);
+                    Assert.Null(typeof(MainViewModel).GetField("_recordingDiagnosticCancellation", hidden)!.GetValue(vm));
+
+                    // Turning the microphone off during a private recording
+                    // test must cancel and await that helper's confirmed exit.
+                    // Exercise the actual privacy-stop method without saving
+                    // Settings, touching a journal, or invoking native capture.
+                    var testCancellationField = typeof(MainViewModel).GetField("_recordingDiagnosticCancellation", hidden)!;
+                    var testCompletionField = typeof(MainViewModel).GetField("_recordingDiagnosticCompletion", hidden)!;
+                    var cleanupUnconfirmedField = typeof(MainViewModel).GetField("_diagnosticCleanupUnconfirmed", hidden)!;
+                    using var testCancellation = new CancellationTokenSource();
+                    var testCompletion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+                    testCancellationField.SetValue(vm, testCancellation);
+                    testCompletionField.SetValue(vm, testCompletion);
+                    runningTestField.SetValue(vm, true);
+                    cancellingTestField.SetValue(vm, false);
+                    PublishRecordingTest();
+                    try
+                    {
+                        typeof(MainWindow).GetMethod("OpenSettings", hidden)!.Invoke(window, null);
+                        var activeSettings = Assert.IsType<SettingsWindow>(typeof(MainWindow).GetField("_settingsPage", hidden)!.GetValue(window));
+                        var captureActive = Assert.IsType<Func<bool>>(typeof(SettingsWindow).GetField("_isCaptureActive", hidden)!.GetValue(activeSettings));
+                        Assert.True(captureActive()); // The real Settings callback recognizes the private test.
+                        typeof(MainWindow).GetMethod("CloseSettingsPage", hidden)!.Invoke(window, new object[] { false });
+                        var stopMicrophone = typeof(MainWindow).GetMethod("StopCaptureForMicPrivacyAsync", hidden)!;
+                        var stoppingMicrophone = Assert.IsAssignableFrom<Task>(stopMicrophone.Invoke(window, null));
+                        Assert.True(testCancellation.IsCancellationRequested);
+                        Assert.False(stoppingMicrophone.IsCompleted);
+                        Assert.Contains("Disabling the microphone", vm.StatusDetails);
+                        Assert.DoesNotContain("test stopped", vm.StatusDetails);
+                        runningTestField.SetValue(vm, false);
+                        cancellingTestField.SetValue(vm, false);
+                        testCompletion.TrySetResult();
+                        var privacyFrame = new System.Windows.Threading.DispatcherFrame();
+                        var privacyGuard = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
+                        privacyGuard.Tick += (_, _) => privacyFrame.Continue = false;
+                        _ = stoppingMicrophone.ContinueWith(_ => window.Dispatcher.BeginInvoke(new Action(() => privacyFrame.Continue = false)),
+                            TaskScheduler.Default);
+                        privacyGuard.Start();
+                        try { System.Windows.Threading.Dispatcher.PushFrame(privacyFrame); }
+                        finally { privacyGuard.Stop(); }
+                        Assert.True(stoppingMicrophone.IsCompletedSuccessfully, "Microphone release did not await test cleanup.");
+                        Assert.Contains("Microphone disabled and recording test stopped", vm.StatusDetails);
+                        Assert.False(host.IsRunning);
+                        Assert.False(vm.DiagnosticsInitialized);
+                        cleanupUnconfirmedField.SetValue(vm, true);
+                        Assert.IsAssignableFrom<Task>(stopMicrophone.Invoke(window, null)).GetAwaiter().GetResult();
+                        Assert.Contains("exit was not confirmed", vm.StatusDetails);
+                        Assert.DoesNotContain("recording test stopped", vm.StatusDetails);
+                    }
+                    finally
+                    {
+                        testCompletion.TrySetResult();
+                        testCancellationField.SetValue(vm, null);
+                        testCompletionField.SetValue(vm, null);
+                        runningTestField.SetValue(vm, false);
+                        cancellingTestField.SetValue(vm, false);
+                        cleanupUnconfirmedField.SetValue(vm, false);
+                        PublishRecordingTest();
+                    }
+
                     // Quit must cancel an active diagnostics export and wait
                     // for its cleanup, without beginning capture teardown first.
                     // A completed stop fixture prevents any native IPC here.
@@ -367,6 +555,7 @@ public class SettingsStagingTests
                         exportCompletionField.SetValue(vm, null);
                         busyField.SetValue(vm, false);
                         stopTaskField.SetValue(vm, null);
+                        typeof(MainViewModel).GetField("_isPreparingToQuit", hidden)!.SetValue(vm, false);
                     }
                     // Health is available above Settings too. Escape must close
                     // it before the normal page/editor keyboard guard returns.
@@ -400,5 +589,16 @@ public class SettingsStagingTests
         for (int i = 0; i < VisualTreeHelper.GetChildrenCount(visual); i++)
             InvalidateVisualMeasure(VisualTreeHelper.GetChild(visual, i));
         if (visual is UIElement element) element.InvalidateMeasure();
+    }
+
+    private static T? FindVisualDescendant<T>(DependencyObject visual) where T : DependencyObject
+    {
+        for (int i = 0; i < VisualTreeHelper.GetChildrenCount(visual); i++)
+        {
+            var child = VisualTreeHelper.GetChild(visual, i);
+            if (child is T match) return match;
+            if (FindVisualDescendant<T>(child) is { } nested) return nested;
+        }
+        return null;
     }
 }

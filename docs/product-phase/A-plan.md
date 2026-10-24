@@ -1,6 +1,6 @@
 # A — Recording health and diagnostics
 
-Status: A1 implemented/tested/integrated through PR44/45; physical qualification remains open. A2 in progress; A3/A4 planned. Owner: Flick implementation lead. Umbrella: #36. Updated: 2026-10-24.
+Status: A1/A2 implemented/tested/integrated through PR44–46; physical qualification remains open. A3 in progress; A4 planned. Owner: Flick implementation lead. Umbrella: #36. Updated: 2026-10-24.
 
 ## Existing behavior
 
@@ -14,7 +14,7 @@ Health models, CaptureHostClient, MainViewModel, MainWindow, HotkeyManager, Diag
 
 - [x] A1 — Truthful recording state and retained health
 
-- [ ] A2 — Bounded private diagnostics and redacted export
+- [x] A2 — Bounded private diagnostics and redacted export
 
 - [ ] A3 — Consented diagnostic test and recovery
 
