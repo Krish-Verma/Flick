@@ -36,6 +36,20 @@ internal static partial class Program
         object Binding(DependencyObject target, DependencyProperty property)
         {
             var expression = BindingOperations.GetBindingExpression(target, property);
+            object? Read(object? source, string member)
+            {
+                for (Type? type = source?.GetType(); type != null; type = type.BaseType)
+                {
+                    const System.Reflection.BindingFlags flags = System.Reflection.BindingFlags.Instance |
+                        System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Public |
+                        System.Reflection.BindingFlags.DeclaredOnly;
+                    if (type.GetProperty(member, flags) is { } descriptor) return descriptor.GetValue(source);
+                    if (type.GetField(member, flags) is { } field) return field.GetValue(source);
+                }
+                return null;
+            }
+            var worker = Read(expression, "Worker");
+            var pathWorker = Read(worker, "_pathWorker");
             return new { Path = expression?.ParentBinding.Path?.Path,
                 Status = expression?.Status.ToString(), Mode = expression?.ParentBinding.Mode.ToString(),
                 expression?.HasError, expression?.HasValidationError,
@@ -43,7 +57,13 @@ internal static partial class Program
                 expression?.ResolvedSourcePropertyName,
                 DataItemIsViewModel = ReferenceEquals(expression?.DataItem, vm),
                 ResolvedSourceIsViewModel = ReferenceEquals(expression?.ResolvedSource, vm),
-                DataContextIsViewModel = target is FrameworkElement element && ReferenceEquals(element.DataContext, vm) };
+                DataContextIsViewModel = target is FrameworkElement element && ReferenceEquals(element.DataContext, vm),
+                IsDynamic = Read(expression, "IsDynamic"),
+                IsTransferPending = Read(expression, "IsTransferPending"),
+                IsInUpdate = Read(expression, "IsInUpdate"),
+                IgnoreSourcePropertyChange = Read(expression, "IgnoreSourcePropertyChange"),
+                PathWorkerIsDynamic = Read(pathWorker, "_isDynamic"),
+                WorkerType = worker?.GetType().FullName };
         }
         observations.Add(new {
             Label = label, RequiredMatch = requireMatch, RequiredReady = requireReady,

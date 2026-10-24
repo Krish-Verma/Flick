@@ -151,9 +151,10 @@ internal static partial class Program
         var timer = Stopwatch.StartNew();
         while (!completed() && timer.Elapsed < TimeSpan.FromSeconds(10))
         {
-            dispatcher.Invoke(() => { }, DispatcherPriority.Background);
+            DrainDispatcherThroughContextIdle(dispatcher);
             Thread.Sleep(5);
         }
         if (!completed()) throw new TimeoutException("Bounded Share still-image load did not settle.");
+        DrainDispatcherThroughContextIdle(dispatcher);
     }
 }

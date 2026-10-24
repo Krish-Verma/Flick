@@ -28,6 +28,16 @@ public partial class SettingsStagingTests
             try
             {
                 var app = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
+                void DrainBindings()
+                {
+                    // WPF attaches bindings at Loaded and marshals worker
+                    // notifications at ContextIdle. A DataBind-only sentinel
+                    // starves those real queues in this unshown-window fixture.
+                    for (int pass = 0; pass < 3; pass++)
+                        app.Dispatcher.Invoke(() => { },
+                            System.Windows.Threading.DispatcherPriority.ContextIdle,
+                            CancellationToken.None, TimeSpan.FromSeconds(2));
+                }
                 // Testhost owns Application.ResourceAssembly. Load the actual
                 // production dictionaries by assembly-qualified pack URI.
                 foreach (string dictionary in new[] { "Colors", "Metrics", "Typography", "Icons", "Controls", "Chrome" })
@@ -67,11 +77,11 @@ public partial class SettingsStagingTests
                 var disclosureContent = Assert.IsType<ContentPresenter>(
                     disclosure.Template.FindName("ExpandSite", disclosure));
                 header.IsChecked = true;
-                page.Dispatcher.Invoke(() => { }, System.Windows.Threading.DispatcherPriority.DataBind);
+                DrainBindings();
                 Assert.True(disclosure.IsExpanded);
                 Assert.Equal(Visibility.Visible, disclosureContent.Visibility);
                 header.IsChecked = false;
-                page.Dispatcher.Invoke(() => { }, System.Windows.Threading.DispatcherPriority.DataBind);
+                DrainBindings();
                 Assert.False(disclosure.IsExpanded);
                 Assert.Equal(Visibility.Collapsed, disclosureContent.Visibility);
                 var toggle = Find<TextBox>("TxtToggleHotkey");
@@ -147,7 +157,7 @@ public partial class SettingsStagingTests
                     void PublishHealth()
                     {
                         typeof(MainViewModel).GetMethod("PublishHealth", hidden)!.Invoke(vm, null);
-                        page.Dispatcher.Invoke(() => { }, System.Windows.Threading.DispatcherPriority.DataBind);
+                        DrainBindings();
                         updateCaptureUi.Invoke(window, null);
                     }
                     vm.CaptureStatus = "Armed";
@@ -275,7 +285,7 @@ public partial class SettingsStagingTests
                     {
                         foreach (string property in new[] { nameof(vm.DiagnosticStatusText), nameof(vm.CanExportDiagnostics) })
                             typeof(MainViewModel).GetMethod("OnPropertyChanged", hidden)!.Invoke(vm, new object[] { property });
-                        page.Dispatcher.Invoke(() => { }, System.Windows.Threading.DispatcherPriority.DataBind);
+                        DrainBindings();
                     }
                     long healthRevisionBeforeExportState = health.Snapshot.Revision;
                     busyField.SetValue(vm, true);
@@ -311,7 +321,7 @@ public partial class SettingsStagingTests
                         healthScroll.ScrollToTop();
                         for (int pass = 0; pass < 3; pass++)
                         {
-                            page.Dispatcher.Invoke(() => { }, System.Windows.Threading.DispatcherPriority.DataBind);
+                            DrainBindings();
                             InvalidateVisualMeasure(client);
                             client.Measure(size);
                             client.Arrange(new Rect(size));
@@ -366,7 +376,7 @@ public partial class SettingsStagingTests
                     foreach (string activeState in new[] { "Starting", "Buffering", "Armed", "Stopping" })
                     {
                         vm.CaptureStatus = activeState;
-                        page.Dispatcher.Invoke(() => { }, System.Windows.Threading.DispatcherPriority.DataBind);
+                        DrainBindings();
                         Assert.False(vm.CanRunRecordingDiagnostic);
                         Assert.False(runRecordingTest.IsEnabled);
                         Assert.Null(vm.CreateRecordingDiagnosticPlan(false));
@@ -385,7 +395,7 @@ public partial class SettingsStagingTests
                     void PublishRecordingTest()
                     {
                         typeof(MainViewModel).GetMethod("PublishDiagnosticTest", hidden)!.Invoke(vm, null);
-                        page.Dispatcher.Invoke(() => { }, System.Windows.Threading.DispatcherPriority.DataBind);
+                        DrainBindings();
                     }
                     runningTestField.SetValue(vm, true);
                     PublishRecordingTest();
@@ -393,7 +403,7 @@ public partial class SettingsStagingTests
                     Assert.True(runRecordingTest.IsEnabled); // Running must not disable its own Cancel action.
                     Assert.False(includeTestAudio.IsEnabled);
                     vm.CancelRecordingDiagnostic();
-                    page.Dispatcher.Invoke(() => { }, System.Windows.Threading.DispatcherPriority.DataBind);
+                    DrainBindings();
                     Assert.True(vm.IsRecordingDiagnosticRunning); // Cleanup has not completed.
                     Assert.False(runRecordingTest.IsEnabled);
                     Assert.Equal("Finishing Test…", runRecordingTest.Content);

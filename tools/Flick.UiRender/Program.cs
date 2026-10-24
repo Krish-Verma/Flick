@@ -417,6 +417,7 @@ internal static partial class Program
             {
                 for (int pass = 0; pass < 3; pass++)
                 {
+                    DrainDispatcherThroughContextIdle(root.Dispatcher);
                     root.Dispatcher.Invoke(() => { }, DispatcherPriority.DataBind);
                     InvalidateVisualMeasure(root);
                     root.Measure(viewport);
@@ -424,6 +425,7 @@ internal static partial class Program
                     root.UpdateLayout();
                     root.Dispatcher.Invoke(() => { }, DispatcherPriority.Render);
                     root.UpdateLayout();
+                    DrainDispatcherThroughContextIdle(root.Dispatcher);
                 }
             }
             // A live Window schedules another measure after binding/template
