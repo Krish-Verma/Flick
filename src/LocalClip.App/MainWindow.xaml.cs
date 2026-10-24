@@ -194,6 +194,19 @@ public partial class MainWindow : Window
     {
         RecordingHealthPanel.Visibility = Visibility.Visible;
         BtnCloseRecordingHealth.Focus();
+        _ = _vm.RefreshDiagnosticsStatusAsync();
+    }
+
+    private async void BtnExportDiagnostics_Click(object sender, RoutedEventArgs e)
+    {
+        if (!_vm.CanExportDiagnostics) return;
+        var dialog = new Microsoft.Win32.SaveFileDialog {
+            Title = "Export Flick Diagnostics", Filter = "ZIP archive (*.zip)|*.zip",
+            DefaultExt = ".zip", AddExtension = true, OverwritePrompt = true,
+            FileName = "Flick-diagnostics-" + DateTime.Now.ToString("yyyy-MM-dd-HHmmss") + ".zip"
+        };
+        if (dialog.ShowDialog(this) == true)
+            await _vm.ExportDiagnosticsAsync(dialog.FileName);
     }
 
     private void BtnCloseRecordingHealth_Click(object sender, RoutedEventArgs e)

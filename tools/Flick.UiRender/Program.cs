@@ -210,6 +210,43 @@ internal static class Program
         health.ObserveHost(saveSession, CaptureHostHealth.Exited);
         PublishHealth();
         Render("26-health-stopped-retained-compact.png", 800, 600);
+
+        // A2: only simulate bindable status/busy observations. Do not initialize
+        // a diagnostics journal, open a save dialog, or export a bundle here.
+        void SetDiagnosticsFixture(bool busy, string message)
+        {
+            typeof(MainViewModel).GetField("_isExportingDiagnostics", Private)!.SetValue(vm, busy);
+            typeof(MainViewModel).GetField("_diagnosticStatusMessage", Private)!.SetValue(vm, message);
+            foreach (string property in new[] { nameof(vm.DiagnosticStatusText), nameof(vm.CanExportDiagnostics) })
+                typeof(MainViewModel).GetMethod("OnPropertyChanged", Private)!.Invoke(vm, new object[] { property });
+            if (vm.DiagnosticsInitialized || typeof(MainViewModel).GetField("_diagnosticInitialization", Private)!.GetValue(vm) != null)
+                throw new InvalidOperationException("Synthetic diagnostics renders must never initialize a journal.");
+        }
+        SetDiagnosticsFixture(false, "Synthetic fixture: local diagnostics have not been initialized.");
+        typeof(MainWindow).GetField("_layoutMode", Private)!.SetValue(main, WorkspaceLayoutMode.Split);
+        Invoke("ApplyWorkspaceLayout");
+        PublishHealth();
+        Render("27-diagnostics-wide.png", 1240, 720);
+
+        Guid diagnosticsSession = BeginHealthFixture("Sample display (synthetic)");
+        health.RecordRecordingIssue(diagnosticsSession, "fixture-long-error",
+            "Simulated: the selected recording source became unavailable. Choose another available source and start replay again. " +
+            "This deliberately long retained error exercises the scrolling health details at the minimum window size. " +
+            "No capture device or diagnostics journal was opened by this fixture.");
+        vm.CaptureStatus = "Faulted";
+        SetDiagnosticsFixture(false,
+            "Synthetic fixture: local diagnostics are unavailable. Recording can continue. Choose another export location and try again.");
+        typeof(MainWindow).GetField("_layoutMode", Private)!.SetValue(main, WorkspaceLayoutMode.Compact);
+        Invoke("ShowCompactEditor");
+        PublishHealth();
+        Find<ScrollViewer>("RecordingHealthScroll").ScrollToTop();
+        Render("28-diagnostics-minimum-long-errors.png", 720, 480);
+
+        SetDiagnosticsFixture(true, "Synthetic fixture: creating a local redacted diagnostics ZIP. No export is running.");
+        Render("29-diagnostics-busy-compact.png", 800, 600);
+        SetDiagnosticsFixture(false, "Synthetic fixture: no journal initialized; nothing was exported or uploaded.");
+        Find<ScrollViewer>("RecordingHealthScroll").ScrollToBottom();
+        Render("30-diagnostics-minimum-scrolled.png", 720, 480);
         string applicationVersion = typeof(MainWindow).Assembly
             .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? "unknown";
         File.WriteAllText(Path.Combine(output, "PROVENANCE.txt"),
@@ -223,6 +260,7 @@ internal static class Program
             "Recording health: synthetic ledger observations exercise actual fault/retained-error, validating, success and stopped bindings at wide/compact sizes. Hotkey outcomes are simulated; no hotkeys registered and no clip validated by this renderer.\n" +
             "The VM polling timer is stopped for fixture isolation. Binding/render dispatcher work and recursive visual-tree measure invalidation settle changed labels before rasterization; no control widths or pixels are substituted. layout-observations.json records actual Save button geometry and an unconstrained caption measurement; clipped captions fail this renderer.\n" +
             "The health disclosure is rendered as part of the actual same-window WPF visual; native focus, keyboard and physical placement acceptance are separate.\n" +
+            "Diagnostics views simulate only status/busy fields through actual bindings, including long errors at720x480DIPs. No diagnostics journal is initialized, no save dialog opens, and no ZIP is exported. Fixed header/footer/Close/Export containment and the finite middle scroll viewport are checked in layout-observations.json.\n" +
             "Brand samples: actual shared Image style rasterized by WPF at 96/120/144/192 DPI; not a physical per-monitor DPI session.\n" +
             "No gameplay, media decoder, OS titlebar, real recording, updater network request, or full UI acceptance claimed.\n");
         vm.Dispose();
@@ -267,6 +305,41 @@ internal static class Program
             double roundingTolerance = 0.5 / VisualTreeHelper.GetDpi(saveButton).DpiScaleX;
             bool captionFits = saveButton.ActualWidth + roundingTolerance >= requiredWidth &&
                 presenter.ActualWidth + roundingTolerance >= captionWidth;
+            object? healthLayout = null;
+            string? healthLayoutFailure = null;
+            var healthPanel = Find<Border>("RecordingHealthPanel");
+            if (healthPanel.Visibility == Visibility.Visible)
+            {
+                Rect Bounds(FrameworkElement element) => element.TransformToAncestor(root)
+                    .TransformBounds(new Rect(element.RenderSize));
+                bool Contains(Rect outer, Rect inner) => inner.Left >= outer.Left - roundingTolerance &&
+                    inner.Top >= outer.Top - roundingTolerance && inner.Right <= outer.Right + roundingTolerance &&
+                    inner.Bottom <= outer.Bottom + roundingTolerance;
+                object Coordinates(Rect bounds) => new { x = bounds.X, y = bounds.Y, width = bounds.Width, height = bounds.Height };
+                var header = Find<Grid>("RecordingHealthHeader");
+                var footer = Find<StackPanel>("RecordingDiagnosticsFooter");
+                var close = Find<Button>("BtnCloseRecordingHealth");
+                var export = Find<Button>("BtnExportDiagnostics");
+                var scroll = Find<ScrollViewer>("RecordingHealthScroll");
+                Rect panelBounds = Bounds(healthPanel), headerBounds = Bounds(header), footerBounds = Bounds(footer);
+                Rect closeBounds = Bounds(close), exportBounds = Bounds(export), scrollBounds = Bounds(scroll);
+                bool fixedControlsFit = Contains(new Rect(root.RenderSize), panelBounds) &&
+                    Contains(panelBounds, headerBounds) && Contains(panelBounds, footerBounds) &&
+                    Contains(headerBounds, closeBounds) && Contains(footerBounds, exportBounds) &&
+                    headerBounds.Bottom <= scrollBounds.Top + roundingTolerance &&
+                    scrollBounds.Bottom <= footerBounds.Top + roundingTolerance &&
+                    double.IsFinite(scroll.ViewportHeight) && scroll.ViewportHeight > 0;
+                healthLayout = new {
+                    panel = Coordinates(panelBounds), header = Coordinates(headerBounds), footer = Coordinates(footerBounds),
+                    close = Coordinates(closeBounds), export = Coordinates(exportBounds), scroll = Coordinates(scrollBounds),
+                    scroll.ViewportHeight, scroll.ExtentHeight, scroll.ScrollableHeight, scroll.VerticalOffset,
+                    diagnosticsInitialized = vm.DiagnosticsInitialized, exportEnabled = export.IsEnabled, fixedControlsFit
+                };
+                if (!fixedControlsFit)
+                    healthLayoutFailure = $"Fixed diagnostics controls or scroll viewport do not fit in {file}.";
+                if (file == "28-diagnostics-minimum-long-errors.png" && scroll.ScrollableHeight <= 0)
+                    healthLayoutFailure = "The minimum-size diagnostics fixture must exercise overflowing health details.";
+            }
             layoutObservations.Add(new
             {
                 image = file,
@@ -283,10 +356,12 @@ internal static class Program
                 captionUnconstrainedDesiredWidth = captionWidth,
                 requiredButtonWidth = requiredWidth,
                 roundingTolerance,
-                captionFits
+                captionFits,
+                healthLayout
             });
             File.WriteAllText(Path.Combine(output, "layout-observations.json"),
                 JsonSerializer.Serialize(layoutObservations, new JsonSerializerOptions { WriteIndented = true }));
+            if (healthLayoutFailure != null) throw new InvalidOperationException(healthLayoutFailure);
             if (!captionFits)
                 throw new InvalidOperationException($"Save caption is clipped in {file}: actual button width " +
                     $"{saveButton.ActualWidth:F2}, required {requiredWidth:F2}; presenter width " +

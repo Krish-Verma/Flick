@@ -1,6 +1,6 @@
 # E — Share screen redesign and file transfer
 
-Status: planned. Owner: Flick implementation lead. Umbrella: #36. Updated: 2026-10-24.
+Status: E1 research/specification integrated through PR43/44; E2–E4 planned. Owner: Flick implementation lead. Umbrella: #36. Updated: 2026-10-24.
 
 ## Existing behavior
 
@@ -12,7 +12,7 @@ MainWindow SharePanel/code, MainViewModel share state, shared theme (only needed
 
 ## Slice tracker
 
-- [ ] E1 — Research and share state specification
+- [x] E1 — Research and share state specification
 
 - [ ] E2 — Preview tile and brighter hierarchy
 
