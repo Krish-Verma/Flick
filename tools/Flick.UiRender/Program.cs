@@ -45,6 +45,9 @@ internal static class Program
             });
         var main = new MainWindow();
         var vm = (MainViewModel)main.DataContext;
+        // An unshown Window still constructs the VM's timer. Synthetic health
+        // observations must not be replaced by a real no-host polling result.
+        ((DispatcherTimer)typeof(MainViewModel).GetField("_pollTimer", Private)!.GetValue(vm)!).Stop();
         T Find<T>(string name) => (T)main.FindName(name);
         void Invoke(string method, params object[] parameters) =>
             typeof(MainWindow).GetMethod(method, Private)!.Invoke(main, parameters);
@@ -170,10 +173,12 @@ internal static class Program
             typeof(MainWindow).GetField("_layoutMode", Private)!.SetValue(main, WorkspaceLayoutMode.Split);
             Invoke("ApplyWorkspaceLayout");
             PublishHealth();
+            Invoke("UpdateStatusBadgeColor");
             Render(wide, 1240, 720);
             typeof(MainWindow).GetField("_layoutMode", Private)!.SetValue(main, WorkspaceLayoutMode.Compact);
             Invoke("ShowCompactEditor");
             PublishHealth();
+            Invoke("UpdateStatusBadgeColor");
             Render(compact, 800, 600);
         }
         vm.ReportHotkeyHealth("Toggle replay", settings.CaptureToggleHotkey,
@@ -214,6 +219,7 @@ internal static class Program
             "Compact Share: default, Custom 250 MB and expanded optional posting; no export or post action invoked.\n" +
             "Encoder status: synthetic Intel/CPU profiles exercise real bindings and the persistent compatibility warning. No encoder or capture host started.\n" +
             "Recording health: synthetic ledger observations exercise actual fault/retained-error, validating, success and stopped bindings at wide/compact sizes. Hotkey outcomes are simulated; no hotkeys registered and no clip validated by this renderer.\n" +
+            "The VM polling timer is stopped for fixture isolation. Binding/render dispatcher work and repeated WPF measure/arrange passes settle changed labels before rasterization; no control widths or pixels are substituted.\n" +
             "The health disclosure is rendered as part of the actual same-window WPF visual; native focus, keyboard and physical placement acceptance are separate.\n" +
             "Brand samples: actual shared Image style rasterized by WPF at 96/120/144/192 DPI; not a physical per-monitor DPI session.\n" +
             "No gameplay, media decoder, OS titlebar, real recording, updater network request, or full UI acceptance claimed.\n");
@@ -223,12 +229,22 @@ internal static class Program
 
         void Render(string file, int width, int height)
         {
-            root.Measure(new Size(width, height));
-            root.Arrange(new Rect(0, 0, width, height));
-            root.UpdateLayout();
-            // Drain bindings/layout only; the unshown main Window never runs Loaded.
-            root.Dispatcher.Invoke(() => { }, DispatcherPriority.Render);
-            root.UpdateLayout();
+            var viewport = new Size(width, height);
+            var bounds = new Rect(0, 0, width, height);
+            // A live Window schedules another measure after binding/template
+            // changes. This detached client visual must explicitly repeat the
+            // same work when compact/wide labels change their desired size.
+            // Drain bindings/layout only; the unshown Window never runs Loaded.
+            for (int pass = 0; pass < 3; pass++)
+            {
+                root.Dispatcher.Invoke(() => { }, DispatcherPriority.DataBind);
+                root.InvalidateMeasure();
+                root.Measure(viewport);
+                root.Arrange(bounds);
+                root.UpdateLayout();
+                root.Dispatcher.Invoke(() => { }, DispatcherPriority.Render);
+                root.UpdateLayout();
+            }
             var bitmap = new RenderTargetBitmap(width, height, 96, 96, PixelFormats.Pbgra32);
             bitmap.Render(root);
             var encoder = new PngBitmapEncoder();
