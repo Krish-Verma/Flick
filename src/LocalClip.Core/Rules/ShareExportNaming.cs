@@ -12,8 +12,9 @@ namespace LocalClip.Core.Rules;
 /// </summary>
 public static class ShareExportNaming
 {
-    public static string ForOriginal(string originalFilePath, int targetMb)
+    public static string ForOriginal(string originalFilePath, int targetMb, string aspectPreset = ExportAspectPresets.Original)
     {
+        if (!ExportAspectPresets.IsValid(aspectPreset)) throw new ArgumentException("Unsupported export aspect preset.");
         if (string.IsNullOrWhiteSpace(originalFilePath))
             throw new ArgumentException("An original path is required.", nameof(originalFilePath));
         _ = ShareExportTargets.ToBytes(targetMb);
@@ -23,6 +24,7 @@ public static class ShareExportNaming
         if (string.IsNullOrWhiteSpace(name)) name = "Clip";
         string hash = Convert.ToHexString(SHA256.HashData(
             Encoding.UTF8.GetBytes(full.ToUpperInvariant())))[..12];
-        return $"{name}_Discord_{targetMb}MB_{hash}.mp4";
+        string aspect = aspectPreset switch { ExportAspectPresets.Vertical9x16 => "_Fit9x16", ExportAspectPresets.Square1x1 => "_Fit1x1", _ => "" };
+        return $"{name}_Discord_{targetMb}MB_{hash}{aspect}.mp4";
     }
 }

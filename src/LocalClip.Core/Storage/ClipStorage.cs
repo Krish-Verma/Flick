@@ -154,6 +154,7 @@ public sealed class ClipStorage
     public void AddOrUpdateClip(ClipMetadata clip)
     {
         ArgumentNullException.ThrowIfNull(clip);
+        ValidateOrganization(clip);
         lock (_lock)
         {
             int idx = _clips.FindIndex(c => c.Id == clip.Id);
@@ -168,6 +169,18 @@ public sealed class ClipStorage
                 throw;
             }
         }
+    }
+
+    private static void ValidateOrganization(ClipMetadata clip)
+    {
+        if (clip.GameName == null) throw new InvalidDataException("Clip index contains an invalid game label.");
+        clip.Tags = ClipOrganization.NormalizeTags(clip.Tags);
+        clip.GameName = ClipOrganization.NormalizeGame(clip.GameName);
+        clip.Markers = ClipOrganization.ValidateMarkers(clip.Markers, clip.DurationSeconds);
+        if (!ExportAspectPresets.IsValid(clip.ExportAspectPreset))
+            throw new InvalidDataException("Clip index contains an invalid export aspect preset.");
+        if (clip.LastExportTargetMb != 0 && !ShareExportTargets.IsValid(clip.LastExportTargetMb))
+            throw new InvalidDataException("Clip index contains an invalid previous export size.");
     }
 
     public async Task<ClipMetadata> RegisterNewOriginalAsync(string originalPath,
@@ -204,7 +217,10 @@ public sealed class ClipStorage
         if (trackNames?.Count == probe.AudioTracks.Count)
             for (int i = 0; i < trackNames.Count; i++)
                 if (!string.IsNullOrWhiteSpace(trackNames[i]))
+                {
                     probe.AudioTracks[i].Name = trackNames[i];
+                    if (source == null) probe.AudioTracks[i].Role = LocalClip.Core.Audio.AudioTrackRoles.FromNativeName(trackNames[i]);
+                }
 
         if (source != null)
         {
@@ -220,6 +236,8 @@ public sealed class ClipStorage
             }
         }
 
+        if (source == null && trackNames?.Count == probe.AudioTracks.Count)
+            LocalClip.Core.Audio.AudioTrackRoles.Reset(new ClipMetadata { AudioTracks = probe.AudioTracks });
         var info = new FileInfo(normalized);
         var clip = new ClipMetadata
         {
@@ -497,6 +515,7 @@ public sealed class ClipStorage
                          !string.Equals(clip.SourceKind, "Imported", StringComparison.OrdinalIgnoreCase)))
                         throw new InvalidDataException("Clip index contains a damaged entry. Back up or repair the original index before editing the library.");
                     if (string.IsNullOrWhiteSpace(clip.OriginalFilePath)) continue;
+                    ValidateOrganization(clip); // Missing legacy fields keep safe model defaults; invalid fields preserve raw index.
                     var path = SafeNormalize(clip.OriginalFilePath);
                     if (seen.Add(path))
                     {

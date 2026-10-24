@@ -26,7 +26,7 @@
             </StackPanel>
         </Grid>
         <Canvas Grid.Row="1" x:Name="RangeCanvas" Height="30"
-                SizeChanged="RangeCanvas_SizeChanged" ClipToBounds="False"
+                SizeChanged="RangeCanvas_SizeChanged" ClipToBounds="False" Background="Transparent" PreviewMouseLeftButtonDown="Track_PreviewMouseLeftButtonDown"
                 Margin="7,0,7,0">
             <Border x:Name="TrackBackground" Canvas.Top="10" Height="11"
                     CornerRadius="3" Background="{DynamicResource Flick.Brush.Raised}"
@@ -34,6 +34,7 @@
             <Border x:Name="SelectedTrack" Canvas.Top="10" Height="11"
                     CornerRadius="3" Background="{DynamicResource Flick.Brush.Raised}"
                     BorderBrush="{DynamicResource Flick.Brush.BorderStrong}" BorderThickness="1"/>
+            <Border x:Name="PlayheadLine" Canvas.Top="0" Width="2" Height="30" Background="{DynamicResource Flick.Brush.TextPrimary}" IsHitTestVisible="False"/>
             <primitives:Thumb x:Name="StartHandle" Width="12" Height="28"
                               Focusable="True" IsTabStop="True"
                               Cursor="SizeWE" DragDelta="StartHandle_DragDelta"
@@ -110,6 +111,7 @@
                      Padding="6,6" FontSize="{StaticResource Flick.Font.Control}" Typography.NumeralAlignment="Tabular"
                      AutomationProperties.Name="Trim Start Time"
                      LostKeyboardFocus="TimeBox_LostKeyboardFocus"
+                     TextChanged="TimeBox_TextChanged"
                      PreviewKeyDown="TimeBox_PreviewKeyDown"
                      ToolTip="Enter seconds or M:SS.ff"/>
             <TextBlock Grid.Column="3" Text="End" Style="{StaticResource Flick.Text.Caption}"
@@ -119,6 +121,7 @@
                      Padding="6,6" FontSize="{StaticResource Flick.Font.Control}" Typography.NumeralAlignment="Tabular"
                      AutomationProperties.Name="Trim End Time"
                      LostKeyboardFocus="TimeBox_LostKeyboardFocus"
+                     TextChanged="TimeBox_TextChanged"
                      PreviewKeyDown="TimeBox_PreviewKeyDown"
                      ToolTip="Enter seconds or M:SS.ff"/>
         </Grid>

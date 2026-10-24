@@ -1,6 +1,6 @@
 # C — Real audio separation and controls
 
-Status: planned. Owner: Flick implementation lead. Umbrella: #36. Updated: 2026-10-24.
+Status: C1–C4 implementation authored in the isolated C branch; integration/Windows/physical acceptance pending. See [implementation and qualification contract](C-AUDIO-SEPARATION.md). Owner: Flick implementation lead. Umbrella: #36. Updated: 2026-10-24.
 
 ## Existing behavior
 

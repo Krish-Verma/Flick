@@ -55,7 +55,7 @@ jobs:
             -Itools/obs/include/libobs -Isrc/LocalClip.CaptureHost \
             src/LocalClip.CaptureHost/main.cpp native-build/capture-version.o \
             -Ltools/obs/runtime/bin/64bit -Wl,-Bstatic -lwinpthread \
-            -Wl,-Bdynamic -lobs -ldwmapi \
+            -Wl,-Bdynamic -lobs -ldwmapi -lole32 \
             -o tools/obs/runtime/bin/64bit/LocalClip.CaptureHost.exe
           test -f tools/obs/runtime/bin/64bit/LocalClip.CaptureHost.exe
       - name: Run offline source/design contracts
@@ -85,7 +85,7 @@ jobs:
           name: flick-preview-release-files
           path: |
             dist/Flick-Setup.exe
-            dist/Flick-v1.0.5-win-x64.zip
+            dist/Flick-v1.0.7-win-x64.zip
             dist/SHA256SUMS.txt
             release/PREVIEW-RELEASE-NOTES.md
           if-no-files-found: error

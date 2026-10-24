@@ -36,7 +36,7 @@ public class GpuCompatibilitySettingsTests
             var loaded = AppSettings.LoadExistingFile(path);
             Assert.Equal(expectedEncoder, loaded.VideoEncoder);
             Assert.False(loaded.AllowSoftwareFallback);
-            Assert.Equal(3, loaded.SchemaVersion);
+            Assert.Equal(4, loaded.SchemaVersion);
             Assert.Equal(needsReview, loaded.RequiresExplicitSettingsSave);
             Assert.Equal(raw, File.ReadAllText(path));
             if (needsReview)

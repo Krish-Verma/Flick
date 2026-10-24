@@ -370,6 +370,8 @@ public class CaptureHostClient : IDisposable
                     Title = w.GetProperty("title").GetString() ?? "",
                     Pid = w.GetProperty("pid").GetUInt32(),
                     Exe = w.GetProperty("exe").GetString() ?? "",
+                    ExecutablePath = w.TryGetProperty("executable_path", out var path) || w.TryGetProperty("exe_path", out path) ? path.GetString() ?? "" : "",
+                    ProcessCreationFileTime = w.TryGetProperty("process_creation_time", out var created) ? created.GetUInt64() : 0,
                     Width = w.GetProperty("width").GetInt32(),
                     Height = w.GetProperty("height").GetInt32()
                 });
@@ -410,11 +412,25 @@ public class CaptureHostClient : IDisposable
             ["enable_mic"] = settings.EnableMicrophone, ["mic_device_id"] = settings.MicrophoneDeviceId,
             ["system_device_id"] = settings.SystemAudioDeviceId, ["enable_system_audio"] = options.EnableSystemAudio
         };
+        if (options.EnableSystemAudio)
+        {
+            LocalClip.Core.Audio.AudioCapturePolicy.Validate(settings);
+            if (LocalClip.Core.Audio.AudioCapturePolicy.IsSeparated(settings))
+            {
+                if (settings.GameAudioSource is { } game) values["game_audio"] = new { pid = game.ProcessId, creation_time = game.CreationTime, path = game.ExecutablePath };
+                if (settings.VoiceAudioSource is { } voice) values["voice_audio"] = new { pid = voice.ProcessId, creation_time = voice.CreationTime, path = voice.ExecutablePath };
+            }
+        }
         if (options.ExpectedWindow is { } window)
         {
             values["expected_window_pid"] = window.ProcessId;
             values["expected_window_title"] = window.Title;
             values["expected_window_exe"] = window.Executable;
+            if (window.ExecutablePath.Length != 0 || window.ProcessCreationFileTime != 0)
+            {
+                values["expected_window_path"] = window.ExecutablePath;
+                values["expected_window_creation_time"] = window.ProcessCreationFileTime;
+            }
         }
         if (options.ExpectedMonitorId != null) values["monitor_id"] = options.ExpectedMonitorId;
         return values;
@@ -442,6 +458,12 @@ public class CaptureHostClient : IDisposable
 
     public async Task<bool> StartCaptureAsync(AppSettings settings, CaptureStartOptions? options = null)
     {
+        if ((options?.EnableSystemAudio ?? true) && LocalClip.Core.Audio.AudioCapturePolicy.IsSeparated(settings))
+        {
+            LocalClip.Core.Audio.AudioCapturePolicy.Validate(settings);
+            var capabilities = await GetCapabilitiesAsync().ConfigureAwait(false);
+            if (!capabilities.ExactProcessAudio) throw new InvalidOperationException("This Windows/helper version does not support exact app audio. Select System Audio explicitly or update Flick.");
+        }
         CurrentProfile = null;
         LastStartError = "";
         // Hardware discovery can try multiple vendor plugins before bounded CPU fallback.

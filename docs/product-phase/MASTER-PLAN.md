@@ -30,7 +30,7 @@ Updated 2026-10-24. Authoritative umbrella: [#36](https://github.com/Krish-Verma
 | 5 | E2–E4 Share preview/native transfer/accessibility | medium | ready/stale states, real Discord file transfer |
 | 6 | cross-feature regression, five reviews, candidate preparation | high qualification | hardware/performance/signing and publication gates |
 
-Research and independent tests/review can run in parallel. Only one active feature slice is integrated at a time. Use separate ownership for Core policies/IPC and WPF integration; no concurrent writers in shared files. Before each slice inspect live branch/main and local diff. Complete useful slices, publish evidence and update tracker before advancing; do not open five half-features at once.
+Owner steering on October24 supersedes the earlier serial coding rule: implement B, C, D and E concurrently in isolated managed checkouts, each lane responsible for its complete functional workstream and focused tests. Root owns E, shared integration and all final acceptance. B/C/D may change shared files only inside their own checkout; root merges them serially and resolves contract conflicts. Run focused builds/tests during coding, then batch the integrated Windows, media, visual, installer and applicable physical tests; fix findings and repeat affected checks. This reduces repeated full package compression per small slice. Do not mistake an isolated lane pass for integrated acceptance or release qualification.
 
 ## Workstream plans and tracked slices
 
@@ -59,3 +59,13 @@ No new persistent webviews, overlays, injection, telemetry, upload or background
 Perform distinct completeness (requirement ledger), correctness (state/race/failure/media tests), performance (measured traces), UX (renders/interactions/accessibility) and release (source/version/install/license/CI) reviews. Fix findings and retain evidence; rereading source alone is not independent validation.
 
 Merge only after applicable available checks pass. Prepare a new unique preview candidate version after integrated gates; never overwrite published1.0.6 or reuse its tag. **Do not publish a new public release or replace Latest without explicit owner approval.** No stable/signed/universal-hardware claim. Signing/Store identity remain separate. Any physical acceptance blocker gets exact reproduction, owner and reason; implemented/tested/hardware-verified/released are separate statuses.
+
+
+## Active parallel lanes (owner-authorized October24)
+
+- B game detection and strict video target: `flick-game-automation-20261024`, agent logo_render.
+- C real audio routing and editor/export control: `flick-audio-separation-20261024`, agent update_core.
+- D library, timeline and export workflow: `flick-editor-library-20261024`, agent update_ui.
+- E Share and cross-feature integration: `product-improvements-20261024`, root.
+
+All start from reviewed A4 source `a7b091cc50629ee30dfed1b3b3c94590ec7d397e`. No lane publishes releases or merges independently. Feature branches/commits and focused evidence are retained; root batches full acceptance on the final combined source. A4's current-head Windows CI passes and its separate package is ready for controlled physical qualification.

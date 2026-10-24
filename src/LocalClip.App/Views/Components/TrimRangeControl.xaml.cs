@@ -12,6 +12,7 @@ public sealed class TrimRangeCommittedEventArgs(double start, double end) : Even
     public double Start { get; } = start;
     public double End { get; } = end;
 }
+public sealed class TrimSeekEventArgs(double seconds) : EventArgs { public double Seconds { get; } = seconds; }
 
 /// <summary>
 /// Render two accessible handles over one horizontal trim selection, persisting
@@ -26,8 +27,13 @@ public partial class TrimRangeControl : UserControl
     private double _committedStart;
     private double _committedEnd;
     private bool _keyboardRangeDirty;
+    private bool _refreshing;
+    private double _playhead;
 
     public event EventHandler<TrimRangeCommittedEventArgs>? RangeCommitted;
+    public event EventHandler? RangeChanging;
+    public event EventHandler? RangeReverted;
+    public event EventHandler<TrimSeekEventArgs>? SeekRequested;
 
     public double SelectionStart => _start;
     public double SelectionEnd => _end;
@@ -41,6 +47,7 @@ public partial class TrimRangeControl : UserControl
 
     public void SetRange(double duration, double start, double end)
     {
+        _keyboardRangeDirty = false;
         if (!TrimTimelineMath.TryCreate(duration, start, end, out _start, out _end))
         {
             _duration = _start = _end = 0;
@@ -62,6 +69,7 @@ public partial class TrimRangeControl : UserControl
     private double TravelWidth => Math.Max(1, RangeCanvas.ActualWidth - StartHandle.Width);
     private double Position(double seconds) => _duration <= 0 ? 0 :
         Math.Clamp(seconds / _duration, 0, 1) * TravelWidth;
+    public void SetPlayhead(double seconds) { _playhead = double.IsFinite(seconds) ? Math.Clamp(seconds, 0, _duration) : 0; UpdateTrack(); }
 
     private void UpdateTrack()
     {
@@ -76,13 +84,16 @@ public partial class TrimRangeControl : UserControl
         Canvas.SetTop(StartHandle, 1);
         Canvas.SetLeft(EndHandle, to);
         Canvas.SetTop(EndHandle, 1);
+        Canvas.SetLeft(PlayheadLine, Position(_playhead) + StartHandle.Width / 2);
     }
 
     private void RefreshControls()
     {
         if (StartTimeBox is null) return;
+        _refreshing = true;
         StartTimeBox.Text = TrimTimelineMath.Format(_start);
         EndTimeBox.Text = TrimTimelineMath.Format(_end);
+        _refreshing = false;
         SelectedDurationText.Text = _duration > 0
             ? "Selected: " + TrimTimelineMath.Format(_end - _start)
             : "No Clip Selected";
@@ -95,6 +106,7 @@ public partial class TrimRangeControl : UserControl
         _start = TrimTimelineMath.MoveStart(
             _start + e.HorizontalChange * _duration / TravelWidth, _end, _duration);
         RefreshControls();
+        RangeChanging?.Invoke(this, EventArgs.Empty);
     }
 
     private void EndHandle_DragDelta(object sender, DragDeltaEventArgs e)
@@ -103,6 +115,7 @@ public partial class TrimRangeControl : UserControl
         _end = TrimTimelineMath.MoveEnd(
             _end + e.HorizontalChange * _duration / TravelWidth, _start, _duration);
         RefreshControls();
+        RangeChanging?.Invoke(this, EventArgs.Empty);
     }
 
     private void Handle_DragCompleted(object sender, DragCompletedEventArgs e) => Commit();
@@ -132,6 +145,7 @@ public partial class TrimRangeControl : UserControl
             _end = TrimTimelineMath.MoveEnd(desired, _start, _duration);
         RefreshControls();
         _keyboardRangeDirty = true;
+        RangeChanging?.Invoke(this, EventArgs.Empty);
         e.Handled = true;
     }
 
@@ -163,6 +177,7 @@ public partial class TrimRangeControl : UserControl
         else if (e.Key == Key.Escape)
         {
             RefreshControls();
+            RangeReverted?.Invoke(this, EventArgs.Empty);
             Keyboard.ClearFocus();
             e.Handled = true;
         }
@@ -170,6 +185,21 @@ public partial class TrimRangeControl : UserControl
 
     private void TimeBox_LostKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e)
         => CommitTimeBoxes();
+    private void TimeBox_TextChanged(object sender, TextChangedEventArgs e)
+    { if (!_refreshing && _duration > 0) RangeChanging?.Invoke(this, EventArgs.Empty); }
+
+    private void Track_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (_duration <= 0) return;
+        DependencyObject? source = e.OriginalSource as DependencyObject;
+        while (source != null && !ReferenceEquals(source, RangeCanvas))
+        {
+            if (source is Thumb) return;
+            source = System.Windows.Media.VisualTreeHelper.GetParent(source);
+        }
+        double seconds = Math.Clamp((e.GetPosition(RangeCanvas).X - StartHandle.Width / 2) / TravelWidth, 0, 1) * _duration;
+        SetPlayhead(seconds); SeekRequested?.Invoke(this, new(seconds)); e.Handled = true;
+    }
 
     private void CommitTimeBoxes()
     {
@@ -180,6 +210,7 @@ public partial class TrimRangeControl : UserControl
             !TrimTimelineMath.TryCreate(_duration, s, t, out var start, out var end))
         {
             RefreshControls(); // Reject rather than persist an invalid range.
+            RangeReverted?.Invoke(this, EventArgs.Empty);
             return;
         }
         _start = start;
@@ -199,14 +230,16 @@ public partial class TrimRangeControl : UserControl
 
     private void Commit()
     {
-        if (_duration <= 0 ||
-            Math.Abs(_start - _committedStart) < 1e-7 &&
-            Math.Abs(_end - _committedEnd) < 1e-7) return;
+        if (_duration <= 0) return;
+        if (Math.Abs(_start - _committedStart) < 1e-7 &&
+            Math.Abs(_end - _committedEnd) < 1e-7)
+        { RangeReverted?.Invoke(this, EventArgs.Empty); return; }
         if (!TrimValidator.Validate(_start, _end, _duration).IsValid)
         {
             _start = _committedStart;
             _end = _committedEnd;
             RefreshControls();
+            RangeReverted?.Invoke(this, EventArgs.Empty);
             return;
         }
         // Change is announced only after the user completes an intentional edit.

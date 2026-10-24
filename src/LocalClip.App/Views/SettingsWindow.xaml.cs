@@ -50,11 +50,12 @@ public partial class SettingsWindow : UserControl
     public event Action<bool, bool, string, string>? PreviewNotificationRequested;
     public event EventHandler? ManageFoldersRequested;
 
-    public SettingsWindow(AppSettings settings, Func<bool> isCaptureActive)
+    public SettingsWindow(AppSettings settings, Func<bool> isCaptureActive, Func<Task<TargetList>>? loadAudioSources = null)
     {
         InitializeComponent();
         _settings = settings;
         _isCaptureActive = isCaptureActive ?? throw new ArgumentNullException(nameof(isCaptureActive));
+        _loadAudioSources = loadAudioSources;
         Populate(settings);
         SelectCategory("Recording");
         TxtCurrentVersion.Text = "Current version: " + FlickUpdateService.CurrentVersion;
@@ -68,6 +69,7 @@ public partial class SettingsWindow : UserControl
     /// <summary>Leaving Settings cancels network work and removes this page's staged installer.</summary>
     public void LeavePage()
     {
+        _gameApprovalCancellation?.Cancel();
         _updateCancellation?.Cancel();
         _installationCancellation?.Cancel();
         _updateCancellation = null;
@@ -237,6 +239,7 @@ public partial class SettingsWindow : UserControl
         {
             (NavRecording, PanelRecording, "Recording"),
             (NavAudio, PanelAudio, "Audio"),
+            (NavGames, PanelGames, "Games"),
             (NavShortcuts, PanelShortcuts, "Shortcuts"),
             (NavStorage, PanelStorage, "Storage"),
             (NavGeneral, PanelGeneral, "General"),
@@ -259,6 +262,7 @@ public partial class SettingsWindow : UserControl
         _loading = true;
         try
         {
+            PopulateGameProfiles(settings);
             TxtToggleHotkey.Text = settings.CaptureToggleHotkey;
             TxtSaveHotkey.Text = settings.SaveReplayHotkey;
             TxtOriginalsFolder.Text = settings.OriginalsFolder;
@@ -270,6 +274,7 @@ public partial class SettingsWindow : UserControl
                 RecordingProfiles.Smooth => 2,
                 _ => 1
             };
+            PopulateAudio(settings);
             ChkMicrophone.IsChecked = settings.EnableMicrophone;
             ChkSoftwareFallback.IsChecked = settings.AllowSoftwareFallback;
             ChkStartWithWindows.IsChecked = settings.StartWithWindows;
@@ -540,10 +545,12 @@ public partial class SettingsWindow : UserControl
                 "Invalid Webhook");
             return;
         }
-        if (_isCaptureActive() && _settings.EnableMicrophone && ChkMicrophone.IsChecked != true &&
-            LocalClip.App.Services.FlickDialog.Show("Turning off an active microphone stops the current recording. Unsaved replay footage will be discarded. Continue?",
-                "Disable Microphone", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes)
+        if (_isCaptureActive() && AudioRoutingChanged() &&
+            LocalClip.App.Services.FlickDialog.Show("Changing audio routing stops the current recording. Unsaved replay footage will be discarded. Continue?",
+                "Change Recording Audio", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes)
             return;
+
+        if (!ReviewGameSettingsBeforeSave()) return;
 
         bool originalStartup = _settings.StartWithWindows;
         bool originalMinimized = _settings.StartMinimizedToTray;
@@ -554,11 +561,15 @@ public partial class SettingsWindow : UserControl
             // field never partially rewrites the live VM's settings.
             var staged = JsonSerializer.Deserialize<AppSettings>(JsonSerializer.Serialize(_settings)) ??
                 throw new InvalidOperationException("Could not stage current settings.");
+            staged.SchemaVersion = 4;
+            staged.GameDetectionEnabled = ChkGameDetectionEnabled.IsChecked == true;
+            staged.ApprovedGameProfiles = _stagedGameProfiles.ToList();
             staged.CaptureToggleHotkey = toggle;
             staged.SaveReplayHotkey = save;
             staged.OriginalsFolder = originals;
             staged.ExportsFolder = exports;
             staged.ReplayDurationSeconds = duration;
+            StageAudio(staged);
             staged.EnableMicrophone = ChkMicrophone.IsChecked == true;
             staged.AllowSoftwareFallback = ChkSoftwareFallback.IsChecked == true;
             staged.StartWithWindows = ChkStartWithWindows.IsChecked == true;
@@ -585,6 +596,9 @@ public partial class SettingsWindow : UserControl
             _settings.MarkExplicitSettingsSaveCompleted();
 
             // Commit only GUI-managed properties after the atomic disk write.
+            _settings.SchemaVersion = staged.SchemaVersion;
+            _settings.GameDetectionEnabled = staged.GameDetectionEnabled;
+            _settings.ApprovedGameProfiles = staged.ApprovedGameProfiles.ToList();
             _settings.CaptureToggleHotkey = staged.CaptureToggleHotkey;
             _settings.SaveReplayHotkey = staged.SaveReplayHotkey;
             _settings.OriginalsFolder = staged.OriginalsFolder;
@@ -596,6 +610,9 @@ public partial class SettingsWindow : UserControl
             _settings.VideoBitrateKbps = staged.VideoBitrateKbps;
             _settings.VideoEncoder = staged.VideoEncoder;
             _settings.QualityPreset = staged.QualityPreset;
+            _settings.AudioMode = staged.AudioMode;
+            _settings.GameAudioSource = staged.GameAudioSource;
+            _settings.VoiceAudioSource = staged.VoiceAudioSource;
             _settings.EnableMicrophone = staged.EnableMicrophone;
             _settings.AllowSoftwareFallback = staged.AllowSoftwareFallback;
             _settings.StartWithWindows = staged.StartWithWindows;

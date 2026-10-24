@@ -9,6 +9,8 @@ public class TargetWindow
     public string Title { get; set; } = "";
     public uint Pid { get; set; }
     public string Exe { get; set; } = "";
+    public string ExecutablePath { get; set; } = "";
+    public ulong ProcessCreationFileTime { get; set; }
     public int Width { get; set; }
     public int Height { get; set; }
 

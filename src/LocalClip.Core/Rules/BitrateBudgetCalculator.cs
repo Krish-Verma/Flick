@@ -12,6 +12,7 @@ public class BitrateBudget
     public int RecommendedWidth { get; set; }
     public int RecommendedHeight { get; set; }
     public int RetryCount { get; set; }
+    public string AspectPreset { get; set; } = ExportAspectPresets.Original;
 }
 
 public static class BitrateBudgetCalculator

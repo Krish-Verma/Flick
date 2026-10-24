@@ -8,6 +8,8 @@ public sealed class RecordingDiagnosticPlan
     private readonly int _width, _height, _fps, _bitrate, _replaySeconds, _bufferMiB;
     private readonly string _encoder, _systemDeviceId, _microphoneDeviceId;
     private readonly bool _allowSoftwareFallback;
+    private readonly string _audioMode;
+    private readonly LocalClip.Core.Audio.AudioProcessIdentity? _gameAudio, _voiceAudio;
 
     public Guid PlanId { get; } = Guid.NewGuid();
     public RecordingDiagnosticTarget Target { get; }
@@ -17,7 +19,7 @@ public sealed class RecordingDiagnosticPlan
     public bool EnableMicrophone { get; }
     public int ReplayDurationSeconds => _replaySeconds;
     public string AudioSummary =>
-        $"Computer audio: {(EnableSystemAudio ? "all audio on the selected output (" + _systemDeviceId + ")" : "Off")}. " +
+        $"Computer audio: {(EnableSystemAudio ? (_audioMode == "Separated" ? "selected app process trees (" + string.Join(", ", new[] { _gameAudio?.DisplayName, _voiceAudio?.DisplayName }.Where(name => name != null)) + ")" : "all audio on the selected output (" + _systemDeviceId + ")") : "Off")}. " +
         $"Microphone: {(EnableMicrophone ? "On (" + _microphoneDeviceId + ")" : "Off")}.";
     public string ConsentSummary => $"Record a short test of {Target.Name}.\n{AudioSummary}\nSave the test clip in your Flick library, then stop the test helper.";
 
@@ -39,6 +41,8 @@ public sealed class RecordingDiagnosticPlan
         _bufferMiB = preferences.BufferMemoryLimitMb;
         _systemDeviceId = preferences.SystemAudioDeviceId;
         _microphoneDeviceId = preferences.MicrophoneDeviceId;
+        _audioMode = LocalClip.Core.Audio.AudioCapturePolicy.IsSeparated(preferences) ? "Separated" : "SystemFallback";
+        _gameAudio = preferences.GameAudioSource; _voiceAudio = preferences.VoiceAudioSource;
     }
 
     public static RecordingDiagnosticPlan Create(AppSettings preferences, RecordingDiagnosticTarget target,
@@ -52,6 +56,9 @@ public sealed class RecordingDiagnosticPlan
             if (target.WindowHwnd == 0 || target.WindowPid == 0 || string.IsNullOrWhiteSpace(target.WindowTitle) ||
                 string.IsNullOrWhiteSpace(target.WindowExecutable))
                 throw new ArgumentException("The selected window needs its current handle, process and exact identity.", nameof(target));
+            if ((target.WindowExecutablePath.Length != 0 || target.WindowProcessCreationFileTime != 0) &&
+                (!LocalClip.Core.GameDetection.GameDetectionPolicy.TryNormalizePath(target.WindowExecutablePath, out _) || target.WindowProcessCreationFileTime == 0))
+                throw new ArgumentException("Refresh the selected window's executable and process identity before testing.", nameof(target));
         }
         else if (target.Kind == "Monitor")
         {
@@ -69,6 +76,7 @@ public sealed class RecordingDiagnosticPlan
         if (enableSystemAudio && string.IsNullOrWhiteSpace(preferences.SystemAudioDeviceId) ||
             enableMicrophone && string.IsNullOrWhiteSpace(preferences.MicrophoneDeviceId))
             throw new ArgumentException("Select the audio device before enabling it for the test.", nameof(preferences));
+        if (enableSystemAudio) LocalClip.Core.Audio.AudioCapturePolicy.Validate(preferences);
         return new(preferences, target, enableSystemAudio, enableMicrophone);
     }
 
@@ -89,7 +97,9 @@ public sealed class RecordingDiagnosticPlan
         ReplayDurationSeconds = _replaySeconds,
         BufferMemoryLimitMb = _bufferMiB,
         OriginalsFolder = outputDirectory,
-        AudioMode = "SystemFallback",
+        AudioMode = EnableSystemAudio ? _audioMode : "SystemFallback",
+        GameAudioSource = EnableSystemAudio ? _gameAudio : null,
+        VoiceAudioSource = EnableSystemAudio ? _voiceAudio : null,
         EnableMicrophone = EnableMicrophone,
         SystemAudioDeviceId = _systemDeviceId,
         MicrophoneDeviceId = _microphoneDeviceId

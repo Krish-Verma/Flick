@@ -104,7 +104,8 @@ public sealed class PatternWindow : Window, IDisposable
             NormalizeClientSize();
             UpdateLayout();
             _identity = new CaptureWindowIdentity(unchecked((ulong)Hwnd.ToInt64()),
-                ProcessId, FixtureTitle, ExecutableName);
+                ProcessId, FixtureTitle, ExecutableName, ExecutablePath,
+                checked((ulong)System.Diagnostics.Process.GetCurrentProcess().StartTime.ToUniversalTime().ToFileTimeUtc()));
             return _identity;
         }, DispatcherPriority.ContextIdle, cancellationToken).Task.ConfigureAwait(false);
     }
