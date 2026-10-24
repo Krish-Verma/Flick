@@ -3,6 +3,8 @@ using System.Diagnostics;
 using System.IO;
 using System.Reflection;
 using System.Windows;
+using System.Windows.Controls;
+using LocalClip.App;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
@@ -16,7 +18,7 @@ namespace LocalClip.App.Tests;
 internal static class SharePresentationAssertions
 {
     private const BindingFlags Private = BindingFlags.NonPublic | BindingFlags.Instance;
-    internal static void AssertStaleNotificationsAndSamePathRepair(MainViewModel vm)
+    internal static void AssertStaleNotificationsAndSamePathRepair(MainWindow window, MainViewModel vm)
     {
         var dispatcher = Application.Current?.Dispatcher ?? throw new InvalidOperationException("Use the existing Application fixture.");
         Assert.True(dispatcher.CheckAccess());
@@ -26,7 +28,7 @@ internal static class SharePresentationAssertions
         object? Invoke(string name, params object?[] values) => typeof(MainViewModel).GetMethod(name, Private)!.Invoke(vm, values);
         void Notify(ClipMetadata clip) => Invoke("OnShareClipPropertyChanged", clip, new PropertyChangedEventArgs(nameof(ClipMetadata.ThumbnailPath)));
         Task Refresh(ClipMetadata clip) => (Task)Invoke("RefreshSharePreviewAsync", clip)!;
-        string[] savedNames = ["_selectedClip", "_sharePresentationActive", "_shareDisposed", "_shareObservedClip", "_sharePreview", "_sharePreviewCancellation"];
+        string[] savedNames = ["_selectedClip", "_sharePresentationActive", "_shareDisposed", "_shareObservedClip", "_sharePreview", "_sharePreviewCancellation", "_isExportReady", "_readyExportFilePath", "_exportStatusMessage"];
         var saved = savedNames.ToDictionary(name => name, Get);
         Assert.Null(saved["_sharePreviewCancellation"]); // The fixture must be idle before taking ownership.
         var gate = (SemaphoreSlim)Get("_sharePreviewGate")!;
@@ -86,6 +88,32 @@ internal static class SharePresentationAssertions
             var loaded = Assert.IsAssignableFrom<BitmapSource>(vm.SharePreview);
             Assert.True(loaded.IsFrozen); Assert.Equal(1, loaded.PixelWidth);
             File.Delete(poster); // Loaded still image owns no lingering file handle.
+
+            // The selected object stays identical while its original goes
+            // offline and returns. Exercise the actual Export button binding,
+            // not merely the last-mile export guard or a copied bool value.
+            string original = Path.Combine(root, "availability.mkv");
+            File.WriteAllBytes(original, [1, 2, 3, 4]); // State-only sentinel; no codec claim.
+            second.OriginalFilePath = original;
+            second.ThumbnailPath = original; // Existing path prevents starting a decoder.
+            var export = (Button)window.FindName("BtnExport");
+            void RefreshAvailability()
+            {
+                second.RefreshAvailability();
+                Invoke("OnSelectedClipChanged"); // Same production recheck used when Share opens.
+                for (int pass = 0; pass < 3; pass++)
+                    dispatcher.Invoke(() => { }, DispatcherPriority.ContextIdle,
+                        CancellationToken.None, TimeSpan.FromSeconds(2));
+            }
+            RefreshAvailability();
+            Assert.True(vm.CanStartExport); Assert.True(export.IsEnabled);
+            File.Move(original, original + ".offline");
+            RefreshAvailability();
+            Assert.False(vm.CanEditClip); Assert.False(vm.CanStartExport); Assert.False(export.IsEnabled);
+            Assert.Equal("Original offline", vm.ShareTileStateText);
+            File.Move(original + ".offline", original);
+            RefreshAvailability();
+            Assert.True(vm.CanStartExport); Assert.True(export.IsEnabled);
         }
         finally
         {

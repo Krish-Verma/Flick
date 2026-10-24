@@ -599,7 +599,7 @@ public partial class SettingsStagingTests
                     workspacePage.Visibility = Visibility.Collapsed;
                     OrganizationEditorAssertions.Run(vm);
                     ThumbnailOperationAssertions.Run(vm);
-                    SharePresentationAssertions.AssertStaleNotificationsAndSamePathRepair(vm);
+                    SharePresentationAssertions.AssertStaleNotificationsAndSamePathRepair(window, vm);
                 }
                 finally { vm.Dispose(); }
                 app.Shutdown();

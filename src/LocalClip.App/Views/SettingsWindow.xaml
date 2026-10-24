@@ -22,6 +22,7 @@
                 Background="{DynamicResource Flick.Brush.Surface}"
                 BorderBrush="{DynamicResource Flick.Brush.Divider}"
                 BorderThickness="0,0,1,0" Padding="16,22">
+            <ScrollViewer x:Name="SettingsNavScroll" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" CanContentScroll="False" Focusable="False">
             <DockPanel>
                 <StackPanel DockPanel.Dock="Top">
                     <StackPanel Orientation="Horizontal" Margin="0,0,0,26">
@@ -66,6 +67,7 @@
                            Style="{StaticResource Flick.Text.Muted}"
                            TextWrapping="Wrap"/>
             </DockPanel>
+            </ScrollViewer>
         </Border>
 
         <ScrollViewer Grid.Column="1" Grid.Row="0"
@@ -123,7 +125,7 @@
                               Style="{StaticResource Flick.Toggle}" AutomationProperties.Name="Enable Automatic Game Replay"/>
                     <TextBlock Text="Off by default. Enabled detection checks every three seconds. Stop Replay pauses that game session, including after Flick restarts; restart the game or start replay manually to record again."
                                Style="{StaticResource Flick.Text.Muted}" TextWrapping="Wrap" Margin="0,8,0,16"/>
-                    <TextBlock Text="{Binding GameDetectionStatus}" Style="{StaticResource Flick.Text.Caption}" TextWrapping="Wrap" Margin="0,0,0,16"/>
+                    <TextBlock Text="{Binding GameDetectionStatus, StringFormat='Current status: {0}'}" Style="{StaticResource Flick.Text.Caption}" TextWrapping="Wrap" Margin="0,0,0,16"/>
                     <Button x:Name="BtnRefreshRunningGames" Content="Find Running Windows" HorizontalAlignment="Left"
                             Click="RefreshRunningGames_Click" Style="{StaticResource Flick.Button.Secondary}"/>
                     <ComboBox x:Name="CmbRunningGames" Style="{StaticResource Flick.Input.Combo}"

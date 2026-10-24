@@ -65,6 +65,7 @@ public partial class MainViewModel
     {
         OnPropertyChanged(nameof(HasUnsavedOrganization));
         if (HasUnsavedOrganization) EditorSaveState = "Clip details not saved";
+        else if (EditorSaveState == "Clip details not saved") EditorSaveState = "Clip details saved";
     }
     private void OrganizationSelectionChanged()
     {

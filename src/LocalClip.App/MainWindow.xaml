@@ -94,15 +94,16 @@
 
             <!-- Left: Clip Gallery -->
             <Border x:Name="ClipLibraryPanel" Grid.Column="0" Background="{DynamicResource Flick.Brush.Surface}" BorderBrush="{DynamicResource Flick.Brush.Divider}" BorderThickness="0,0,1,0">
-                <Grid Margin="12">
+                <Grid x:Name="LibraryLayoutRoot" Margin="12" SizeChanged="LibraryLayout_SizeChanged">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="*" MinHeight="96"/>
                         <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
 
                     <!-- Compact library header, search and local source filters. -->
-                    <StackPanel Grid.Row="0" Margin="0,0,0,10">
+                    <ScrollViewer x:Name="LibraryHeaderScroll" Grid.Row="0" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" CanContentScroll="False" Focusable="False">
+                    <StackPanel Margin="0,0,0,10">
                         <Grid Margin="0,0,0,11">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
@@ -136,17 +137,18 @@
                         <Grid Margin="0,10,0,0">
                             <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="8"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                             <StackPanel><TextBlock Text="Game" Style="{StaticResource Flick.Text.Caption}" Margin="0,0,0,4"/>
-                                <ComboBox ItemsSource="{Binding GameGroups}" SelectedItem="{Binding GameFilter}" Style="{StaticResource Flick.Input.Combo}" AutomationProperties.Name="Filter by Game"/>
+                                <ComboBox ItemsSource="{Binding GameGroups}" SelectedItem="{Binding GameFilter}" MinWidth="0" Style="{StaticResource Flick.Input.Combo}" AutomationProperties.Name="Filter by Game"/>
                             </StackPanel>
                             <StackPanel Grid.Column="2"><TextBlock Text="Sort" Style="{StaticResource Flick.Text.Caption}" Margin="0,0,0,4"/>
-                                <ComboBox ItemsSource="{Binding LibrarySortChoices}" SelectedItem="{Binding LibrarySort}" Style="{StaticResource Flick.Input.Combo}" AutomationProperties.Name="Sort Clips"/>
+                                <ComboBox ItemsSource="{Binding LibrarySortChoices}" SelectedItem="{Binding LibrarySort}" MinWidth="0" Style="{StaticResource Flick.Input.Combo}" AutomationProperties.Name="Sort Clips"/>
                             </StackPanel>
                         </Grid>
                         <Grid Margin="0,9,0,0"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="100"/></Grid.ColumnDefinitions>
                             <CheckBox Content="Favorites only" IsChecked="{Binding FavoritesOnly}" Style="{StaticResource Flick.Input.CheckBox}"/>
-                            <ComboBox Grid.Column="1" ItemsSource="{Binding LibraryPeriodChoices}" SelectedItem="{Binding LibraryPeriod}" Style="{StaticResource Flick.Input.Combo}" AutomationProperties.Name="Filter Clip Date"/>
+                            <ComboBox Grid.Column="1" ItemsSource="{Binding LibraryPeriodChoices}" SelectedItem="{Binding LibraryPeriod}" MinWidth="0" Style="{StaticResource Flick.Input.Combo}" AutomationProperties.Name="Filter Clip Date"/>
                         </Grid>
                     </StackPanel>
+                    </ScrollViewer>
 
                     <!-- Virtualized clip rows; imported media stays in place. -->
                     <Grid Grid.Row="1" MinHeight="0">
@@ -214,18 +216,19 @@
                         </TextBlock>
                     </Grid>
 
-                    <StackPanel Grid.Row="2" Margin="0,10,0,0">
-                        <Expander Header="Clip details" IsEnabled="{Binding CanOrganizeClip}" Style="{StaticResource Flick.Expander.Disclosure}" Margin="0,0,0,8">
+                    <ScrollViewer x:Name="LibraryDetailsScroll" Grid.Row="2" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" CanContentScroll="False" Focusable="False">
+                    <StackPanel Margin="0,10,0,0">
+                        <Expander x:Name="ClipDetailsExpander" Header="Clip details" IsEnabled="{Binding CanOrganizeClip}" Style="{StaticResource Flick.Expander.Disclosure}" Margin="0,0,0,8" Expanded="LibraryDetails_ExpandedChanged" Collapsed="LibraryDetails_ExpandedChanged">
                             <StackPanel Margin="0,8,0,0">
                                 <TextBlock Text="Game label" Style="{StaticResource Flick.Text.Caption}" Margin="0,0,0,4"/>
                                 <TextBox Text="{Binding GameDraft, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource Flick.Input.Text}" MaxLength="80" AutomationProperties.Name="Clip Game Label"/>
                                 <TextBlock Text="Tags · comma separated" Style="{StaticResource Flick.Text.Caption}" Margin="0,8,0,4"/>
                                 <TextBox Text="{Binding TagsDraft, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource Flick.Input.Text}" MaxLength="400" AutomationProperties.Name="Clip Tags"/>
                                 <WrapPanel Margin="0,8,0,0">
-                                    <Button Content="Save details" Click="SaveOrganization_Click" IsEnabled="{Binding HasUnsavedOrganization}" Style="{StaticResource Flick.Button.Secondary}" Padding="9,0" Margin="0,0,8,0"/>
+                                    <Button x:Name="BtnSaveClipDetails" Content="Save details" Click="SaveOrganization_Click" IsEnabled="{Binding HasUnsavedOrganization}" Style="{StaticResource Flick.Button.Secondary}" Padding="9,0" Margin="0,0,8,0"/>
                                     <Button Content="Favorite" Click="ToggleFavorite_Click" Style="{StaticResource Flick.Button.Ghost}" Padding="9,0"/>
                                 </WrapPanel>
-                                <TextBlock Text="{Binding EditorSaveState}" Style="{StaticResource Flick.Text.Caption}" TextWrapping="Wrap" Margin="0,8,0,0"/>
+                                <TextBlock x:Name="TxtClipDetailsState" Text="{Binding EditorSaveState}" Style="{StaticResource Flick.Text.Caption}" TextWrapping="Wrap" Margin="0,8,0,0"/>
                             </StackPanel>
                         </Expander>
                         <TextBlock Text="{Binding LibrarySummaryText}" Style="{StaticResource Flick.Text.Muted}" TextTrimming="CharacterEllipsis" Margin="0,0,0,7"/>
@@ -238,6 +241,7 @@
                             <Button Grid.Column="1" Content="Rescan" Click="BtnRescan_Click" Style="{StaticResource Flick.Button.Ghost}" HorizontalAlignment="Right" MinHeight="32" MinWidth="0" Padding="9,0"/>
                         </Grid>
                     </StackPanel>
+                    </ScrollViewer>
                 </Grid>
             </Border>
 

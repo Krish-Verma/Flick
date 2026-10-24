@@ -1725,6 +1725,8 @@ public partial class MainViewModel : INotifyPropertyChanged, IDisposable
                 SelectedClip = null; // Never keep editing a removed/unlinked entry.
             else if (!ReferenceEquals(SelectedClip, previous))
                 SelectedClip = previous;
+            else
+                OnSelectedClipChanged(); // Availability may change on the same cached metadata instance.
         }
         UpdateLibrarySummary();
     }
@@ -1747,6 +1749,10 @@ public partial class MainViewModel : INotifyPropertyChanged, IDisposable
 
     private void OnSelectedClipChanged()
     {
+        // Reopening Share or rescanning can change availability without changing
+        // the selected metadata object. Refresh its derived command bindings too.
+        OnPropertyChanged(nameof(CanEditClip));
+        OnPropertyChanged(nameof(CanStartExport));
         if (SelectedClip == null)
         {
             InvalidateExportReady();

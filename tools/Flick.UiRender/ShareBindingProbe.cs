@@ -24,15 +24,17 @@ internal static partial class Program
             BindingOperations.GetBinding(control, TextBlock.TextProperty)?.Path?.Path == nameof(vm.ShareClipDetails));
         var state = (TextBlock)window.FindName("TxtShareTileState");
         var copy = (Button)window.FindName("BtnShareCopyFile");
+        var export = (Button)window.FindName("BtnExport");
         var thumbnail = (Image)window.FindName("ShareThumbnail");
         bool titleMatches = title.Text == vm.ShareClipTitle;
         bool detailsMatch = details.Text == vm.ShareClipDetails;
         bool stateMatches = state.Text == vm.ShareTileStateText;
         bool copyMatches = copy.IsEnabled == vm.ShareCanCopy;
+        bool exportMatches = export.IsEnabled == vm.CanStartExport;
         bool thumbnailMatches = ReferenceEquals(thumbnail.Source, vm.SharePreview);
         bool readyValid = !requireReady || (vm.TryGetReadyShareFile(out _) && vm.ShareCanCopy &&
             vm.ShareTileStateText == "MP4 ready");
-        bool bindingsMatch = titleMatches && detailsMatch && stateMatches && copyMatches && thumbnailMatches;
+        bool bindingsMatch = titleMatches && detailsMatch && stateMatches && copyMatches && exportMatches && thumbnailMatches;
         object Binding(DependencyObject target, DependencyProperty property)
         {
             var expression = BindingOperations.GetBindingExpression(target, property);
@@ -71,10 +73,11 @@ internal static partial class Program
             ExpectedDetails = vm.ShareClipDetails, ActualDetails = details.Text, detailsMatch,
             ExpectedState = vm.ShareTileStateText, ActualState = state.Text, stateMatches,
             ExpectedCopyEnabled = vm.ShareCanCopy, ActualCopyEnabled = copy.IsEnabled, copyMatches,
+            ExpectedExportEnabled = vm.CanStartExport, ActualExportEnabled = export.IsEnabled, exportMatches,
             ExpectedHasThumbnail = vm.ShareHasPreview, ActualHasThumbnail = thumbnail.Source != null, thumbnailMatches,
             bindingsMatch, readyValid,
             TitleBinding = Binding(title, TextBlock.TextProperty), DetailsBinding = Binding(details, TextBlock.TextProperty),
-            StateBinding = Binding(state, TextBlock.TextProperty), CopyBinding = Binding(copy, UIElement.IsEnabledProperty),
+            StateBinding = Binding(state, TextBlock.TextProperty), CopyBinding = Binding(copy, UIElement.IsEnabledProperty), ExportBinding = Binding(export, UIElement.IsEnabledProperty),
             ThumbnailBinding = Binding(thumbnail, Image.SourceProperty),
             SharePresentationActive = typeof(MainViewModel).GetField("_sharePresentationActive", Private)!.GetValue(vm),
             ShareDisposed = typeof(MainViewModel).GetField("_shareDisposed", Private)!.GetValue(vm),
@@ -86,6 +89,6 @@ internal static partial class Program
         }, new JsonSerializerOptions { WriteIndented = true }));
         if (requireMatch && (!bindingsMatch || !readyValid))
             throw new InvalidOperationException("Share UI disagrees with its real view model in " + label +
-                $": title={titleMatches}, details={detailsMatch}, state={stateMatches}, copy={copyMatches}, thumbnail={thumbnailMatches}, ready={readyValid}.");
+                $": title={titleMatches}, details={detailsMatch}, state={stateMatches}, copy={copyMatches}, export={exportMatches}, thumbnail={thumbnailMatches}, ready={readyValid}.");
     }
 }

@@ -5,6 +5,7 @@ $dist = Join-Path $root "dist"
 $manifest = Join-Path $dist "SHA256SUMS.txt"
 $version = (Get-Content -LiteralPath (Join-Path $root "release\preview-version.txt") -Raw).Trim()
 if ($version -ne "1.0.7-preview.1") { throw "Unexpected Flick release version: $version" }
+$expectedFileVersion = [version](($version -split '-', 2)[0] + '.0')
 if (-not (Test-Path -LiteralPath $manifest -PathType Leaf)) { throw "Missing SHA256SUMS.txt" }
 $checksums = Get-Content -LiteralPath $manifest -Raw
 & (Join-Path $PSScriptRoot "check_ffmpeg_runtime.ps1") -RuntimeRoot (Join-Path $dist "Flick-v1.0.7-win-x64\tools\ffmpeg")
@@ -35,8 +36,12 @@ foreach ($path in @(
 & (Join-Path $PSScriptRoot "check_obs_runtime.ps1") -RuntimeRoot (Join-Path $dist "Flick-v1.0.7-win-x64\tools\obs\runtime")
 foreach ($relative in @('Flick.exe','Flick.dll','LocalClip.Core.dll','tools\obs\runtime\bin\64bit\LocalClip.CaptureHost.exe')) {
   $metadata = (Get-Item -LiteralPath (Join-Path $dist "Flick-v1.0.7-win-x64\$relative")).VersionInfo
-  if ($metadata.ProductName -cne 'Flick' -or $metadata.ProductVersion -cne '1.0.7-preview.1') {
-    throw "Owned binary has incorrect Flick product/version metadata: $relative"
+  $actualFileVersion = [version]::new($metadata.FileMajorPart, $metadata.FileMinorPart,
+    $metadata.FileBuildPart, $metadata.FilePrivatePart)
+  if ($metadata.ProductName -cne 'Flick' -or $metadata.ProductVersion -cne $version -or
+      $metadata.FileVersion -cne $expectedFileVersion.ToString() -or $actualFileVersion -ne $expectedFileVersion) {
+    throw "Owned binary has incorrect Flick product/version metadata: $relative (product '$($metadata.ProductVersion)', file '$($metadata.FileVersion)', numeric '$actualFileVersion'; expected '$version' / '$expectedFileVersion')"
   }
+  Write-Host "Verified Flick product/version metadata: $relative ($version; file $actualFileVersion)" -ForegroundColor Green
 }
 Write-Host "Flick preview distribution integrity PASS; Windows install/real-GPU testing is separate." -ForegroundColor Green

@@ -93,6 +93,29 @@ internal static partial class Program
         SettingsFrame("55-separate-app-audio-microphone-minimum.png", 720, 480, "Independent microphone choice");
         if (settings.GameDetectionEnabled || typeof(MainViewModel).GetField("_gameTimer", Private)!.GetValue(vm) != null)
             throw new InvalidOperationException("Staged Games rendering must not enable live detection.");
+        // At minimum height every category remains reachable by the real
+        // ScrollViewer BringIntoView path; no control coordinates are changed.
+        var navigation = Page<ScrollViewer>("SettingsNavScroll");
+        var navigationChecks = new List<object>();
+        foreach (string name in new[] { "NavRecording", "NavGames", "NavAudio", "NavShortcuts", "NavStorage", "NavGeneral", "NavSharing" })
+        {
+            var button = Page<Button>(name);
+            button.BringIntoView();
+            for (int pass = 0; pass < 3; pass++)
+            {
+                DrainDispatcherThroughContextIdle(page.Dispatcher);
+                page.UpdateLayout();
+            }
+            Rect location = button.TransformToAncestor(navigation).TransformBounds(new Rect(button.RenderSize));
+            bool reachable = ProductContains(new Rect(navigation.RenderSize), location);
+            navigationChecks.Add(new { Name = name, Reachable = reachable, navigation.VerticalOffset,
+                navigation.ViewportHeight, navigation.ScrollableHeight });
+            if (!reachable || !double.IsFinite(navigation.ViewportHeight) || navigation.ViewportHeight <= 0)
+                throw new InvalidOperationException("Settings category is unreachable at minimum height: " + name);
+        }
+        Category("Sharing");
+        SettingsFrame("67-settings-navigation-minimum.png", 720, 480, "Last category reached through actual navigation scrolling");
+        observations.Add(new { SettingsCategoryNavigation = navigationChecks });
         Invoke("ReturnToClipWorkspace"); // Discard the actual staged page without Save.
 
         // Reuse the actual generated/decoded media and matching MP4 from the
@@ -158,12 +181,24 @@ internal static partial class Program
                     ProductContains(Bounds(context), Bounds(Find<Button>("CloseEditorTool"))) &&
                     contextScroll.ViewportHeight > 0 && double.IsFinite(contextScroll.ViewportHeight);
             }
+            bool libraryFits = true;
+            double? listHeight = null;
+            if (Find<Border>("ClipLibraryPanel").Visibility == Visibility.Visible)
+            {
+                var library = Find<Border>("ClipLibraryPanel");
+                var list = Find<ListBox>("ClipList");
+                listHeight = list.ActualHeight;
+                Rect listBounds = list.TransformToAncestor(library).TransformBounds(new Rect(list.RenderSize));
+                libraryFits = list.ActualHeight >= 96 && ProductContains(new Rect(library.RenderSize), listBounds);
+            }
             observations.Add(new { Image = file, State = state, Width = width, Height = height,
                 FilteredClips = vm.FilteredClips.Count, RecentExports = vm.RecentExports.Count,
                 vm.FavoritesOnly, vm.GameFilter, vm.LibrarySort, Markers = vm.ClipMarkers.Count,
-                vm.ExportAspectPreset, EditorContextFits = contextFits, NoPlaybackOrCapture = true });
+                vm.ExportAspectPreset, EditorContextFits = contextFits, LibraryListFits = libraryFits,
+                ListHeight = listHeight, NoPlaybackOrCapture = true });
             WriteEvidence();
             if (!contextFits) throw new InvalidOperationException("Editor context, Close or scroll viewport do not fit in " + file);
+            if (!libraryFits) throw new InvalidOperationException("The virtualized clip list lacks a useful contained viewport in " + file);
         }
         Split();
         ProductFrame("56-organized-library-720.png", 1280, 720, "Grouped games, favorites and clip metadata");
@@ -177,6 +212,23 @@ internal static partial class Program
         details.IsExpanded = true;
         vm.TagsDraft = "clutch, overtime, review";
         ProductFrame("58-clip-details-staged-720.png", 1280, 720, "Unsaved tag edit, actual save-state binding");
+        Compact(library: true);
+        ProductFrame("65-clip-details-minimum-top.png", 720, 480, "Expanded clip details preserve the virtualized library at minimum size");
+        var detailsScroll = Find<ScrollViewer>("LibraryDetailsScroll");
+        var headerScroll = Find<ScrollViewer>("LibraryHeaderScroll");
+        detailsScroll.ScrollToBottom();
+        var saveDetails = Find<Button>("BtnSaveClipDetails");
+        saveDetails.BringIntoView();
+        ProductFrame("66-clip-details-minimum-save.png", 720, 480, "Expanded details scroll to actual Save action at minimum size");
+        Rect saveBounds = saveDetails.TransformToAncestor(detailsScroll).TransformBounds(new Rect(saveDetails.RenderSize));
+        bool saveReachable = ProductContains(new Rect(detailsScroll.RenderSize), saveBounds);
+        observations.Add(new { ExpandedLibraryDetails = true, SaveReachable = saveReachable,
+            DetailsViewportHeight = detailsScroll.ViewportHeight, DetailsScrollHeight = detailsScroll.ScrollableHeight,
+            HeaderViewportHeight = headerScroll.ViewportHeight, HeaderScrollHeight = headerScroll.ScrollableHeight });
+        if (!saveReachable || detailsScroll.ViewportHeight <= 0 || !double.IsFinite(detailsScroll.ViewportHeight) ||
+            headerScroll.ViewportHeight <= 0 || !double.IsFinite(headerScroll.ViewportHeight))
+            throw new InvalidOperationException("Expanded library controls are not reachable in finite scroll viewports.");
+        Split();
         vm.TagsDraft = vm.SelectedClip!.TagsText; // Discard the draft before later navigation.
         details.IsExpanded = false;
         Invoke("EditorTool_Click", Find<Button>("ToolTrim"), new RoutedEventArgs());

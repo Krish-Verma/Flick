@@ -38,6 +38,20 @@ internal static class OrganizationEditorAssertions
             vm.TagsDraft = "Clutch, clutch, Team"; vm.GameDraft = "Fixture Game";
             Assert.True(vm.HasUnsavedOrganization); Assert.True(vm.SaveOrganization()); Assert.False(vm.HasUnsavedOrganization);
             Assert.Equal(new[] { "Clutch", "Team" }, first.Tags);
+            string savedTags = vm.TagsDraft, savedGame = vm.GameDraft;
+            vm.TagsDraft = "temporary tag"; Assert.True(vm.HasUnsavedOrganization);
+            Assert.Equal("Clip details not saved", vm.EditorSaveState);
+            vm.TagsDraft = savedTags; Assert.False(vm.HasUnsavedOrganization);
+            Assert.Equal("Clip details saved", vm.EditorSaveState);
+            vm.GameDraft = "Temporary game"; Assert.True(vm.HasUnsavedOrganization);
+            vm.GameDraft = savedGame; Assert.False(vm.HasUnsavedOrganization);
+            Assert.Equal("Clip details saved", vm.EditorSaveState);
+            // Reverting a draft must not replace the outcome of a different edit.
+            vm.GameDraft = "Temporary game"; vm.ScheduleAudioEdit();
+            Assert.Equal("Saving audio mix…", vm.EditorSaveState);
+            vm.GameDraft = savedGame; Assert.False(vm.HasUnsavedOrganization);
+            Assert.Equal("Saving audio mix…", vm.EditorSaveState);
+            vm.FlushPendingAudioEdits();
             Assert.True(vm.ApplyTrim(1, 8)); Assert.Contains("saved", vm.EditorSaveState);
             Assert.True(vm.UndoTrim()); Assert.Equal(0, first.TrimStartSeconds); Assert.Equal(10, first.TrimEndSeconds);
             Assert.True(vm.AddMarker(2.25)); Assert.False(vm.AddMarker(11)); Assert.Single(first.Markers);
@@ -68,8 +82,12 @@ internal static class OrganizationEditorAssertions
             second.Markers = [new(2.25, "")]; vm.RemoveMarker(first.Markers[0]); Assert.Single(second.Markers);
             vm.SelectedClip = first;
             string blocked = Path.Combine(metadata, "clips_index.json.tmp"); Directory.CreateDirectory(blocked);
+            vm.TagsDraft = "temporary tag";
             Assert.False(vm.ApplyTrim(2, 7)); Assert.Equal(0, first.TrimStartSeconds); Assert.Equal(10, first.TrimEndSeconds);
             Assert.Contains("Couldn't save", vm.EditorSaveState);
+            string trimError = vm.EditorSaveState;
+            vm.TagsDraft = first.TagsText; Assert.False(vm.HasUnsavedOrganization);
+            Assert.Equal(trimError, vm.EditorSaveState);
             Directory.Delete(blocked);
             Assert.Equal(bytes, File.ReadAllBytes(source));
             File.Delete(source); vm.ReloadClips();
