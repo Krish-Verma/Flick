@@ -572,6 +572,7 @@ public class SettingsStagingTests
                     Assert.True(escape.Handled);
                     Assert.Equal(Visibility.Collapsed, healthPanel.Visibility);
                     workspacePage.Visibility = Visibility.Collapsed;
+                    OrganizationEditorAssertions.Run(vm);
                 }
                 finally { vm.Dispose(); }
                 app.Shutdown();

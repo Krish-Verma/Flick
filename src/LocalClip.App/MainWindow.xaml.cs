@@ -72,6 +72,7 @@ public partial class MainWindow : Window
         DataContext = _vm;
         _notificationService = new FlickNotificationService(Dispatcher);
         _vm.ConfirmTargetReset = ConfirmSourceReset;
+        _vm.ConfirmDiscardEditorChanges = ConfirmDiscardOrganization;
         _vm.DiagnosticReservationAllowed = () => !_updateInstallInProgress && !_quitInProgress && !_isRealClosing;
         _vm.ClipSavedConfirmed += OnClipSavedConfirmed;
         _vm.ReplaySaveFailed += OnReplaySaveFailed;
@@ -424,6 +425,7 @@ public partial class MainWindow : Window
     private async void RealQuit()
     {
         if (_quitInProgress || _isRealClosing) return;
+        if (!ConfirmDiscardOrganization()) return;
         _quitInProgress = true;
         bool wasEnabled = IsEnabled;
         IsEnabled = false;
@@ -479,6 +481,7 @@ public partial class MainWindow : Window
         _playerTimer.Stop();
         CancelPendingPreview();
         _vm.ConfirmTargetReset = null;
+        _vm.ConfirmDiscardEditorChanges = null;
         FlickBackdropService.Reset(this);
         _vm.ClipSavedConfirmed -= OnClipSavedConfirmed;
         _vm.ReplaySaveFailed -= OnReplaySaveFailed;
@@ -896,6 +899,7 @@ public partial class MainWindow : Window
             return;
         }
         if (WorkspacePageLayer.Visibility == Visibility.Visible) return;
+        if (HandleEditorShortcut(e)) { e.Handled = true; return; }
         if (e.Key == Key.Escape && EditorContextLayer.Visibility == Visibility.Visible)
         {
             CloseEditorContext();
@@ -917,6 +921,7 @@ public partial class MainWindow : Window
 
     private void SuspendPlayback(bool clearSource)
     {
+        _vm.ClearFilmstrip();
         if (clearSource) CancelPendingPreview();
         _playerTimer.Stop();
         if (VideoPlayer is null) return;
@@ -993,6 +998,7 @@ public partial class MainWindow : Window
         var clip = _vm.SelectedClip;
         TrimTimeline.SetRange(clip?.DurationSeconds ?? 0,
             clip?.TrimStartSeconds ?? 0, clip?.TrimEndSeconds ?? 0);
+        PlayerSlider.Maximum = Math.Max(.25, clip?.DurationSeconds ?? 0);
         BtnPlayPause.IsEnabled = clip?.IsAvailable == true;
         BtnPreviewMode.IsEnabled = clip?.IsAvailable == true;
         BtnBuildPreview.IsEnabled = clip?.IsAvailable == true;
@@ -1109,6 +1115,7 @@ public partial class MainWindow : Window
 
     private void CloseEditorContext()
     {
+        _vm.ClearFilmstrip();
         EditorContextLayer.Visibility = Visibility.Collapsed;
         TrimPanel.Visibility = AudioPanel.Visibility = SharePanel.Visibility = Visibility.Collapsed;
         AudioExpander.IsExpanded = false;
@@ -1204,6 +1211,7 @@ public partial class MainWindow : Window
     {
         if (_isDraggingSlider || !VideoPlayer.NaturalDuration.HasTimeSpan) return;
         PlayerSlider.Value = VideoPlayer.Position.TotalSeconds;
+        TrimTimeline.SetPlayhead(OriginalPlayhead);
         var position = VideoPlayer.Position;
         var length = VideoPlayer.NaturalDuration.TimeSpan;
         TxtPlayerTime.Text = position.ToString(position.TotalHours >= 1 ? @"h\:mm\:ss" : @"m\:ss") +

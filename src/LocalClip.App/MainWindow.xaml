@@ -107,7 +107,7 @@
                             <Button Grid.Column="1" Content="Import Folder" ContentTemplate="{StaticResource Flick.IconText.Add}" Style="{StaticResource Flick.Button.Secondary}" FontSize="12" Padding="9,0" MinWidth="0" MinHeight="32" Click="BtnImportFolder_Click" ToolTip="Link clips already saved by other recording software"/>
                         </Grid>
                         <Grid Margin="0,0,0,10">
-                            <TextBox x:Name="TxtClipSearch" Style="{StaticResource Flick.Input.Text}" Text="{Binding SearchQuery, UpdateSourceTrigger=PropertyChanged, Delay=180}" ToolTip="Search clip titles and local source names"/>
+                            <TextBox x:Name="TxtClipSearch" Style="{StaticResource Flick.Input.Text}" Text="{Binding SearchQuery, UpdateSourceTrigger=PropertyChanged, Delay=180}" ToolTip="Search titles, games, source names and tags; use #tag"/>
                             <TextBlock Text="Search Clips…" Foreground="{DynamicResource Flick.Brush.TextMuted}" Margin="11,0,0,0" VerticalAlignment="Center" IsHitTestVisible="False">
                                 <TextBlock.Style>
                                     <Style TargetType="TextBlock">
@@ -128,6 +128,19 @@
                                 <RadioButton x:Name="RadioImportedClips" Content="Imported" Style="{StaticResource Flick.Library.FilterChip}" GroupName="LibrarySources" Checked="LibraryFilter_Checked"/>
                             </StackPanel>
                         </Border>
+                        <Grid Margin="0,10,0,0">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="8"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                            <StackPanel><TextBlock Text="Game" Style="{StaticResource Flick.Text.Caption}" Margin="0,0,0,4"/>
+                                <ComboBox ItemsSource="{Binding GameGroups}" SelectedItem="{Binding GameFilter}" Style="{StaticResource Flick.Input.Combo}" AutomationProperties.Name="Filter by Game"/>
+                            </StackPanel>
+                            <StackPanel Grid.Column="2"><TextBlock Text="Sort" Style="{StaticResource Flick.Text.Caption}" Margin="0,0,0,4"/>
+                                <ComboBox ItemsSource="{Binding LibrarySortChoices}" SelectedItem="{Binding LibrarySort}" Style="{StaticResource Flick.Input.Combo}" AutomationProperties.Name="Sort Clips"/>
+                            </StackPanel>
+                        </Grid>
+                        <Grid Margin="0,9,0,0"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="100"/></Grid.ColumnDefinitions>
+                            <CheckBox Content="Favorites only" IsChecked="{Binding FavoritesOnly}" Style="{StaticResource Flick.Input.CheckBox}"/>
+                            <ComboBox Grid.Column="1" ItemsSource="{Binding LibraryPeriodChoices}" SelectedItem="{Binding LibraryPeriod}" Style="{StaticResource Flick.Input.Combo}" AutomationProperties.Name="Filter Clip Date"/>
+                        </Grid>
                     </StackPanel>
 
                     <!-- Virtualized clip rows; imported media stays in place. -->
@@ -135,6 +148,7 @@
                         <ListBox x:Name="ClipList" ItemsSource="{Binding FilteredClips}" SelectedItem="{Binding SelectedClip, Mode=TwoWay}" Style="{StaticResource Flick.Library.List}" PreviewMouseRightButtonDown="ClipList_PreviewMouseRightButtonDown">
                             <ListBox.ContextMenu>
                                 <ContextMenu>
+                                    <MenuItem Header="Toggle Favorite" Click="ToggleFavorite_Click"/>
                                     <MenuItem Header="Rename Clip" Click="BtnRename_Click"/>
                                     <MenuItem Header="Open Original Folder" Click="BtnOpenMediaFolder_Click"/>
                                     <Separator/>
@@ -146,6 +160,10 @@
                             </ListBox.ItemContainerStyle>
                             <ListBox.ItemTemplate>
                                 <DataTemplate>
+                                    <StackPanel>
+                                    <TextBlock Text="{Binding GameGroup}" Margin="7,10,0,2" TextTrimming="CharacterEllipsis">
+                                        <TextBlock.Style><Style TargetType="TextBlock" BasedOn="{StaticResource Flick.Text.Caption}"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding ShowGameHeading}" Value="True"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></TextBlock.Style>
+                                    </TextBlock>
                                     <Grid Height="62" Margin="7,3">
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="78"/>
@@ -156,7 +174,7 @@
                                         </Border>
                                         <StackPanel Grid.Column="1" Margin="9,0,0,0" VerticalAlignment="Center" MinWidth="0">
                                             <TextBlock Text="{Binding Title}" Style="{StaticResource Flick.Text.Control}" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" ToolTip="{Binding Title}"/>
-                                            <TextBlock Text="{Binding LibrarySource}" Style="{StaticResource Flick.Text.Caption}" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" Margin="0,2,0,0"/>
+                                            <TextBlock Text="{Binding OrganizationSummary}" Style="{StaticResource Flick.Text.Caption}" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" Margin="0,2,0,0" ToolTip="{Binding TagsText}"/>
                                             <DockPanel Margin="0,3,0,0" LastChildFill="False">
                                                 <TextBlock Text="{Binding FormattedDuration}" Style="{StaticResource Flick.Text.Caption}"/>
                                                 <TextBlock Text="{Binding LibraryStatus}" HorizontalAlignment="Right" DockPanel.Dock="Right">
@@ -173,6 +191,7 @@
                                             </DockPanel>
                                         </StackPanel>
                                     </Grid>
+                                    </StackPanel>
                                 </DataTemplate>
                             </ListBox.ItemTemplate>
                         </ListBox>
@@ -191,6 +210,19 @@
                     </Grid>
 
                     <StackPanel Grid.Row="2" Margin="0,10,0,0">
+                        <Expander Header="Clip details" IsEnabled="{Binding CanOrganizeClip}" Style="{StaticResource Flick.Expander.Disclosure}" Margin="0,0,0,8">
+                            <StackPanel Margin="0,8,0,0">
+                                <TextBlock Text="Game label" Style="{StaticResource Flick.Text.Caption}" Margin="0,0,0,4"/>
+                                <TextBox Text="{Binding GameDraft, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource Flick.Input.Text}" MaxLength="80" AutomationProperties.Name="Clip Game Label"/>
+                                <TextBlock Text="Tags · comma separated" Style="{StaticResource Flick.Text.Caption}" Margin="0,8,0,4"/>
+                                <TextBox Text="{Binding TagsDraft, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource Flick.Input.Text}" MaxLength="400" AutomationProperties.Name="Clip Tags"/>
+                                <WrapPanel Margin="0,8,0,0">
+                                    <Button Content="Save details" Click="SaveOrganization_Click" IsEnabled="{Binding HasUnsavedOrganization}" Style="{StaticResource Flick.Button.Secondary}" Padding="9,0" Margin="0,0,8,0"/>
+                                    <Button Content="Favorite" Click="ToggleFavorite_Click" Style="{StaticResource Flick.Button.Ghost}" Padding="9,0"/>
+                                </WrapPanel>
+                                <TextBlock Text="{Binding EditorSaveState}" Style="{StaticResource Flick.Text.Caption}" TextWrapping="Wrap" Margin="0,8,0,0"/>
+                            </StackPanel>
+                        </Expander>
                         <TextBlock Text="{Binding LibrarySummaryText}" Style="{StaticResource Flick.Text.Muted}" TextTrimming="CharacterEllipsis" Margin="0,0,0,7"/>
                         <Grid>
                             <Grid.ColumnDefinitions>
@@ -345,7 +377,39 @@
                                     </TextBlock>
                                 </DockPanel>
                                 <ScrollViewer x:Name="EditorContextScroll" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Focusable="False"><StackPanel x:Name="EditorContextHost"><Border IsEnabled="{Binding CanEditClip}" Background="Transparent" BorderThickness="0" Padding="12" Margin="0,8,0,0" x:Name="TrimPanel" Visibility="Collapsed">
-                            <components:TrimRangeControl x:Name="TrimTimeline" RangeCommitted="TrimTimeline_RangeCommitted"/>
+                            <StackPanel>
+                            <components:TrimRangeControl x:Name="TrimTimeline" RangeCommitted="TrimTimeline_RangeCommitted" RangeChanging="TrimTimeline_RangeChanging" RangeReverted="TrimTimeline_RangeReverted" SeekRequested="TrimTimeline_SeekRequested"/>
+                            <WrapPanel Margin="0,10,0,0">
+                                <Button Content="Set In (I)" Click="SetTrimIn_Click" Style="{StaticResource Flick.Button.Secondary}" Margin="0,0,8,6" Padding="9,0"/>
+                                <Button Content="Set Out (O)" Click="SetTrimOut_Click" Style="{StaticResource Flick.Button.Secondary}" Margin="0,0,8,6" Padding="9,0"/>
+                                <Button Content="Undo trim" Click="UndoTrim_Click" IsEnabled="{Binding CanUndoTrim}" Style="{StaticResource Flick.Button.Ghost}" Margin="0,0,8,6" Padding="9,0"/>
+                                <Button Content="Add marker (M)" Click="AddMarker_Click" Style="{StaticResource Flick.Button.Ghost}" Margin="0,0,0,6" Padding="9,0"/>
+                            </WrapPanel>
+                            <TextBlock Text="{Binding EditorSaveState}" Style="{StaticResource Flick.Text.Caption}" TextWrapping="Wrap" Margin="0,4,0,8"/>
+                            <ItemsControl ItemsSource="{Binding ClipMarkers}">
+                                <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate><DataTemplate>
+                                    <Button Content="{Binding DisplayText}" Tag="{Binding}" Click="SeekMarker_Click" Style="{StaticResource Flick.Button.Ghost}" Padding="8,0" Margin="0,0,6,6" ToolTip="Jump to marker; right-click to remove">
+                                        <Button.ContextMenu><ContextMenu><MenuItem Header="Remove marker" Click="RemoveMarker_Click"/></ContextMenu></Button.ContextMenu>
+                                    </Button>
+                                </DataTemplate></ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <Expander Header="Preview frames" Style="{StaticResource Flick.Expander.Disclosure}" Margin="0,8,0,0">
+                                <StackPanel Margin="0,8,0,0">
+                                    <Button Content="Load six frames" Click="LoadFilmstrip_Click" IsEnabled="{Binding CanLoadFilmstrip}" Style="{StaticResource Flick.Button.Secondary}" HorizontalAlignment="Left" Margin="0,0,0,8"/>
+                                    <ItemsControl ItemsSource="{Binding FilmstripFrames}">
+                                        <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                                        <ItemsControl.ItemTemplate><DataTemplate>
+                                            <Button Tag="{Binding}" Click="SeekFrame_Click" Style="{StaticResource Flick.Button.Ghost}" Padding="3" Margin="0,0,6,6">
+                                                <StackPanel><Image Source="{Binding Image}" Width="96" Height="54" Stretch="Uniform"/><TextBlock Text="{Binding Label}" Style="{StaticResource Flick.Text.Caption}" HorizontalAlignment="Center"/></StackPanel>
+                                            </Button>
+                                        </DataTemplate></ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                    <TextBlock Text="{Binding FilmstripStatusText}" Style="{StaticResource Flick.Text.Muted}" TextWrapping="Wrap"/>
+                                </StackPanel>
+                            </Expander>
+                            <TextBlock Text="Left/Right seek · Ctrl+Left/Right 5s · Home/End · I/O trim · M marker · Ctrl+Z undo trim. Shortcuts do not run while typing." Style="{StaticResource Flick.Text.Muted}" TextWrapping="Wrap" Margin="0,10,0,0"/>
+                            </StackPanel>
                         </Border><Border Background="Transparent" BorderThickness="0" Padding="6,3" x:Name="AudioPanel" Visibility="Collapsed" Margin="0,8,0,0">
                             <Expander x:Name="AudioExpander" Style="{StaticResource Flick.Expander.Disclosure}" IsEnabled="{Binding CanEditClip}" Header="Export Audio" IsExpanded="False" Foreground="{DynamicResource Flick.Brush.TextPrimary}" Background="Transparent" Padding="4">
                                 <StackPanel Margin="5,8,5,8">

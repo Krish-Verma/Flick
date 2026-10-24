@@ -1,10 +1,10 @@
 # D — Editing, organization and export speed
 
-Status: planned. Owner: Flick implementation lead. Umbrella: #36. Updated: 2026-10-24.
+Status: implemented in the D workstream branch; integration and Windows acceptance gates pending. Owner: Flick implementation lead. Umbrella: #36. Updated: 2026-10-24.
 
 ## Existing behavior
 
-Atomic JSON library with imports, offline references, trim/audio persistence and validated size-constrained exports exists. No favorites/tags/game grouping/markers/aspect presets. Library filtering performs synchronous file checks.
+The existing atomic library, imported ownership, immutable originals, trim/audio persistence and validated exports are preserved. D adds local organization, timeline navigation, optional bounded frames and fitted export shapes. Search uses cached availability instead of probing files for every keystroke. See [implementation and evidence](D-EDITING-ORGANIZATION.md).
 
 ## Technical boundary
 
@@ -12,13 +12,13 @@ ClipMetadata, ClipStorage, MainViewModel, MainWindow, TrimTimeline and ClipExpor
 
 ## Slice tracker
 
-- [ ] D1 — Favorites tags and game organization
+- [ ] D1 — Favorites tags and game organization — implemented; focused policy tests pass, Windows interaction pending
 
-- [ ] D2 — Timeline shortcuts and edit state
+- [ ] D2 — Timeline shortcuts and edit state — implemented; focused trim tests pass, Windows interaction pending
 
-- [ ] D3 — Bounded preview navigation
+- [ ] D3 — Bounded preview navigation — implemented; decoder/cancellation tests authored and compiled, Windows execution pending
 
-- [ ] D4 — Export workflow and aspect presets
+- [ ] D4 — Export workflow and aspect presets — implemented; focused policy tests pass, two real-media cases pending Windows execution
 
 ## D1 — Favorites tags and game organization
 

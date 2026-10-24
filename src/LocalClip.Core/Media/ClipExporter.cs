@@ -65,6 +65,8 @@ public class ClipExporter
         string? temporaryFileToDelete = null;
         try
         {
+        if (!ExportAspectPresets.IsValid(clip.ExportAspectPreset))
+            return new ExportResult { Success = false, ErrorMessage = "Choose a supported export aspect preset." };
         if (!File.Exists(clip.OriginalFilePath))
         {
             return new ExportResult { Success = false, ErrorMessage = "Original file does not exist: " + clip.OriginalFilePath };
@@ -86,7 +88,8 @@ public class ClipExporter
             startSec,
             endSec,
             clip.AudioTracks,
-            settings.DiscordTargetSizeMb
+            settings.DiscordTargetSizeMb,
+            clip.ExportAspectPreset
         );
 
         long targetCapBytes = BitrateBudgetCalculator.TargetMbToBytes(settings.DiscordTargetSizeMb);
@@ -95,7 +98,7 @@ public class ClipExporter
         if (string.IsNullOrWhiteSpace(exportsDir))
             exportsDir = Path.Combine(Path.GetDirectoryName(clip.OriginalFilePath)!, "..", "Exports");
         string finalExportPath = Path.Combine(exportsDir,
-            ShareExportNaming.ForOriginal(clip.OriginalFilePath, settings.DiscordTargetSizeMb));
+            ShareExportNaming.ForOriginal(clip.OriginalFilePath, settings.DiscordTargetSizeMb, clip.ExportAspectPreset));
 
         // Never reuse an old export at a different destination or one with a
         // legacy filename that another imported clip may have overwritten.
@@ -108,7 +111,7 @@ public class ClipExporter
         {
             long existingSize = new FileInfo(clip.ExportedFilePath).Length;
             if (existingSize <= targetCapBytes &&
-                IsValidShareMedia(await ProbeExportAsync(clip.ExportedFilePath, ct), duration) &&
+                IsValidShareMedia(await ProbeExportAsync(clip.ExportedFilePath, ct), duration, clip.ExportAspectPreset) &&
                 await VerifyFullDecodeAsync(clip.ExportedFilePath, ct))
             {
                 return new ExportResult
@@ -154,6 +157,9 @@ public class ClipExporter
                 retryAttempt: attempt - 1,
                 previousOvershootBytes: previousOvershoot
             );
+            (budget.RecommendedWidth, budget.RecommendedHeight) = ExportAspectPresets.Canvas(
+                clip.ExportAspectPreset, budget.RecommendedWidth, budget.RecommendedHeight);
+            budget.AspectPreset = clip.ExportAspectPreset;
 
             // Audio filter graph for mixing enabled tracks
             string audioFilter = BuildAudioMixFilter(clip.AudioTracks);
@@ -228,7 +234,9 @@ public class ClipExporter
             });
 
             var probeOut = await ProbeExportAsync(tempExportPath, ct);
-            if (!IsValidShareMedia(probeOut, duration))
+            if (!IsValidShareMedia(probeOut, duration, clip.ExportAspectPreset) ||
+                clip.ExportAspectPreset != ExportAspectPresets.Original &&
+                (probeOut.Width != budget.RecommendedWidth || probeOut.Height != budget.RecommendedHeight))
             {
                 try { File.Delete(tempExportPath); } catch { }
                 return new ExportResult
@@ -308,12 +316,13 @@ public class ClipExporter
         }
     }
 
-    private static bool IsValidShareMedia(ProbeResult media, double requestedDuration) =>
+    private static bool IsValidShareMedia(ProbeResult media, double requestedDuration, string aspectPreset) =>
         media.IsValid &&
         media.VideoCodec.Equals("h264", StringComparison.OrdinalIgnoreCase) &&
         media.AudioTracks.Count == 1 &&
         media.AudioTracks[0].Codec.Equals("aac", StringComparison.OrdinalIgnoreCase) &&
-        Math.Abs(media.DurationSeconds - requestedDuration) <= 1.0;
+        Math.Abs(media.DurationSeconds - requestedDuration) <= 1.0 &&
+        ExportAspectPresets.MatchesDimensions(aspectPreset, media.Width, media.Height);
 
     public static string BuildAudioMixFilter(List<AudioTrackInfo>? tracks)
     {
@@ -379,9 +388,9 @@ public class ClipExporter
         // Imported videos may be rotated or use odd coded dimensions. Preserve
         // their displayed aspect ratio and produce even YUV420-compatible output
         // rather than stretching a portrait frame or repeatedly failing x264.
-        string scaleFilter = $"scale={budget.RecommendedWidth}:{budget.RecommendedHeight}:force_original_aspect_ratio=decrease:force_divisible_by=2";
+        string scaleFilter = ExportAspectPresets.VideoFilter(budget.AspectPreset, budget.RecommendedWidth, budget.RecommendedHeight);
 
-        string filterComplex = $"[0:v]{scaleFilter},format=yuv420p[outv];{audioFilter}";
+        string filterComplex = $"[0:v]{scaleFilter}[outv];{audioFilter}";
 
         var args = new StringBuilder();
         args.Append($"-hide_banner -loglevel error -nostats -y -ss {startStr} -t {durStr} -i \"{inputPath}\" ");

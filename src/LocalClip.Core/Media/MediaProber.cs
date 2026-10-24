@@ -14,6 +14,8 @@ using LocalClip.Core.Rules;
 
 namespace LocalClip.Core.Media;
 
+public sealed class MediaWorkerExitUnconfirmedException(string message) : IOException(message);
+
 public class ProbeResult
 {
     public double DurationSeconds { get; set; }
@@ -217,7 +219,7 @@ public class MediaProber
                     CultureInfo.InvariantCulture, out rotation)) && double.IsFinite(rotation);
     }
 
-    public async Task<string> GenerateThumbnailAsync(string videoPath, string outputThumbnailPath,
+    public virtual async Task<string> GenerateThumbnailAsync(string videoPath, string outputThumbnailPath,
         double positionSec = 1.0, CancellationToken cancellationToken = default)
     {
         string dir = Path.GetDirectoryName(outputThumbnailPath)!;
@@ -248,6 +250,9 @@ public class MediaProber
         if (!job.AssignProcess(proc) && !proc.HasExited)
         {
             try { if (!proc.HasExited) proc.Kill(entireProcessTree: true); } catch { }
+            using var confinementCleanup = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            try { await proc.WaitForExitAsync(confinementCleanup.Token); }
+            catch (OperationCanceledException) { throw new MediaWorkerExitUnconfirmedException("Unconfined thumbnail worker exit could not be confirmed within five seconds."); }
             throw new InvalidOperationException("Failed to confine thumbnail worker");
         }
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(15));
@@ -257,8 +262,21 @@ public class MediaProber
             try { if (!proc.HasExited) proc.Kill(entireProcessTree: true); }
             catch { }
         });
-        await proc.WaitForExitAsync(linked.Token);
-        return proc.ExitCode == 0 && File.Exists(outputThumbnailPath) ? outputThumbnailPath : "";
+        try
+        {
+            await proc.WaitForExitAsync(linked.Token);
+            return proc.ExitCode == 0 && File.Exists(outputThumbnailPath) ? outputThumbnailPath : "";
+        }
+        catch (OperationCanceledException)
+        {
+            try { if (!proc.HasExited) proc.Kill(entireProcessTree: true); } catch { }
+            job.Dispose();
+            using var cleanup = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            try { await proc.WaitForExitAsync(cleanup.Token); }
+            catch (OperationCanceledException) { throw new MediaWorkerExitUnconfirmedException("Thumbnail worker exit could not be confirmed within five seconds."); }
+            cancellationToken.ThrowIfCancellationRequested();
+            throw new TimeoutException("Thumbnail generation reached its time limit.");
+        }
     }
     /// <summary>
     /// Explicit, on-demand WPF-compatible preview for MKVs that the Windows

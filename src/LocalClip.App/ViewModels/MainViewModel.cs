@@ -34,7 +34,7 @@ public class TargetItem
     public override string ToString() => DisplayName;
 }
 
-public class MainViewModel : INotifyPropertyChanged, IDisposable
+public partial class MainViewModel : INotifyPropertyChanged, IDisposable
 {
     private readonly AppSettings _settings;
     private readonly CaptureHostClient _captureHost;
@@ -74,11 +74,11 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
     private TaskCompletionSource? _recordingDiagnosticCompletion;
     public bool IsRecordingDiagnosticRunning => _isRecordingDiagnosticRunning;
     public bool DiagnosticHelperNeedsRestart => _diagnosticCleanupUnconfirmed;
-    public bool CanChangeCaptureSource => !_isRecordingDiagnosticRunning && !_isPreparingToQuit && !_diagnosticCleanupUnconfirmed;
+    public bool CanChangeCaptureSource => !_isRecordingDiagnosticRunning && !_isPreparingToQuit && !_diagnosticCleanupUnconfirmed && !_filmstripCleanupUnconfirmed;
     public bool CanControlReplay => CanChangeCaptureSource && !_refreshingTargets;
     public Func<bool>? DiagnosticReservationAllowed { get; set; }
     public bool CanRunRecordingDiagnostic => !_diagnosticsDisposed && !_isPreparingToQuit &&
-        !_isRecordingDiagnosticRunning && !_diagnosticCleanupUnconfirmed && !_refreshingTargets && !CaptureActive && _stopCaptureTask == null &&
+        !_isRecordingDiagnosticRunning && !_diagnosticCleanupUnconfirmed && !_filmstripCleanupUnconfirmed && !_refreshingTargets && !CaptureActive && _stopCaptureTask == null &&
         !IsReplaySavePending && !IsImporting && !IsExporting && !_isExportingDiagnostics &&
         Volatile.Read(ref _discordUploadOperations) == 0 && Volatile.Read(ref _libraryRescanOperations) == 0 &&
         !_pollInProgress && SelectedTarget != null && Targets.Contains(SelectedTarget) &&
@@ -172,6 +172,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
             return;
         }
         _isRecordingDiagnosticRunning = true; // Reserve before the first await.
+        ClearFilmstrip();
         _recordingDiagnosticCancelling = false;
         _diagnosticTestStatus = "Starting the confirmed recording test…";
         _diagnosticTestDetails = "Audio is captured only as described in the confirmed test.";
@@ -183,6 +184,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
         PublishDiagnosticTest();
         try
         {
+            if (!await StopFilmstripAsync()) throw new InvalidOperationException("Preview frames are still stopping. Wait before testing recording.");
             var runner = new RecordingDiagnosticRunner(_ => new NativeRecordingDiagnosticLease(),
                 async (frozen, replay, token) => await _storage.RegisterNewOriginalAsync(
                     replay.FilePath, frozen.Source.Name, replay.TrackNames, token).ConfigureAwait(false));
@@ -518,10 +520,10 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
     // These operations outlive their initiating page. The updater also checks
     // the separate capture/save/import/export flags before closing the app.
     public bool IsBackgroundWorkActive => Volatile.Read(ref _discordUploadOperations) > 0
-        || Volatile.Read(ref _libraryRescanOperations) > 0 || _isExportingDiagnostics || _isRecordingDiagnosticRunning;
+        || Volatile.Read(ref _libraryRescanOperations) > 0 || _isExportingDiagnostics || _isRecordingDiagnosticRunning || _isLoadingFilmstrip || _filmstripCleanupUnconfirmed;
     public bool IsCaptureActive => CaptureActive || _isRecordingDiagnosticRunning || _diagnosticCleanupUnconfirmed;
     public bool CanEditClip => SelectedClip?.IsAvailable == true && !IsExporting;
-    public bool CanStartExport => CanEditClip && !IsImporting && !_isRecordingDiagnosticRunning && !_isPreparingToQuit && !_diagnosticCleanupUnconfirmed;
+    public bool CanStartExport => CanEditClip && !IsImporting && !_isRecordingDiagnosticRunning && !_isPreparingToQuit && !_diagnosticCleanupUnconfirmed && !_filmstripCleanupUnconfirmed;
     // WPF shell supplies consent before an active source change discards replay.
     public Func<bool>? ConfirmTargetReset { get; set; }
     public CaptureHostClient CaptureHost => _captureHost;
@@ -701,9 +703,13 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
         {
             if (_selectedClip != value)
             {
+                if (value == null && _applyingLibraryFilter) return;
+                if (_selectedClip != null && value != null && HasUnsavedOrganization && ConfirmDiscardEditorChanges?.Invoke() != true)
+                { OnPropertyChanged(); return; }
                 FlushPendingAudioEdits();
                 UnsubscribeAudioEvents();
                 _selectedClip = value;
+                OrganizationSelectionChanged();
                 SubscribeAudioEvents();
                 OnPropertyChanged();
                 OnPropertyChanged(nameof(CanEditClip));
@@ -944,7 +950,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
 
     public async Task StartCaptureAsync()
     {
-        if (_isRecordingDiagnosticRunning || _isPreparingToQuit || _diagnosticCleanupUnconfirmed || _refreshingTargets) return;
+        if (_isRecordingDiagnosticRunning || _isPreparingToQuit || _diagnosticCleanupUnconfirmed || _filmstripCleanupUnconfirmed || _refreshingTargets) return;
         if (CaptureActive || _stopCaptureTask != null) return;
         if (SelectedTarget is null || !Targets.Contains(SelectedTarget))
         {
@@ -957,6 +963,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
         // Never let folder indexing compete with the live gameplay encoder.
         _importCancellation?.Cancel();
         _thumbnailCancellation?.Cancel();
+        ClearFilmstrip();
         _captureEpoch++;
         _healthSession = _health.BeginSession(new RecordingSource(SelectedTarget.Type,
             SelectedTarget.DisplayName, SelectedTarget.Exe));
@@ -967,6 +974,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
         Guid startingSession = _healthSession;
         try
         {
+            if (!await StopFilmstripAsync()) throw new InvalidOperationException("Preview frames are still stopping. Wait before starting replay.");
             bool started = await _captureHost.StartCaptureAsync(_settings);
             if (startingEpoch != _captureEpoch || startingSession != _healthSession) return;
             if (!started)
@@ -1023,6 +1031,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
 
     public async Task<bool> PrepareToQuitAsync()
     {
+        ClearFilmstrip();
         _isPreparingToQuit = true;
         PublishDiagnosticTest();
         // A timer tick must not restart an exited helper during finalization.
@@ -1030,6 +1039,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
         bool ready = false;
         try
         {
+            if (!await StopFilmstripAsync(allowUnconfirmedShutdown: true)) return false;
             CancelRecordingDiagnostic();
             if (_recordingDiagnosticCompletion is { } test)
             {
@@ -1523,11 +1533,14 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
             Math.Abs(SelectedClip.TrimEndSeconds - validated.ValidatedEnd) < 1e-6) return true;
         var oldStart = SelectedClip.TrimStartSeconds;
         var oldEnd = SelectedClip.TrimEndSeconds;
+        bool wasReady = SelectedClip.IsExportReady;
         SelectedClip.TrimStartSeconds = validated.ValidatedStart;
         SelectedClip.TrimEndSeconds = validated.ValidatedEnd;
         try
         {
             SaveClipEdits();
+            RememberTrim(oldStart, oldEnd);
+            EditorSaveState = "Trim saved · original unchanged";
             StatusDetails = "Trim Saved · The Original Video Is Unchanged";
             return true;
         }
@@ -1535,6 +1548,9 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
         {
             SelectedClip.TrimStartSeconds = oldStart;
             SelectedClip.TrimEndSeconds = oldEnd;
+            SelectedClip.IsExportReady = wasReady;
+            OnSelectedClipChanged();
+            EditorSaveState = "Couldn't save trim · previous range restored";
             StatusDetails = "Couldn't Save Trim: " + ex.Message;
             return false;
         }
@@ -1598,6 +1614,8 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
     {
         string? selectedId = SelectedClip?.Id;
         _allClips = _storage.GetAllClips();
+        foreach (var clip in _allClips) clip.RefreshAvailability();
+        RefreshOrganizationFacets();
         ApplyFilter();
         if (selectedId != null)
         {
@@ -1612,20 +1630,18 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
 
     public void ApplyFilter()
     {
-        var query = _searchQuery.Trim();
-        var visible = new System.Collections.Generic.List<ClipMetadata>();
-        foreach (var clip in _allClips)
+        DateTime? after = LibraryPeriod switch { "7 days" => DateTime.Now.AddDays(-7), "30 days" => DateTime.Now.AddDays(-30), _ => null };
+        var visible = ClipLibraryQuery.Apply(_allClips, _searchQuery, _clipSourceFilter, FavoritesOnly, GameFilter, LibrarySort, after);
+        if (LibrarySort == "Recently Exported") visible = visible.Where(clip => _recentExportIds.Contains(clip.Id)).ToList();
+        string? previousGame = null;
+        foreach (var clip in visible)
         {
-            if (_clipSourceFilter == "Flick" && clip.IsImported) continue;
-            if (_clipSourceFilter == "Imported" && !clip.IsImported) continue;
-            if (query.Length != 0 &&
-                !clip.Title.Contains(query, StringComparison.OrdinalIgnoreCase) &&
-                !clip.TargetName.Contains(query, StringComparison.OrdinalIgnoreCase) &&
-                !clip.LibrarySource.Contains(query, StringComparison.OrdinalIgnoreCase))
-                continue;
-            visible.Add(clip);
+            clip.ShowGameHeading = LibrarySort == "Game" && !string.Equals(previousGame, clip.GameGroup, StringComparison.OrdinalIgnoreCase);
+            previousGame = clip.GameGroup;
         }
-        _filteredClips.ReplaceAll(visible);
+        _applyingLibraryFilter = true;
+        try { _filteredClips.ReplaceAll(visible); }
+        finally { _applyingLibraryFilter = false; }
     }
 
     private void OnSelectedClipChanged()
@@ -1696,13 +1712,16 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
         ExportStatusMessage = "Clip edited: Click 'Export for Discord' to create share file.";
         if (SelectedClip != null)
         {
+            bool hadReadyExport = SelectedClip.IsExportReady;
             SelectedClip.IsExportReady = false;
+            if (hadReadyExport) { RefreshRecentExports(); if (LibrarySort == "Recently Exported") ApplyFilter(); }
         }
     }
 
     public async Task ExportForDiscordAsync()
     {
         if (!CanStartExport || SelectedClip is null) return;
+        ClearFilmstrip();
         FlushPendingAudioEdits();
         _importCancellation?.Cancel();
         _thumbnailCancellation?.Cancel();
@@ -1730,6 +1749,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
 
         try
         {
+            if (!await StopFilmstripAsync()) throw new InvalidOperationException("Preview frames are still stopping. Wait before exporting.");
             ExportResult result = await _exporter.ExportForDiscordAsync(
                 clip, snapshot, progress, cancellation.Token);
             if (result.Success)
@@ -1738,7 +1758,10 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
                 clip.ExportedFileSizeBytes = result.FileSizeBytes;
                 clip.LastExportFingerprint = result.Fingerprint;
                 clip.IsExportReady = true;
+                clip.LastExportedAtUtc = DateTimeOffset.UtcNow;
+                clip.LastExportTargetMb = snapshot.DiscordTargetSizeMb;
                 _storage.AddOrUpdateClip(clip);
+                RefreshRecentExports();
                 double mb = result.FileSizeBytes / 1_000_000d;
                 if (SelectedClip?.Id == clip.Id &&
                     _targetSizeMb == snapshot.DiscordTargetSizeMb)
@@ -1917,6 +1940,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
 
     public void Dispose()
     {
+        ClearFilmstrip();
         _exportCancellation?.Cancel();
         FlushPendingAudioEdits();
         UnsubscribeAudioEvents();
@@ -1944,6 +1968,11 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
     protected void OnPropertyChanged([CallerMemberName] string? name = null)
     {
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
+        if (name is nameof(IsCaptureActive) or nameof(CaptureStatus) or nameof(CanEditClip) or nameof(IsExporting))
+        {
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CanLoadFilmstrip)));
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CanUndoTrim)));
+        }
         if (name is nameof(IsBackgroundWorkActive) or nameof(IsReplaySavePending) or nameof(IsImporting) or nameof(IsExporting))
         {
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CanRunRecordingDiagnostic)));

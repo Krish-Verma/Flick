@@ -56,6 +56,23 @@ public class ClipMetadata : INotifyPropertyChanged
     public int Height { get; set; }
     public int Fps { get; set; }
     public string TargetName { get; set; } = "";
+    public bool IsFavorite { get; set; }
+    public List<string> Tags { get; set; } = new();
+    public string GameName { get; set; } = "";
+    public List<ClipMarker> Markers { get; set; } = new();
+    public string ExportAspectPreset { get; set; } = "Original";
+    public DateTimeOffset? LastExportedAtUtc { get; set; }
+    public int LastExportTargetMb { get; set; }
+    [JsonIgnore] public string GameGroup => string.IsNullOrWhiteSpace(GameName)
+        ? (string.IsNullOrWhiteSpace(TargetName) ? "Ungrouped" : TargetName) : GameName;
+    [JsonIgnore] public string TagsText => string.Join(", ", Tags);
+    [JsonIgnore] public string OrganizationSummary => (IsFavorite ? "Favorite · " : "") + GameGroup;
+    private bool _showGameHeading;
+    [JsonIgnore] public bool ShowGameHeading
+    {
+        get => _showGameHeading;
+        set { if (_showGameHeading == value) return; _showGameHeading = value; PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ShowGameHeading))); }
+    }
 
     // Source ownership is explicit: linked/imported media is NEVER deleted by
     // a normal Remove From Library operation.
@@ -69,7 +86,22 @@ public class ClipMetadata : INotifyPropertyChanged
         !string.IsNullOrWhiteSpace(ConnectedFolderId);
 
     [JsonIgnore]
-    public bool IsAvailable => File.Exists(OriginalFilePath);
+    public bool IsAvailable => _available ?? File.Exists(OriginalFilePath);
+    private bool? _available;
+
+    /// <summary>Refresh at library discovery/rescan, never for every search keystroke.</summary>
+    public void RefreshAvailability()
+    {
+        _available = File.Exists(OriginalFilePath);
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsAvailable)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(LibraryStatus)));
+    }
+
+    public void NotifyOrganizationChanged()
+    {
+        foreach (string property in new[] { nameof(IsFavorite), nameof(Tags), nameof(TagsText), nameof(GameName), nameof(GameGroup), nameof(OrganizationSummary), nameof(Markers), nameof(ExportAspectPreset) })
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(property));
+    }
 
     [JsonIgnore]
     public string LibraryStatus => IsAvailable ? (IsImported ? "Imported" : "Flick") : "Offline";
@@ -123,4 +155,16 @@ public class ClipMetadata : INotifyPropertyChanged
             return $"{mb:F1} MB";
         }
     }
+}
+
+public sealed record ClipMarker(double PositionSeconds, string Label)
+{
+    [JsonIgnore] public string DisplayText => LocalClip.Core.Rules.TrimTimelineMath.Format(PositionSeconds) +
+        (string.IsNullOrWhiteSpace(Label) ? "" : " · " + Label);
+}
+
+public sealed record RecentClipExport(string ClipId, string Title, string FilePath, long Bytes,
+    DateTimeOffset CreatedAtUtc, string AspectPreset, int TargetMb)
+{
+    public string Detail => $"{Bytes / 1_000_000d:F2} MB · {LocalClip.Core.Rules.ExportAspectPresets.Label(AspectPreset)}";
 }
