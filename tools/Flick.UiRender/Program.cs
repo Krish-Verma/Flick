@@ -57,6 +57,7 @@ internal static partial class Program
         var root = (FrameworkElement)main.Content;
         var layoutObservations = new List<object>();
         var shareLayoutFailures = new List<string>();
+        var resourceLayoutFailures = new List<string>();
         var consentObservations = new List<object>();
         // The Window normally paints this underneath its content. Rendering
         // Content alone otherwise leaves transparent/black gaps around panels.
@@ -389,9 +390,9 @@ internal static partial class Program
         Render("36-recording-test-failure-minimum.png", 720, 480);
         RenderShareFixtures(main, vm, settings, storage, fixtures, output, Render);
         RenderProductPhaseFixtures(main, vm, settings, storage, fixtures, output, Render);
-        if (shareLayoutFailures.Count != 0)
-            throw new InvalidOperationException("Complete Share content failed to fit without scrolling in " +
-                shareLayoutFailures.Count + " render(s): " + string.Join(", ", shareLayoutFailures));
+        if (shareLayoutFailures.Count != 0 || resourceLayoutFailures.Count != 0)
+            throw new InvalidOperationException("Layout regression(s). Share: " + string.Join(", ", shareLayoutFailures) +
+                "; resources: " + string.Join(", ", resourceLayoutFailures));
         string applicationVersion = typeof(MainWindow).Assembly
             .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? "unknown";
         File.WriteAllText(Path.Combine(output, "PROVENANCE.txt"),
@@ -457,6 +458,14 @@ internal static partial class Program
                 presenter.ActualWidth + roundingTolerance >= captionWidth;
             object? healthLayout = null;
             object? shareLayout = null;
+            var resourceLayout = InspectResourceStatsLayout(main);
+            if (!resourceLayout.Fits)
+            {
+                resourceLayoutFailures.Add(file);
+                File.WriteAllText(Path.Combine(output, "resource-layout-failures.json"),
+                    JsonSerializer.Serialize(new { FailedImages = resourceLayoutFailures, BatchMustFail = true,
+                        DetailFile = "layout-observations.json" }, new JsonSerializerOptions { WriteIndented = true }));
+            }
             string? healthLayoutFailure = null;
             // Descendants keep their local Visibility when Settings hides the
             // workspace. Check the rendered path, not Window.IsVisible: this
@@ -533,6 +542,7 @@ internal static partial class Program
                 requiredButtonWidth = requiredWidth,
                 roundingTolerance,
                 captionFits,
+                resourceLayout = resourceLayout.Observation,
                 healthLayout,
                 shareLayout
             });

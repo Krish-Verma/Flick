@@ -44,6 +44,7 @@ public partial class SettingsStagingTests
                     app.Resources.MergedDictionaries.Add(new ResourceDictionary {
                         Source = new Uri($"/Flick;component/Resources/Theme/Flick.{dictionary}.xaml", UriKind.Relative)
                     });
+                ResourceUsageSettingsAssertions.Run();
                 var settings = AppSettings.CreateDefault();
                 var page = new SettingsWindow(settings, () => false);
                 T Find<T>(string name) => (T)page.FindName(name);
@@ -600,6 +601,7 @@ public partial class SettingsStagingTests
                     OrganizationEditorAssertions.Run(vm);
                     ThumbnailOperationAssertions.Run(vm);
                     SharePresentationAssertions.AssertStaleNotificationsAndSamePathRepair(window, vm);
+                    ResourceSamplingAssertions.RunLastAndDispose(vm);
                 }
                 finally { vm.Dispose(); }
                 app.Shutdown();
