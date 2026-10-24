@@ -279,6 +279,7 @@ public partial class SettingsWindow : UserControl
             ChkSoftwareFallback.IsChecked = settings.AllowSoftwareFallback;
             ChkStartWithWindows.IsChecked = settings.StartWithWindows;
             ChkStartMinimized.IsChecked = settings.StartMinimizedToTray;
+            ChkShowResourceUsage.IsChecked = settings.ShowResourceUsage;
             ChkClipSavedOverlay.IsChecked = settings.ShowClipSavedOverlay;
             ChkClipSavedSound.IsChecked = settings.PlayClipSavedSound;
             CmbNotificationTone.SelectedIndex = settings.ClipSavedSoundTone switch { "Quiet" => 1, "Custom" => 2, _ => 0 };
@@ -308,6 +309,9 @@ public partial class SettingsWindow : UserControl
         2 => RecordingProfiles.Smooth,
         _ => RecordingProfiles.Balanced
     };
+
+    private void StageDisplay(AppSettings staged) =>
+        staged.ShowResourceUsage = ChkShowResourceUsage.IsChecked == true;
 
     private void CaptureProfile_Changed(object sender, EventArgs e)
     {
@@ -574,6 +578,7 @@ public partial class SettingsWindow : UserControl
             staged.AllowSoftwareFallback = ChkSoftwareFallback.IsChecked == true;
             staged.StartWithWindows = ChkStartWithWindows.IsChecked == true;
             staged.StartMinimizedToTray = ChkStartMinimized.IsChecked == true;
+            StageDisplay(staged);
             staged.ShowClipSavedOverlay = ChkClipSavedOverlay.IsChecked == true;
             staged.PlayClipSavedSound = ChkClipSavedSound.IsChecked == true;
             staged.ClipSavedSoundTone = NotificationTone();
@@ -617,6 +622,7 @@ public partial class SettingsWindow : UserControl
             _settings.AllowSoftwareFallback = staged.AllowSoftwareFallback;
             _settings.StartWithWindows = staged.StartWithWindows;
             _settings.StartMinimizedToTray = staged.StartMinimizedToTray;
+            _settings.ShowResourceUsage = staged.ShowResourceUsage;
             _settings.ShowClipSavedOverlay = staged.ShowClipSavedOverlay;
             _settings.PlayClipSavedSound = staged.PlayClipSavedSound;
             _settings.ClipSavedSoundTone = staged.ClipSavedSoundTone;

@@ -133,6 +133,7 @@ internal static partial class Program
             ShareFrame("76-share-cpu-warning-minimum.png", 720, 480, requireReady: true);
             observations.Add(new { SyntheticCpuProfileOnly = true, Warning = vm.SoftwareFallbackWarning,
                 ShareAtMinimumWithCpuWarning = true, CaptureStarted = false });
+            RenderResourceFixtures(window, vm, output, render);
         }
         finally { setCaptureProfile.Invoke(vm, [captureProfile]); }
 

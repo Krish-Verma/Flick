@@ -677,7 +677,6 @@ public partial class MainWindow : Window
             : WorkspaceLayoutRules.SplitSourceWidthDips);
         CmbTargets.Width = compact ? 163 : 235;
         TxtBufferedDuration.Visibility = compact ? Visibility.Collapsed : Visibility.Visible;
-        TxtResourceStats.Visibility = compact ? Visibility.Collapsed : Visibility.Visible;
         BtnBackToLibrary.Visibility = compact ? Visibility.Visible : Visibility.Collapsed;
         ClipLibraryColumn.MinWidth = compact ? 0 : 255;
         ClipLibraryColumn.MaxWidth = compact ? double.PositiveInfinity : 430;
@@ -843,6 +842,7 @@ public partial class MainWindow : Window
         RegisterHotkeys();
         _ = _vm.ApplyGameDetectionPreferencesAsync();
         _vm.RefreshExportPreferences();
+        _vm.RefreshResourceUsagePreferences();
         UpdateSharePresetSelection();
         UpdateStatusBadgeColor();
         bool captureActive = _vm.IsCaptureActive;

@@ -480,7 +480,7 @@ public partial class MainViewModel : INotifyPropertyChanged, IDisposable
     private string _bufferedDurationText = "0.0s / 30.0s";
     private bool _isArmed = false;
     private string _statusDetails = "";
-    private string _resourceStatsText = "Memory: -- | CPU: --";
+    private string _resourceStatsText = "RAM -- · CPU --";
     private CaptureEncodingProfile? _captureProfile;
 
     // Targets
@@ -673,7 +673,7 @@ public partial class MainViewModel : INotifyPropertyChanged, IDisposable
     public string ResourceStatsText
     {
         get => _resourceStatsText;
-        set { _resourceStatsText = value; OnPropertyChanged(); }
+        set { if (_resourceStatsText == value) return; _resourceStatsText = value; OnPropertyChanged(); }
     }
 
     public ObservableCollection<TargetItem> Targets
@@ -834,6 +834,7 @@ public partial class MainViewModel : INotifyPropertyChanged, IDisposable
         _storage = new ClipStorage(_settings, _prober);
         _exporter = new ClipExporter(prober: _prober);
         _resourceMonitor = new ResourceMonitor();
+        InitializeResourceSampling();
 
         _targetSizeMb = _settings.DiscordTargetSizeMb;
 
@@ -848,6 +849,7 @@ public partial class MainViewModel : INotifyPropertyChanged, IDisposable
 
         // Status polling timer
         _pollTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
+        _pollTimer.Tick += OnResourcePollTick;
         _pollTimer.Tick += OnPollTick;
         _pollTimer.Start();
         _audioEditCommitTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(450) };
@@ -1125,6 +1127,7 @@ public partial class MainViewModel : INotifyPropertyChanged, IDisposable
         PublishDiagnosticTest();
         // A timer tick must not restart an exited helper during finalization.
         _pollTimer.Stop();
+        PauseResourceSampling();
         _gameTimer?.Stop();
         await QuiesceGameAutomationAsync();
         bool ready = false;
@@ -1153,6 +1156,9 @@ public partial class MainViewModel : INotifyPropertyChanged, IDisposable
             var deadline = Stopwatch.StartNew();
             while (IsReplaySavePending && deadline.Elapsed < TimeSpan.FromSeconds(30))
                 await Task.Delay(100);
+            // Settle optional reads after capture cleanup; resource display
+            // must never delay releasing the recording source or microphone.
+            if (!await StopResourceSamplingAsync()) return false;
             ready = !IsReplaySavePending;
             if (ready && _diagnosticJournal != null)
             {
@@ -1164,7 +1170,7 @@ public partial class MainViewModel : INotifyPropertyChanged, IDisposable
         }
         finally
         {
-            if (!ready) { _isPreparingToQuit = false; _pollTimer.Start(); if (_settings.GameDetectionEnabled) _gameTimer?.Start(); PublishDiagnosticTest(); }
+            if (!ready) { _isPreparingToQuit = false; ResumeResourceSampling(); _pollTimer.Start(); if (_settings.GameDetectionEnabled) _gameTimer?.Start(); PublishDiagnosticTest(); }
         }
     }
 
@@ -1449,17 +1455,12 @@ public partial class MainViewModel : INotifyPropertyChanged, IDisposable
                 CaptureStatus = "Faulted";
                 RecordCaptureFailure("unexpected-stop", "The recording engine stopped unexpectedly. Review the source and restart replay.");
             }
-            var sample = _resourceMonitor.Sample();
-            double hostMb = st.PrivateBytes / (1024.0 * 1024.0);
-            double appMb = sample.AppPrivateBytes / (1024.0 * 1024.0);
-            ResourceStatsText = $"App RAM: {appMb:F0} MB | Host RAM: {hostMb:F0} MB | CPU: {sample.AppCpuPercent:F1}%";
             if (st.PrivateBytes > 805_306_368L)
             {
                 await StopCaptureAsync();
                 RecordCaptureFailure("host-memory-limit", "Capture stopped: native host exceeded the 768 MiB safety limit.", false);
                 return;
             }
-            if (sample.IsLowSystemMemory) StatusDetails = "Warning: System available physical memory < 1 GB!";
             PublishHealth();
         }
         catch (Exception ex)
@@ -2085,6 +2086,7 @@ public partial class MainViewModel : INotifyPropertyChanged, IDisposable
         _importCancellation?.Cancel();
         _thumbnailCancellation?.Cancel();
         _pollTimer.Stop();
+        DisposeResourceSampling();
         _captureHost.CaptureConfigured -= OnCaptureConfigured;
         _captureHost.PendingReplaySavesChanged -= OnPendingReplaySavesChanged;
         _captureHost.ReplaySaveAborted -= OnReplaySaveAborted;

@@ -590,14 +590,16 @@
         </Border>
 
         <!-- Bottom Status Bar -->
-        <Border Grid.Row="2" Grid.Column="1" Background="{DynamicResource Flick.Brush.Surface}" BorderBrush="{DynamicResource Flick.Brush.Divider}" BorderThickness="0,1,0,0" Padding="12,6">
+        <Border x:Name="AppStatusBar" Grid.Row="2" Grid.Column="1" Background="{DynamicResource Flick.Brush.Surface}" BorderBrush="{DynamicResource Flick.Brush.Divider}" BorderThickness="0,1,0,0" Padding="12,6">
             <Grid>
+                <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
-                <StackPanel Grid.Column="0" Margin="0,0,16,0">
-                    <TextBlock Text="{Binding StatusDetails}" ToolTip="{Binding StatusDetails}" Foreground="{DynamicResource Flick.Brush.TextSecondary}" FontSize="12" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"/>
+                <TextBlock Grid.Row="0" Grid.Column="0" Text="{Binding StatusDetails}" ToolTip="{Binding StatusDetails}" Foreground="{DynamicResource Flick.Brush.TextSecondary}" FontSize="12" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" Margin="0,0,16,0"/>
+                <TextBlock Grid.Row="0" Grid.Column="1" x:Name="TxtResourceStats" Text="{Binding ResourceStatsText}" ToolTip="{Binding ResourceStatsDetails}" Visibility="{Binding ResourceStatsVisible, Converter={StaticResource BoolToVis}}" AutomationProperties.Name="{Binding ResourceStatsText}" AutomationProperties.HelpText="{Binding ResourceStatsDetails}" Foreground="{DynamicResource Flick.Brush.TextSecondary}" FontSize="11" TextWrapping="NoWrap" HorizontalAlignment="Right" VerticalAlignment="Center"/>
+                <StackPanel Grid.Row="1" Grid.ColumnSpan="2">
                     <TextBlock Text="{Binding CaptureEncodingText}" ToolTip="{Binding CaptureEncodingText}" FontSize="12" Margin="0,3,0,0" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis">
                         <TextBlock.Style>
                             <Style TargetType="{x:Type TextBlock}" BasedOn="{StaticResource Flick.Text.Caption}">
@@ -618,7 +620,6 @@
                         </TextBlock.Style>
                     </TextBlock>
                 </StackPanel>
-                <TextBlock Grid.Column="1" x:Name="TxtResourceStats" Text="{Binding ResourceStatsText}" ToolTip="{Binding ResourceStatsText}" Foreground="{DynamicResource Flick.Brush.TextMuted}" FontSize="11" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" HorizontalAlignment="Right"/>
             </Grid>
         </Border>
     </Grid>

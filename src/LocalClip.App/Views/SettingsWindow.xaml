@@ -279,6 +279,13 @@
                               Content="Start Minimized to Tray"
                               Margin="0,0,0,22"/>
                     <Separator Background="{DynamicResource Flick.Brush.Divider}" Margin="0,0,0,21"/>
+                    <TextBlock Text="Display" Style="{StaticResource Flick.Text.Section}" Margin="0,0,0,12"/>
+                    <CheckBox x:Name="ChkShowResourceUsage" Content="Show RAM and CPU"
+                              AutomationProperties.Name="Show RAM and CPU"
+                              Style="{StaticResource Flick.Toggle}" Margin="0,0,0,8"/>
+                    <TextBlock Text="Live readings in the footer. Turning this off also stops sampling."
+                               Style="{StaticResource Flick.Text.Muted}" TextWrapping="Wrap" Margin="0,0,0,21"/>
+                    <Separator Background="{DynamicResource Flick.Brush.Divider}" Margin="0,0,0,21"/>
                     <TextBlock Text="Clip Notifications"
                                Style="{StaticResource Flick.Text.Section}" Margin="0,0,0,12"/>
                     <CheckBox x:Name="ChkClipSavedOverlay"

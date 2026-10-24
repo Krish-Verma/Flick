@@ -63,6 +63,7 @@ public class AppSettings
     // App Behavior
     public bool StartWithWindows { get; set; } = false;
     public bool StartMinimizedToTray { get; set; } = false;
+    public bool ShowResourceUsage { get; set; } = true;
 
     // Clip feedback is independently opt-out. No overlay or sound engine is
     // resident until a confirmed saved clip or a user-initiated preview.
