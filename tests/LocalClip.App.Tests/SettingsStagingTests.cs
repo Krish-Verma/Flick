@@ -17,7 +17,7 @@ using Xunit;
 
 namespace LocalClip.App.Tests;
 
-public class SettingsStagingTests
+public partial class SettingsStagingTests
 {
     [Fact]
     public void ActualWpfSettingsCancelDoesNotCommitShortcutOrSoundChanges()
@@ -510,6 +510,8 @@ public class SettingsStagingTests
                         cleanupUnconfirmedField.SetValue(vm, false);
                         PublishRecordingTest();
                     }
+
+                    VerifyGameSettingsAndReservations(vm, window);
 
                     // Quit must cancel an active diagnostics export and wait
                     // for its cleanup, without beginning capture teardown first.

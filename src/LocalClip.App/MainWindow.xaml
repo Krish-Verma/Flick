@@ -58,7 +58,11 @@
                 </Grid.ColumnDefinitions>
                 <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,12,0">
                     <TextBlock Text="Capture Source" Style="{StaticResource Flick.Text.Caption}" FontWeight="SemiBold" Margin="0,0,0,2"/>
-                    <ComboBox x:Name="CmbTargets" Style="{StaticResource Flick.Input.Combo}" MinWidth="0" Width="235" Height="32" DisplayMemberPath="DisplayName" ToolTip="Choose a window or monitor. Display capture can include notifications." IsEnabled="{Binding CanChangeCaptureSource}" ItemsSource="{Binding Targets}" SelectedItem="{Binding SelectedTarget, Mode=TwoWay}"/>
+                    <Grid><ComboBox x:Name="CmbTargets" MinWidth="0" Width="235" Height="32" DisplayMemberPath="DisplayName" ToolTip="Choose a window or monitor. Display capture can include notifications." IsEnabled="{Binding CanChangeCaptureSource}" ItemsSource="{Binding Targets}" SelectedItem="{Binding SelectedTarget, Mode=TwoWay}" >
+                        <ComboBox.Style><Style TargetType="ComboBox" BasedOn="{StaticResource Flick.Input.Combo}"><Style.Triggers><DataTrigger Binding="{Binding IsAutomaticGameCapture}" Value="True"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger></Style.Triggers></Style></ComboBox.Style>
+                    </ComboBox><TextBlock Text="{Binding AutomaticGameSourceText}" TextTrimming="CharacterEllipsis" MaxWidth="235" Height="32" VerticalAlignment="Center" ToolTip="Automatic game replay. Stop Replay to return to your manual capture source.">
+                        <TextBlock.Style><Style TargetType="TextBlock" BasedOn="{StaticResource Flick.Text.Control}"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding IsAutomaticGameCapture}" Value="True"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></TextBlock.Style>
+                    </TextBlock></Grid>
                 </StackPanel>
                 <Button Grid.Column="1" Style="{StaticResource Flick.Button.Icon}" Click="BtnRefreshTargets_Click" AutomationProperties.Name="Refresh Capture Sources" ToolTip="Refresh Capture Sources" Margin="0,0,12,0" VerticalAlignment="Center">
                     <Path Style="{StaticResource Flick.Icon.Symbol}" Data="{StaticResource Flick.Icon.Geometry.Refresh}" Width="16" Height="16"/>
@@ -476,6 +480,7 @@
                 <ScrollViewer x:Name="RecordingHealthScroll" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                     <StackPanel>
                         <TextBlock x:Name="TxtHealthStatus" Text="{Binding HealthStatusText}" FontWeight="SemiBold" Foreground="{DynamicResource Flick.Brush.TextPrimary}" Margin="0,0,0,10" AutomationProperties.LiveSetting="Polite"/>
+                        <TextBlock Text="{Binding GameDetectionStatus}" TextWrapping="Wrap" Margin="0,0,0,12"/>
                         <TextBlock Text="{Binding HealthDetailsText}" TextWrapping="Wrap" Margin="0,0,0,14"/>
                         <TextBlock Text="{Binding HealthLastFailureText}" TextWrapping="Wrap" Margin="0,0,0,14"/>
                         <TextBlock Text="{Binding HealthLastSavedText}" TextWrapping="Wrap" Margin="0,0,0,14"/>

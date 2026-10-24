@@ -123,7 +123,7 @@ public partial class MainWindow : Window
         if (!string.IsNullOrWhiteSpace(_vm.Settings.LoadWarning))
             _vm.StatusDetails = _vm.Settings.LoadWarning;
 
-        // Startup from Windows Run is always disarmed; optionally hide the window.
+        // Manual replay starts off; explicitly approved game automation is separate.
         if (_vm.Settings.StartMinimizedToTray ||
             Environment.GetCommandLineArgs().Any(a =>
                 a.Equals("--minimized", StringComparison.OrdinalIgnoreCase)))
@@ -138,7 +138,8 @@ public partial class MainWindow : Window
         _vm.PropertyChanged += (s, ev) =>
         {
             if (ev.PropertyName is nameof(MainViewModel.CaptureStatus) or nameof(MainViewModel.HealthStatusText)
-                or nameof(MainViewModel.IsRecordingDiagnosticRunning))
+                or nameof(MainViewModel.IsRecordingDiagnosticRunning) or nameof(MainViewModel.CanControlReplay)
+                or nameof(MainViewModel.ActiveReplayDurationSeconds) or nameof(MainViewModel.IsAutomaticGameCapture))
             {
                 UpdateStatusBadgeColor();
                 if (_vm.CaptureStatus == "Starting" || _vm.IsRecordingDiagnosticRunning)
@@ -383,13 +384,13 @@ public partial class MainWindow : Window
         BtnToggleCapture.Content = active || transitional ? "Stop Replay" : "Start Replay";
         BtnToggleCapture.Style = (Style)FindResource(
             active || transitional ? "Flick.Button.Secondary" : "Flick.Button.Primary");
-        BtnToggleCapture.IsEnabled = !transitional && _vm.CanControlReplay;
+        BtnToggleCapture.IsEnabled = (_vm.IsAutomaticGameCapture && _vm.CaptureStatus == "Starting") || (!transitional && _vm.CanControlReplay);
         BtnToggleCapture.ToolTip = $"Toggle Replay ({_vm.Settings.CaptureToggleHotkey})";
 
         string saveLabel = WorkspaceLayoutRules.SaveActionLabel(
-            _vm.Settings.ReplayDurationSeconds, compact: false);
+            _vm.ActiveReplayDurationSeconds, compact: false);
         BtnSaveReplay.Content = WorkspaceLayoutRules.SaveActionLabel(
-            _vm.Settings.ReplayDurationSeconds, _layoutMode == WorkspaceLayoutMode.Compact);
+            _vm.ActiveReplayDurationSeconds, _layoutMode == WorkspaceLayoutMode.Compact);
         BtnSaveReplay.ToolTip = $"Save a replay ({_vm.Settings.SaveReplayHotkey})";
         // A buffering encoder is not yet guaranteed to hold a decodable replay.
         BtnSaveReplay.IsEnabled = ready && !testing;
@@ -399,7 +400,7 @@ public partial class MainWindow : Window
         if (_trayReplayItem != null)
         {
             _trayReplayItem.Text = active || transitional ? "Stop Replay" : "Start Replay";
-            _trayReplayItem.Enabled = !transitional && _vm.CanControlReplay;
+            _trayReplayItem.Enabled = BtnToggleCapture.IsEnabled;
         }
         if (_traySaveItem != null)
         {
@@ -824,6 +825,7 @@ public partial class MainWindow : Window
         _notificationService.StopSound();
 
         RegisterHotkeys();
+        _ = _vm.ApplyGameDetectionPreferencesAsync();
         _vm.RefreshExportPreferences();
         UpdateSharePresetSelection();
         UpdateStatusBadgeColor();
@@ -834,8 +836,9 @@ public partial class MainWindow : Window
             _ = StopCaptureForMicPrivacyAsync();
             return;
         }
-        _vm.StatusDetails = captureActive
-            ? "Preferences saved. New capture profile takes effect on the next manual replay start."
+        _vm.StatusDetails = _vm.Settings.GameDetectionEnabled
+            ? "Preferences saved. Approved game replay follows Games settings; manual preferences are retained."
+            : captureActive ? "Preferences saved. New capture profile takes effect on the next manual replay start."
             : "Preferences saved. Replay remains off until manually started.";
     }
 

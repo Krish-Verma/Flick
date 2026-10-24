@@ -2,12 +2,15 @@ using System;
 using System.IO;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using LocalClip.Core.GameDetection;
 
 namespace LocalClip.Core.Models;
 
 public class AppSettings
 {
-    public int SchemaVersion { get; set; } = 3;
+    public int SchemaVersion { get; set; } = 4;
+    public bool GameDetectionEnabled { get; set; }
+    public System.Collections.Generic.List<ApprovedGameProfile> ApprovedGameProfiles { get; set; } = new();
 
     // Capture Target
     public string TargetType { get; set; } = "Monitor"; // "Monitor" or "Window"
@@ -190,8 +193,23 @@ public class AppSettings
                 repaired = true;
             }
 
+            bool validGameSchema = document.RootElement.TryGetProperty("SchemaVersion", out var gameSchema) &&
+                gameSchema.TryGetInt32(out int schema) && schema == 4;
+            bool duplicateGameKeys = document.RootElement.EnumerateObject().Count(property => property.Name == "GameDetectionEnabled") > 1 ||
+                document.RootElement.EnumerateObject().Count(property => property.Name == "ApprovedGameProfiles") > 1;
+            if (!validGameSchema || duplicateGameKeys || !GameDetectionPolicy.ValidateProfiles(loaded.ApprovedGameProfiles, out _) ||
+                (loaded.GameDetectionEnabled && !loaded.ApprovedGameProfiles.Any(profile => profile.Enabled)))
+            {
+                bool hadGameConfiguration = loaded.GameDetectionEnabled || loaded.ApprovedGameProfiles?.Count > 0;
+                loaded.GameDetectionEnabled = false;
+                loaded.ApprovedGameProfiles = new();
+                if (hadGameConfiguration || duplicateGameKeys || loaded.SchemaVersion > 4) repaired = true;
+            }
+            if (loaded.SchemaVersion < 4) loaded.SchemaVersion = 4;
+
             if (repaired)
             {
+                loaded.GameDetectionEnabled = false;
                 loaded.RequiresExplicitSettingsSave = true;
                 loaded.LoadWarning = "Some old or invalid preferences were safely reset in memory. Review Settings and Save to keep the changes.";
             }

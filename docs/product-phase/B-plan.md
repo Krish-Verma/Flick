@@ -1,10 +1,12 @@
 # B — Optional game detection and replay management
 
-Status: planned. Owner: Flick implementation lead. Umbrella: #36. Updated: 2026-10-24.
+Status: B1–B4 implementation authored in the isolated game-automation branch; focused policy tests and cross-builds pass. Integrated Windows interaction/recording qualification remains pending. Owner: Flick implementation lead. Umbrella: #36. Updated: 2026-10-24.
+
+See [B implementation, contracts and qualification ledger](B-GAME-AUTOMATION.md). No feature is marked hardware-qualified or released by the local checks below.
 
 ## Existing behavior
 
-Capture sources are manually enumerated by the native helper. No approved game profiles or automatic replay lifecycle exists. Manual startup defaults Off.
+The baseline manually enumerates sources in the native helper. New development adds opt-in approved profiles, a separate bounded Win32 metadata scanner and a serialized automatic replay route. Manual startup still defaults Off.
 
 ## Technical boundary
 

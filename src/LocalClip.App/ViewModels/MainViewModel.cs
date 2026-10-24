@@ -27,6 +27,8 @@ public class TargetItem
     public string MonitorDevice { get; set; } = "";
     public ulong WindowHwnd { get; set; }
     public uint WindowPid { get; set; }
+    public string ExecutablePath { get; set; } = "";
+    public ulong ProcessCreationFileTime { get; set; }
     public string DisplayName { get; set; } = "";
     public string Title { get; set; } = "";
     public string Exe { get; set; } = "";
@@ -34,7 +36,7 @@ public class TargetItem
     public override string ToString() => DisplayName;
 }
 
-public class MainViewModel : INotifyPropertyChanged, IDisposable
+public partial class MainViewModel : INotifyPropertyChanged, IDisposable
 {
     private readonly AppSettings _settings;
     private readonly CaptureHostClient _captureHost;
@@ -74,14 +76,14 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
     private TaskCompletionSource? _recordingDiagnosticCompletion;
     public bool IsRecordingDiagnosticRunning => _isRecordingDiagnosticRunning;
     public bool DiagnosticHelperNeedsRestart => _diagnosticCleanupUnconfirmed;
-    public bool CanChangeCaptureSource => !_isRecordingDiagnosticRunning && !_isPreparingToQuit && !_diagnosticCleanupUnconfirmed;
-    public bool CanControlReplay => CanChangeCaptureSource && !_refreshingTargets;
+    public bool CanChangeCaptureSource => !_isRecordingDiagnosticRunning && !_isPreparingToQuit && !_diagnosticCleanupUnconfirmed && !_gameAutomationBusy;
+    public bool CanControlReplay => CanChangeCaptureSource && !_refreshingTargets && _manualStopOperation == null;
     public Func<bool>? DiagnosticReservationAllowed { get; set; }
     public bool CanRunRecordingDiagnostic => !_diagnosticsDisposed && !_isPreparingToQuit &&
         !_isRecordingDiagnosticRunning && !_diagnosticCleanupUnconfirmed && !_refreshingTargets && !CaptureActive && _stopCaptureTask == null &&
         !IsReplaySavePending && !IsImporting && !IsExporting && !_isExportingDiagnostics &&
         Volatile.Read(ref _discordUploadOperations) == 0 && Volatile.Read(ref _libraryRescanOperations) == 0 &&
-        !_pollInProgress && SelectedTarget != null && Targets.Contains(SelectedTarget) &&
+        !_pollInProgress && !_gameAutomationBusy && SelectedTarget != null && Targets.Contains(SelectedTarget) &&
         DiagnosticReservationAllowed?.Invoke() != false;
     public bool CanInvokeRecordingDiagnostic => _isRecordingDiagnosticRunning
         ? !_recordingDiagnosticCancelling : CanRunRecordingDiagnostic;
@@ -518,10 +520,10 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
     // These operations outlive their initiating page. The updater also checks
     // the separate capture/save/import/export flags before closing the app.
     public bool IsBackgroundWorkActive => Volatile.Read(ref _discordUploadOperations) > 0
-        || Volatile.Read(ref _libraryRescanOperations) > 0 || _isExportingDiagnostics || _isRecordingDiagnosticRunning;
-    public bool IsCaptureActive => CaptureActive || _isRecordingDiagnosticRunning || _diagnosticCleanupUnconfirmed;
+        || Volatile.Read(ref _libraryRescanOperations) > 0 || _isExportingDiagnostics || _isRecordingDiagnosticRunning || _gameAutomationBusy;
+    public bool IsCaptureActive => CaptureActive || _gameAutomationBusy || _isRecordingDiagnosticRunning || _diagnosticCleanupUnconfirmed;
     public bool CanEditClip => SelectedClip?.IsAvailable == true && !IsExporting;
-    public bool CanStartExport => CanEditClip && !IsImporting && !_isRecordingDiagnosticRunning && !_isPreparingToQuit && !_diagnosticCleanupUnconfirmed;
+    public bool CanStartExport => CanEditClip && !IsImporting && !_gameAutomationBusy && !_isRecordingDiagnosticRunning && !_isPreparingToQuit && !_diagnosticCleanupUnconfirmed;
     // WPF shell supplies consent before an active source change discards replay.
     public Func<bool>? ConfirmTargetReset { get; set; }
     public CaptureHostClient CaptureHost => _captureHost;
@@ -835,6 +837,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
         // Optional log storage must not delay source discovery or replay.
         _ = InitializeDiagnosticsAsync();
         await RefreshTargetsAsync();
+        await ApplyGameDetectionPreferencesAsync();
     }
 
     public async Task RefreshTargetsAsync()
@@ -865,6 +868,8 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
                     Type = "Window",
                     WindowHwnd = w.Hwnd,
                     WindowPid = w.Pid,
+                    ExecutablePath = w.ExecutablePath,
+                    ProcessCreationFileTime = w.ProcessCreationFileTime,
                     DisplayName = w.DisplayName,
                     Title = w.Title,
                     Exe = w.Exe
@@ -931,6 +936,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
 
     public async Task ToggleCaptureAsync()
     {
+        if (_automaticGame != null) { await StopCaptureAsync(); return; }
         if (CaptureStatus == "Starting" || CaptureStatus == "Stopping") return;
         if (CaptureStatus == "Off" || CaptureStatus == "Faulted" || CaptureStatus == "Paused")
         {
@@ -944,6 +950,9 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
 
     public async Task StartCaptureAsync()
     {
+        if (_manualStopOperation != null) return;
+        await QuiesceGameAutomationAsync();
+        if (_automaticGame != null) return;
         if (_isRecordingDiagnosticRunning || _isPreparingToQuit || _diagnosticCleanupUnconfirmed || _refreshingTargets) return;
         if (CaptureActive || _stopCaptureTask != null) return;
         if (SelectedTarget is null || !Targets.Contains(SelectedTarget))
@@ -954,6 +963,8 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
             RecordCaptureFailure("missing-source", "Select an available window or monitor before starting replay.", false);
             return;
         }
+        _manualReplayReserved = true;
+        PublishGameAutomation("Manual replay owns recording. Automatic game replay waits until it stops.");
         // Never let folder indexing compete with the live gameplay encoder.
         _importCancellation?.Cancel();
         _thumbnailCancellation?.Cancel();
@@ -967,7 +978,20 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
         Guid startingSession = _healthSession;
         try
         {
-            bool started = await _captureHost.StartCaptureAsync(_settings);
+            await ReserveManualGameSessionsAsync();
+            if (startingEpoch != _captureEpoch || startingSession != _healthSession || _isPreparingToQuit) return;
+            CaptureStartOptions? sourceOptions = null;
+            if (SelectedTarget.Type == "Window")
+            {
+                if (string.IsNullOrWhiteSpace(SelectedTarget.ExecutablePath) || SelectedTarget.ProcessCreationFileTime == 0 || SelectedTarget.WindowPid == 0)
+                    throw new InvalidOperationException("Refresh capture sources and reselect this window before recording.");
+                var capabilities = await _captureHost.GetCapabilitiesAsync();
+                if (startingEpoch != _captureEpoch || startingSession != _healthSession || _isPreparingToQuit) return;
+                if (!capabilities.ExactWindowBinding) throw new InvalidOperationException("Update the capture helper before recording this exact window.");
+                sourceOptions = new(ExpectedWindow: new(SelectedTarget.WindowHwnd, SelectedTarget.WindowPid,
+                    SelectedTarget.Title, SelectedTarget.Exe, SelectedTarget.ExecutablePath, SelectedTarget.ProcessCreationFileTime));
+            }
+            bool started = await _captureHost.StartCaptureAsync(_settings, sourceOptions);
             if (startingEpoch != _captureEpoch || startingSession != _healthSession) return;
             if (!started)
             {
@@ -984,6 +1008,39 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
     }
 
     public async Task StopCaptureAsync()
+    {
+        if (_manualStopOperation is { } stopping) { await stopping; return; }
+        var completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        _manualStopOperation = completion.Task;
+        PublishGameAutomation();
+        try { await StopRequestedCaptureAsync(); }
+        finally { _manualStopOperation = null; completion.TrySetResult(); PublishGameAutomation(); }
+    }
+
+    private async Task StopRequestedCaptureAsync()
+    {
+        bool manualWasActive = _automaticGame == null && CaptureActive;
+        await QuiesceGameAutomationAsync();
+        if (manualWasActive && _gameSuppressionStore != null && _settings.GameDetectionEnabled)
+        {
+            try { await ReserveManualGameSessionsAsync(); }
+            catch
+            {
+                _gameStateUnavailable = true;
+                _gameTimer?.Stop();
+                PublishGameAutomation("Automatic replay is paused because the manual-stop state could not be saved. Review Games settings before restarting Flick.");
+            }
+        }
+        await StopCaptureManagedAsync();
+        _manualReplayReserved = false;
+        if (_automaticGame != null)
+        {
+            ClearAutomaticGame();
+            PublishGameAutomation("Automatic replay is paused for this game session. Start manually or restart the game.");
+        }
+    }
+
+    private async Task StopCaptureManagedAsync()
     {
         if (_stopCaptureTask is { } existingStop)
         {
@@ -1027,6 +1084,8 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
         PublishDiagnosticTest();
         // A timer tick must not restart an exited helper during finalization.
         _pollTimer.Stop();
+        _gameTimer?.Stop();
+        await QuiesceGameAutomationAsync();
         bool ready = false;
         try
         {
@@ -1060,7 +1119,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
         }
         finally
         {
-            if (!ready) { _isPreparingToQuit = false; _pollTimer.Start(); PublishDiagnosticTest(); }
+            if (!ready) { _isPreparingToQuit = false; _pollTimer.Start(); if (_settings.GameDetectionEnabled) _gameTimer?.Start(); PublishDiagnosticTest(); }
         }
     }
 
@@ -1297,7 +1356,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
 
     private async void OnPollTick(object? sender, EventArgs e)
     {
-        if (_isRecordingDiagnosticRunning || _isPreparingToQuit) return;
+        if (_isRecordingDiagnosticRunning || _isPreparingToQuit || _gameAutomationBusy) return;
         if (_pollInProgress || CaptureStatus is "Starting" or "Stopping") return;
         if (!_captureHost.IsRunning)
         {
@@ -1917,6 +1976,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
 
     public void Dispose()
     {
+        DisposeGameAutomation();
         _exportCancellation?.Cancel();
         FlushPendingAudioEdits();
         UnsubscribeAudioEvents();

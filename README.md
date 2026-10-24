@@ -9,7 +9,7 @@ Flick is a Windows-native game clipper for capturing the last 15–120 seconds, 
 
 ## Features
 
-- Explicit manual replay on/off, separate global hotkeys for Save Clip and Toggle Replay; recording starts **off** even at Windows login.
+- Explicit manual replay on/off, separate global hotkeys for Save Clip and Toggle Replay; manual recording starts **off** by default even at Windows login.
 - Video replay via a separate libobs capture worker, with 15–120 second duration and bounded buffer. The 1.0.5 recording engine adds automatic NVIDIA/AMD/Intel selection and a bounded CPU fallback described below.
 - Native WPF clip library with search, in-place import of other recording folders, offline-folder awareness and non-destructive editing.
 - Two-handle trim, per-track audio mute/gain, local original/export preview; user-controlled export folder.
@@ -17,6 +17,10 @@ Flick is a Windows-native game clipper for capturing the last 15–120 seconds, 
 - Compact Flick-branded two-second Clip Saved notification and optional chime; each independently toggleable.
 - Native Windows application, optically aligned Flick logo and purple interface, refined toolbar icons and subtle logo gradients.
 - In-app update checks, verified downloads and confirmed install/restart for installed copies.
+
+## Development: approved game replay
+
+The development branch adds **Settings → Games**: explicit running-window approval by full local executable path, per-game quality/duration and microphone consent, and optional automatic replay. Ambiguous windows and unknown identities fail closed. Stop Replay pauses the game process across Flick restarts; manual source/preferences stay separate. This work is awaiting integrated Windows UI/recording acceptance and is **not in the published 1.0.6 download**. See [implementation and qualification boundaries](docs/product-phase/B-GAME-AUTOMATION.md).
 
 ## What the current Windows build supports
 
@@ -86,7 +90,7 @@ For compatibility acceptance, use [scripts/test_gpu_compatibility.ps1](scripts/t
 
 Read the [Privacy policy](PRIVACY.md), [Code signing policy](CODE_SIGNING_POLICY.md), and [candidate release-readiness record](docs/RELEASE-READINESS-1.0.6.md). The SignPath Foundation application has been submitted; signing remains pending approval and verified integration. Current downloads are unsigned.
 
-Flick has no required login and no built-in telemetry/cloud synchronization. It only records a source after manual arming. Microphone recording is opt-in; webhook publishing is disabled by default and requires confirmation. Review source-selection and permissions before gameplay. A linked import folder is indexed locally without copying or deleting imported originals.
+Flick has no required login and no built-in telemetry/cloud synchronization. Manual recording requires arming. The development source also permits explicitly enabled, approved-game automation as described above. Microphone recording is opt-in; webhook publishing is disabled by default and requires confirmation. Review source-selection and permissions before gameplay. A linked import folder is indexed locally without copying or deleting imported originals.
 
 ## Contributing and licensing
 

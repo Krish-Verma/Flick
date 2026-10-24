@@ -154,6 +154,7 @@ begin
   DeleteFile(ProfileDir + '\settings.json.tmp');
   DeleteFile(ProfileDir + '\clips_index.json');
   DeleteFile(ProfileDir + '\clips_index.json.tmp');
+  DeleteFile(ProfileDir + '\game-replay-state.json');
   DeleteFile(ProfileDir + '\connected_sources.json');
   DeleteFile(ProfileDir + '\connected_sources.json.tmp');
   DelTree(ProfileDir + '\Thumbnails', True, True, True);

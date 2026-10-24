@@ -21,6 +21,7 @@
 #include "json.hpp"
 #include "encoder_policy.hpp"
 #include "diagnostic_policy.hpp"
+#include "strict_window_source.hpp"
 
 using json = nlohmann::json;
 
@@ -267,6 +268,8 @@ struct WindowInfo {
     std::string title;
     DWORD pid = 0;
     std::string exe_name;
+    std::string executable_path;
+    uint64_t creation_time = 0;
     int width = 0;
     int height = 0;
 };
@@ -335,6 +338,12 @@ static BOOL CALLBACK EnumWindowsProc(HWND hwnd, LPARAM lParam) {
     info.title = std::move(title);
     info.pid = pid;
     info.exe_name = exeName;
+    flick::game::ProcessIdentity process_identity;
+    if (flick::game::query_process_identity(pid, process_identity)) {
+        utf8_from_wide(process_identity.executable_path.c_str(), info.executable_path);
+        info.creation_time = process_identity.creation_time;
+        utf8_from_wide(std::filesystem::path(process_identity.executable_path).filename().wstring().c_str(), info.exe_name);
+    }
     info.width = w;
     info.height = h;
 
@@ -476,6 +485,10 @@ static bool ensure_obs_init(int width, int height, int fps) {
         obs_shutdown();
         return false;
     }
+    if (!flick::game::register_exact_window_source(bin_dir)) {
+        obs_shutdown();
+        return false;
+    }
     obs_post_load_modules();
     g_obs_initialized = true;
     return true;
@@ -540,14 +553,22 @@ static bool start_capture_attempt(const json &params, const flick::capture::Enco
         if (!selected_target_available(out_err)) {
             return false;
         }
-        struct dstr title = {}, window_class = {}, executable = {};
-        ms_get_window_title(&title, g_cap.window_hwnd);
-        ms_get_window_class(&window_class, g_cap.window_hwnd);
-        ms_get_window_exe(&executable, g_cap.window_hwnd);
-        const std::string selected_title = title.array ? title.array : "";
-        const std::string selected_class = window_class.array ? window_class.array : "";
-        const std::string selected_exe = executable.array ? executable.array : "";
-        dstr_free(&title); dstr_free(&window_class); dstr_free(&executable);
+        flick::game::ProcessIdentity process_identity;
+        if (!flick::game::query_process_identity(g_cap.window_pid, process_identity)) {
+            out_err = "Selected window process identity is unavailable; refusing recording";
+            return false;
+        }
+        std::vector<wchar_t> title(32769);
+        if (!GetWindowTextW(g_cap.window_hwnd, title.data(), static_cast<int>(title.size()))) {
+            out_err = "Selected window title is unavailable";
+            return false;
+        }
+        std::string selected_title, selected_exe;
+        const auto basename = std::filesystem::path(process_identity.executable_path).filename().wstring();
+        if (!utf8_from_wide(title.data(), selected_title) || !utf8_from_wide(basename.c_str(), selected_exe)) {
+            out_err = "Selected window metadata is unavailable";
+            return false;
+        }
         const bool expected_window = params.contains("expected_window_pid") ||
                                      params.contains("expected_window_title") || params.contains("expected_window_exe");
         if (expected_window && (!params.contains("expected_window_pid") || !params.contains("expected_window_title") ||
@@ -557,23 +578,32 @@ static bool start_capture_attempt(const json &params, const flick::capture::Enco
             out_err = "The consented window changed; select it again before recording";
             return false;
         }
-        const auto identity = flick::capture::window_identity(selected_title, selected_class, selected_exe);
-        // Match OBS's own WGC resolver before accepting the request. A second
-        // window with the same title must not silently replace the chosen HWND.
-        if (ms_find_window_top_level(EXCLUDE_MINIMIZED, WINDOW_PRIORITY_TITLE, selected_class.c_str(),
-                                     selected_title.c_str(), selected_exe.c_str()) != g_cap.window_hwnd) {
-            out_err = "Selected window cannot be identified uniquely; bring it forward and select it again";
+        const bool expected_process = params.contains("expected_window_path") || params.contains("expected_window_creation_time");
+        if (expected_process) {
+            if (!expected_window || !params.contains("expected_window_path") || !params.contains("expected_window_creation_time")) {
+                out_err = "The approved process identity is incomplete";
+                return false;
+            }
+            flick::game::ProcessIdentity expected;
+            expected.pid = g_cap.window_pid;
+            expected.creation_time = params.value("expected_window_creation_time", 0ULL);
+            if (!flick::game::from_utf8(params.value("expected_window_path", ""), expected.executable_path) ||
+                !flick::game::same_process_identity(expected, process_identity)) {
+                out_err = "The approved game process changed; refusing recording";
+                return false;
+            }
+        }
+        std::string full_path;
+        if (!utf8_from_wide(process_identity.executable_path.c_str(), full_path)) {
+            out_err = "Selected executable path cannot be represented safely";
             return false;
         }
         obs_data_t *w_settings = obs_data_create();
-        obs_data_set_string(w_settings, "window", identity.c_str());
-        obs_data_set_int(w_settings, "priority", WINDOW_PRIORITY_TITLE);
-        obs_data_set_int(w_settings, "method", 2); // 2 = Windows Graphics Capture (non-injecting)
-        obs_data_set_bool(w_settings, "cursor", true);
-        // Window capture has an optional nested process-audio source in OBS.
-        // Audio is routed explicitly below; never let this video source open it.
-        obs_data_set_bool(w_settings, "capture_audio", false);
-        g_cap.video_source = obs_source_create("window_capture", "WindowSource", w_settings, nullptr);
+        obs_data_set_int(w_settings, "hwnd", static_cast<long long>(hwnd_raw));
+        obs_data_set_int(w_settings, "pid", process_identity.pid);
+        obs_data_set_int(w_settings, "creation_time", static_cast<long long>(process_identity.creation_time));
+        obs_data_set_string(w_settings, "executable_path", full_path.c_str());
+        g_cap.video_source = obs_source_create(flick::game::exact_window_source_id, "ExactWindowSource", w_settings, nullptr);
         obs_data_release(w_settings);
     } else {
         // Monitor capture
@@ -1123,7 +1153,7 @@ int main(int argc, char **argv) {
             }
             else if (cmd == "get_capabilities") {
                 send_response(id, true, {{"protocol_version", 2}, {"diagnostic_no_system_audio", true},
-                                         {"source_identity_binding", true}});
+                                         {"source_identity_binding", true}, {"exact_window_binding", true}});
             }
             else if (cmd == "enum_targets") {
                 // Windows
@@ -1136,6 +1166,8 @@ int main(int argc, char **argv) {
                         {"title", w.title},
                         {"pid", w.pid},
                         {"exe", w.exe_name},
+                        {"executable_path", w.executable_path},
+                        {"process_creation_time", w.creation_time},
                         {"width", w.width},
                         {"height", w.height}
                     });

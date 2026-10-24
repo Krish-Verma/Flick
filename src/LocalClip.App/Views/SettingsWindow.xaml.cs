@@ -68,6 +68,7 @@ public partial class SettingsWindow : UserControl
     /// <summary>Leaving Settings cancels network work and removes this page's staged installer.</summary>
     public void LeavePage()
     {
+        _gameApprovalCancellation?.Cancel();
         _updateCancellation?.Cancel();
         _installationCancellation?.Cancel();
         _updateCancellation = null;
@@ -237,6 +238,7 @@ public partial class SettingsWindow : UserControl
         {
             (NavRecording, PanelRecording, "Recording"),
             (NavAudio, PanelAudio, "Audio"),
+            (NavGames, PanelGames, "Games"),
             (NavShortcuts, PanelShortcuts, "Shortcuts"),
             (NavStorage, PanelStorage, "Storage"),
             (NavGeneral, PanelGeneral, "General"),
@@ -259,6 +261,7 @@ public partial class SettingsWindow : UserControl
         _loading = true;
         try
         {
+            PopulateGameProfiles(settings);
             TxtToggleHotkey.Text = settings.CaptureToggleHotkey;
             TxtSaveHotkey.Text = settings.SaveReplayHotkey;
             TxtOriginalsFolder.Text = settings.OriginalsFolder;
@@ -545,6 +548,8 @@ public partial class SettingsWindow : UserControl
                 "Disable Microphone", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes)
             return;
 
+        if (!ReviewGameSettingsBeforeSave()) return;
+
         bool originalStartup = _settings.StartWithWindows;
         bool originalMinimized = _settings.StartMinimizedToTray;
         bool startupTouched = false;
@@ -554,6 +559,9 @@ public partial class SettingsWindow : UserControl
             // field never partially rewrites the live VM's settings.
             var staged = JsonSerializer.Deserialize<AppSettings>(JsonSerializer.Serialize(_settings)) ??
                 throw new InvalidOperationException("Could not stage current settings.");
+            staged.SchemaVersion = 4;
+            staged.GameDetectionEnabled = ChkGameDetectionEnabled.IsChecked == true;
+            staged.ApprovedGameProfiles = _stagedGameProfiles.ToList();
             staged.CaptureToggleHotkey = toggle;
             staged.SaveReplayHotkey = save;
             staged.OriginalsFolder = originals;
@@ -585,6 +593,9 @@ public partial class SettingsWindow : UserControl
             _settings.MarkExplicitSettingsSaveCompleted();
 
             // Commit only GUI-managed properties after the atomic disk write.
+            _settings.SchemaVersion = staged.SchemaVersion;
+            _settings.GameDetectionEnabled = staged.GameDetectionEnabled;
+            _settings.ApprovedGameProfiles = staged.ApprovedGameProfiles.ToList();
             _settings.CaptureToggleHotkey = staged.CaptureToggleHotkey;
             _settings.SaveReplayHotkey = staged.SaveReplayHotkey;
             _settings.OriginalsFolder = staged.OriginalsFolder;

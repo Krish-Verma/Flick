@@ -370,6 +370,8 @@ public class CaptureHostClient : IDisposable
                     Title = w.GetProperty("title").GetString() ?? "",
                     Pid = w.GetProperty("pid").GetUInt32(),
                     Exe = w.GetProperty("exe").GetString() ?? "",
+                    ExecutablePath = w.TryGetProperty("executable_path", out var path) || w.TryGetProperty("exe_path", out path) ? path.GetString() ?? "" : "",
+                    ProcessCreationFileTime = w.TryGetProperty("process_creation_time", out var created) ? created.GetUInt64() : 0,
                     Width = w.GetProperty("width").GetInt32(),
                     Height = w.GetProperty("height").GetInt32()
                 });
@@ -415,6 +417,11 @@ public class CaptureHostClient : IDisposable
             values["expected_window_pid"] = window.ProcessId;
             values["expected_window_title"] = window.Title;
             values["expected_window_exe"] = window.Executable;
+            if (window.ExecutablePath.Length != 0 || window.ProcessCreationFileTime != 0)
+            {
+                values["expected_window_path"] = window.ExecutablePath;
+                values["expected_window_creation_time"] = window.ProcessCreationFileTime;
+            }
         }
         if (options.ExpectedMonitorId != null) values["monitor_id"] = options.ExpectedMonitorId;
         return values;
