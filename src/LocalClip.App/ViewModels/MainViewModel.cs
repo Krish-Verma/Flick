@@ -233,7 +233,11 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
         {
             _captureStatus = value;
             IsArmed = value == "Armed";
-            if (value is "Off" or "Faulted" or "Paused") SetCaptureProfile(null);
+            if (value is "Off" or "Faulted" or "Paused")
+            {
+                SetCaptureProfile(null);
+                BufferedDurationText = "No active replay buffer";
+            }
             _health.ObserveEngine(_healthSession, value switch {
                 "Starting" => RecordingEngineState.Starting,
                 "Buffering" => RecordingEngineState.Buffering,

@@ -238,7 +238,9 @@ public class SettingsStagingTests
                     using var keyboardSource = new HwndSource(new HwndSourceParameters("Flick health keyboard fixture") {
                         Width = 1, Height = 1, WindowStyle = 0
                     }); // Hidden input source, never attached to or showing MainWindow.
-                    var escape = new KeyEventArgs(Keyboard.PrimaryDevice, keyboardSource, Environment.TickCount, Key.Escape);
+                    var escape = new KeyEventArgs(Keyboard.PrimaryDevice, keyboardSource, Environment.TickCount, Key.Escape) {
+                        RoutedEvent = Keyboard.PreviewKeyDownEvent
+                    };
                     typeof(MainWindow).GetMethod("MainWindow_PreviewKeyDown", hidden)!
                         .Invoke(window, new object[] { window, escape });
                     Assert.True(escape.Handled);

@@ -465,7 +465,7 @@
                 </Grid>
                 <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                     <StackPanel>
-                        <TextBlock x:Name="TxtHealthStatus" Text="{Binding HealthStatusText}" FontWeight="SemiBold" Foreground="{DynamicResource Flick.Brush.BrandAccent}" Margin="0,0,0,10" AutomationProperties.LiveSetting="Polite"/>
+                        <TextBlock x:Name="TxtHealthStatus" Text="{Binding HealthStatusText}" FontWeight="SemiBold" Foreground="{DynamicResource Flick.Brush.TextPrimary}" Margin="0,0,0,10" AutomationProperties.LiveSetting="Polite"/>
                         <TextBlock Text="{Binding HealthDetailsText}" TextWrapping="Wrap" Margin="0,0,0,14"/>
                         <TextBlock Text="{Binding HealthLastFailureText}" TextWrapping="Wrap" Margin="0,0,0,14"/>
                         <TextBlock Text="{Binding HealthLastSavedText}" TextWrapping="Wrap" Margin="0,0,0,14"/>

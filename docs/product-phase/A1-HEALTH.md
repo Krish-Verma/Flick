@@ -11,8 +11,9 @@ This slice stores bounded current/last health in memory. Durable diagnostic logs
 ## Verification
 
 - Cross-build on macOS with hash-verified SDK10.0.402: solution Release warnings-as-errors, zero warnings/errors. A task-local ignored ICO fixture only bypassed unavailable Windows icon generation; Windows CI must run the real generator.
-- Focused IPC tests:34 passed. Health-ledger tests:16 passed. Exact integrated Windows counts/results and WPF render links will be added after CI.
+- Focused IPC tests:34 passed. Health-ledger tests:16 passed. Initial Windows Core315 passed/14 skipped; media5/5, native compile, encoder policy and real WPF renders passed. The first STA job exposed a synthetic KeyEventArgs fixture missing its RoutedEvent; the fixture is corrected and Windows checks are rerunning.
 - Baseline Windows run40084437463: Core271 passed/14 explicitly skipped, App5 passed; separate real-media job5/5, native compile and encoder-policy pass. This baseline is not hardware acceptance.
 - Local full Core baseline:267 passed/4 platform-dependent failures/14 skipped on macOS. The four are Windows DPAPI, kernel32/process metrics and Windows-path settings. Subsequent portable runs explicitly exclude these four; Windows CI runs them unchanged.
+- Render40088130057/artifact12557069333 digest4181e1aa3de6452fb9f7d3f2e7ff08ebe5a904099af3df90de7f5f02ba9c4aaf visually reviewed at wide/compact sizes. Removed decorative gradient from the health status and cleared stale inactive buffer text after review; fresh renders required.
 - WPF fixtures20–26 simulate health/hotkey observations through production models and bindings. They do not claim actual capture, real hotkey conflicts or media validation. The existing STA UI test exercises the actual health disclosure, retained data, disabled Save and Escape above Settings.
 - Windows PC metadata initially reachable via SSH: Windows11 build26300/RTX5060. Later SSH requests timed out and the observed1729MiB free RAM is stale; no physical tests admitted yet. Recheck access/headroom and use an isolated synthetic-window source, never private desktop content.
