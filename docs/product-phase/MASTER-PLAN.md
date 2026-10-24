@@ -48,7 +48,7 @@ Existing CI: Windows warnings-as-errors WPF build, unit tests (hardware tests ex
 
 Baseline render artifact12556043044 SHA256 `0a77fb4f…f3ac35` was recovered and independently hash-checked. Its PROVENANCE reports commit0a6fa3f6e366f53c39504ae35be9e3dc05e13a65 while workflow head is d630435; application/VM/theme/renderer source diff to current main is empty. These are synthetic WPF fixture screenshots, with no hardware/media recording. See research record for full hash/provenance.
 
-Current execution host is macOS ARM64. A task-local hash-verified pinned .NET SDK enables portable Core tests/cross-builds; WPF/Win32 interaction executes in Windows Actions. No authorized Windows gaming PC access is confirmed. A user access question is pending; do all other executable checks meanwhile. Never infer NVIDIA/AMD/Intel behavior, gameplay FPS, endpoint isolation or Discord desktop acceptance from hosted CI.
+Current execution host is macOS ARM64. A task-local hash-verified pinned .NET SDK enables portable Core tests/cross-builds; WPF/Win32 interaction executes in Windows Actions. Owner-authorized SSH access to KRISHPC is confirmed: Windows11, RTX5060, SDK10.0.402. The SSH process runs in Session0 while the owner's desktop runs in Session1, so SSH alone does not qualify interactive capture/Discord. A1's isolated Core package was transferred and hash-verified, but tests were refused before launch when available RAM fell to1525MiB. The installed Flick1.0.5 process/profile remain untouched. Recheck resources before any further PC execution, and use only isolated temporary roots. Never infer NVIDIA/AMD/Intel behavior, gameplay FPS, endpoint isolation or Discord desktop acceptance from hosted CI.
 
 ## Performance and privacy budgets
 

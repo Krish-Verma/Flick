@@ -5,6 +5,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Interop;
+using System.Windows.Media;
 using LocalClip.App;
 using LocalClip.App.Services;
 using LocalClip.App.ViewModels;
@@ -96,6 +97,11 @@ public class SettingsStagingTests
                 var vm = Assert.IsType<MainViewModel>(window.DataContext);
                 try
                 {
+                    // Keep synthetic observations independent of the real
+                    // no-host polling timer while dispatcher layout work runs.
+                    Assert.IsType<System.Windows.Threading.DispatcherTimer>(typeof(MainViewModel)
+                        .GetField("_pollTimer", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(vm)).Stop();
+                    Assert.False(vm.DiagnosticsInitialized); // Unshown windows must not open a journal.
                     vm.Settings.ShowClipSavedOverlay = false; // No test desktop toast.
                     var saveButton = Assert.IsType<Button>(window.FindName("BtnSaveReplay"));
                     var updateCaptureUi = typeof(MainWindow).GetMethod(
@@ -231,6 +237,137 @@ public class SettingsStagingTests
                     healthButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                     Assert.Equal(Visibility.Visible, healthPanel.Visibility);
                     Assert.Equal(KeyboardNavigationMode.Cycle, KeyboardNavigation.GetTabNavigation(healthPanel));
+
+                    // A2: opening/refreshing the disclosure must not initialize
+                    // persistent diagnostics in an unshown fixture window.
+                    vm.RefreshDiagnosticsStatusAsync().GetAwaiter().GetResult();
+                    Assert.False(vm.DiagnosticsInitialized);
+                    Assert.Null(typeof(MainViewModel).GetField("_diagnosticJournal", hidden)!.GetValue(vm));
+                    Assert.Null(typeof(MainViewModel).GetField("_diagnosticInitialization", hidden)!.GetValue(vm));
+                    var exportDiagnostics = Assert.IsType<Button>(window.FindName("BtnExportDiagnostics"));
+                    var closeHealth = Assert.IsType<Button>(window.FindName("BtnCloseRecordingHealth"));
+                    var diagnosticStatus = Assert.IsType<TextBlock>(window.FindName("TxtDiagnosticStatus"));
+                    var privacy = Assert.IsType<TextBlock>(window.FindName("TxtDiagnosticPrivacy"));
+                    var healthHeader = Assert.IsType<Grid>(window.FindName("RecordingHealthHeader"));
+                    var diagnosticFooter = Assert.IsType<StackPanel>(window.FindName("RecordingDiagnosticsFooter"));
+                    var healthScroll = Assert.IsType<ScrollViewer>(window.FindName("RecordingHealthScroll"));
+                    Assert.True(exportDiagnostics.Focusable);
+                    Assert.False(string.IsNullOrWhiteSpace(System.Windows.Automation.AutomationProperties.GetName(exportDiagnostics)));
+                    Assert.Equal(TextWrapping.Wrap, privacy.TextWrapping);
+                    Assert.Equal(System.Windows.Automation.AutomationLiveSetting.Polite,
+                        System.Windows.Automation.AutomationProperties.GetLiveSetting(diagnosticStatus));
+                    var busyField = typeof(MainViewModel).GetField("_isExportingDiagnostics", hidden)!;
+                    var diagnosticStatusField = typeof(MainViewModel).GetField("_diagnosticStatusMessage", hidden)!;
+                    void PublishDiagnostics()
+                    {
+                        foreach (string property in new[] { nameof(vm.DiagnosticStatusText), nameof(vm.CanExportDiagnostics) })
+                            typeof(MainViewModel).GetMethod("OnPropertyChanged", hidden)!.Invoke(vm, new object[] { property });
+                        page.Dispatcher.Invoke(() => { }, System.Windows.Threading.DispatcherPriority.DataBind);
+                    }
+                    long healthRevisionBeforeExportState = health.Snapshot.Revision;
+                    busyField.SetValue(vm, true);
+                    PublishDiagnostics();
+                    Assert.False(exportDiagnostics.IsEnabled);
+                    Assert.True(closeHealth.IsEnabled);
+                    Assert.Equal(healthRevisionBeforeExportState, health.Snapshot.Revision);
+                    busyField.SetValue(vm, false);
+                    diagnosticStatusField.SetValue(vm,
+                        "Synthetic fixture: local diagnostics are unavailable. Recording can continue. Choose another export location and try again.");
+                    PublishDiagnostics();
+                    Assert.Equal(vm.CanExportDiagnostics, exportDiagnostics.IsEnabled);
+                    Assert.Equal(vm.DiagnosticStatusText, diagnosticStatus.Text);
+                    Assert.False(vm.DiagnosticsInitialized);
+                    Assert.True(health.RecordRecordingIssue(session, "fixture-long-error",
+                        "Synthetic capture failure: the selected source became unavailable. Choose another source and restart replay. " +
+                        "This retained message deliberately exercises scrolling health details at the minimum window size. " +
+                        "The fixed Close and Export Diagnostics controls must remain accessible while these details scroll."));
+                    vm.CaptureStatus = "Faulted";
+                    PublishHealth();
+                    typeof(MainWindow).GetField("_layoutMode", hidden)!.SetValue(window, LocalClip.Core.Rules.WorkspaceLayoutMode.Compact);
+                    typeof(MainWindow).GetMethod("ShowCompactEditor", hidden)!.Invoke(window, null);
+                    var client = Assert.IsAssignableFrom<FrameworkElement>(window.Content);
+                    Rect ClientBounds(FrameworkElement element) => element.TransformToAncestor(client)
+                        .TransformBounds(new Rect(element.RenderSize));
+                    void AssertContained(Rect outer, Rect inner)
+                    {
+                        outer.Inflate(0.5, 0.5); // Allow half a physical pixel for layout rounding at96DPI.
+                        Assert.True(outer.Contains(inner), $"Expected {inner} to fit within {outer}.");
+                    }
+                    foreach (var size in new[] { new Size(720, 480), new Size(800, 600) })
+                    {
+                        healthScroll.ScrollToTop();
+                        for (int pass = 0; pass < 3; pass++)
+                        {
+                            page.Dispatcher.Invoke(() => { }, System.Windows.Threading.DispatcherPriority.DataBind);
+                            InvalidateVisualMeasure(client);
+                            client.Measure(size);
+                            client.Arrange(new Rect(size));
+                            client.UpdateLayout();
+                        }
+                        Rect panelBounds = ClientBounds(healthPanel);
+                        Rect headerBounds = ClientBounds(healthHeader), footerBounds = ClientBounds(diagnosticFooter);
+                        Rect scrollBounds = ClientBounds(healthScroll);
+                        AssertContained(new Rect(size), panelBounds);
+                        AssertContained(panelBounds, headerBounds);
+                        AssertContained(panelBounds, footerBounds);
+                        AssertContained(headerBounds, ClientBounds(closeHealth));
+                        AssertContained(footerBounds, ClientBounds(exportDiagnostics));
+                        Assert.True(headerBounds.Bottom <= scrollBounds.Top + 0.5);
+                        Assert.True(scrollBounds.Bottom <= footerBounds.Top + 0.5);
+                        Assert.True(double.IsFinite(healthScroll.ViewportHeight) && healthScroll.ViewportHeight > 0);
+                        Assert.True(healthScroll.ScrollableHeight > 0); // Exercise the fixed footer under real overflow.
+                        healthScroll.ScrollToBottom();
+                        client.UpdateLayout();
+                        Assert.True(healthScroll.VerticalOffset > 0);
+                        Assert.Equal(headerBounds, ClientBounds(healthHeader));
+                        Assert.Equal(footerBounds, ClientBounds(diagnosticFooter));
+                    }
+
+                    // Quit must cancel an active diagnostics export and wait
+                    // for its cleanup, without beginning capture teardown first.
+                    // A completed stop fixture prevents any native IPC here.
+                    var exportCancellationField = typeof(MainViewModel).GetField("_diagnosticExportCancellation", hidden)!;
+                    var exportCompletionField = typeof(MainViewModel).GetField("_diagnosticExportCompletion", hidden)!;
+                    using var exportCancellation = new CancellationTokenSource();
+                    var exportCompletion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+                    exportCancellationField.SetValue(vm, exportCancellation);
+                    exportCompletionField.SetValue(vm, exportCompletion);
+                    busyField.SetValue(vm, true);
+                    stopTaskField.SetValue(vm, Task.CompletedTask);
+                    object? epochBeforeQuit = epochField.GetValue(vm);
+                    string stateBeforeQuit = vm.CaptureStatus;
+                    try
+                    {
+                        Task<bool> quit = vm.PrepareToQuitAsync();
+                        Assert.True(exportCancellation.IsCancellationRequested);
+                        Assert.False(quit.IsCompleted); // Cancellation alone is not cleanup completion.
+                        Assert.Equal(stateBeforeQuit, vm.CaptureStatus);
+                        Assert.Equal(epochBeforeQuit, epochField.GetValue(vm));
+                        exportCompletion.TrySetResult();
+                        var frame = new System.Windows.Threading.DispatcherFrame();
+                        var guard = new System.Windows.Threading.DispatcherTimer {
+                            Interval = TimeSpan.FromSeconds(2)
+                        };
+                        guard.Tick += (_, _) => frame.Continue = false;
+                        _ = quit.ContinueWith(_ => window.Dispatcher.BeginInvoke(new Action(() => frame.Continue = false)),
+                            TaskScheduler.Default);
+                        guard.Start();
+                        try { System.Windows.Threading.Dispatcher.PushFrame(frame); }
+                        finally { guard.Stop(); }
+                        Assert.True(quit.IsCompletedSuccessfully, "Quit did not resume after diagnostics cleanup completed.");
+                        Assert.True(quit.GetAwaiter().GetResult());
+                        Assert.Equal(stateBeforeQuit, vm.CaptureStatus);
+                        Assert.False(host.IsRunning);
+                        Assert.False(vm.DiagnosticsInitialized);
+                    }
+                    finally
+                    {
+                        exportCompletion.TrySetResult();
+                        exportCancellationField.SetValue(vm, null);
+                        exportCompletionField.SetValue(vm, null);
+                        busyField.SetValue(vm, false);
+                        stopTaskField.SetValue(vm, null);
+                    }
                     // Health is available above Settings too. Escape must close
                     // it before the normal page/editor keyboard guard returns.
                     var workspacePage = Assert.IsType<Border>(window.FindName("WorkspacePageLayer"));
@@ -256,5 +393,12 @@ public class SettingsStagingTests
         thread.Start();
         Assert.True(thread.Join(TimeSpan.FromSeconds(30)), "WPF staging test timed out.");
         if (failure != null) ExceptionDispatchInfo.Capture(failure).Throw();
+    }
+
+    private static void InvalidateVisualMeasure(DependencyObject visual)
+    {
+        for (int i = 0; i < VisualTreeHelper.GetChildrenCount(visual); i++)
+            InvalidateVisualMeasure(VisualTreeHelper.GetChild(visual, i));
+        if (visual is UIElement element) element.InvalidateMeasure();
     }
 }

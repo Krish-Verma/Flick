@@ -5,6 +5,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Runtime.CompilerServices;
+using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
@@ -44,6 +45,154 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
     private readonly DispatcherTimer _audioEditCommitTimer;
     private ClipMetadata? _pendingAudioClip;
     private readonly System.Collections.Generic.List<AudioTrackInfo> _subscribedAudioTracks = new();
+
+    // Diagnostics initialize only for an explicitly opened app session, never
+    // from an unshown UI fixture. Journals accept closed enums/numbers only.
+    private DiagnosticJournal? _diagnosticJournal;
+    private Task? _diagnosticInitialization;
+    private DiagnosticObservation? _lastDiagnosticObservation;
+    private bool _isExportingDiagnostics;
+    private CancellationTokenSource? _diagnosticExportCancellation;
+    private TaskCompletionSource? _diagnosticExportCompletion;
+    private bool _diagnosticsDisposed;
+    private string _diagnosticStatusMessage = "Local diagnostics start when Flick opens.";
+    public bool DiagnosticsInitialized => _diagnosticJournal != null;
+    public bool CanExportDiagnostics => !_isExportingDiagnostics && !_diagnosticsDisposed;
+    public string DiagnosticStatusText => _diagnosticStatusMessage;
+
+    private Task InitializeDiagnosticsAsync() => _diagnosticInitialization ??= InitializeDiagnosticsCoreAsync();
+
+    private async Task InitializeDiagnosticsCoreAsync()
+    {
+        if (_diagnosticsDisposed) return;
+        try
+        {
+            var assembly = typeof(MainViewModel).Assembly;
+            string? versionText = assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;
+            if (!DiagnosticAppVersion.TryParse(versionText, out var version))
+            {
+                var binaryVersion = assembly.GetName().Version ?? new Version(0, 0, 0);
+                version = new DiagnosticAppVersion(binaryVersion.Major, binaryVersion.Minor,
+                    Math.Max(0, binaryVersion.Build), DiagnosticReleaseChannel.Preview);
+            }
+            string directory = Path.Combine(Path.GetDirectoryName(AppSettings.GetSettingsFilePath())!, "Diagnostics");
+            // Even metadata queries can block on unavailable storage. Keep the
+            // entire filesystem operation off the WPF dispatcher.
+            var journal = await Task.Run(() => DiagnosticJournal.OpenAsync(directory, version));
+            if (_diagnosticsDisposed) { await journal.DisposeAsync(); return; }
+            _diagnosticJournal = journal;
+            OnPropertyChanged(nameof(DiagnosticsInitialized));
+            RecordDiagnostic(DiagnosticEventKind.ApplicationStarted);
+            // Window shortcuts register before asynchronous app initialization.
+            // Project their outcomes now; never persist their chord or message.
+            foreach (var hotkey in _health.Snapshot.Hotkeys)
+                RecordDiagnosticHotkey(hotkey.Action, hotkey.IsRegistered, hotkey.Message);
+            UpdateDiagnosticStatus();
+        }
+        catch (Exception)
+        {
+            // Logging must never prevent replay. Never copy exception paths or
+            // raw settings into a troubleshooting report or status DTO.
+            _diagnosticStatusMessage = "Local diagnostics could not start. Recording remains available.";
+            OnPropertyChanged(nameof(DiagnosticStatusText));
+        }
+    }
+
+    private void UpdateDiagnosticStatus()
+    {
+        if (_diagnosticJournal == null) return;
+        _diagnosticStatusMessage = _diagnosticJournal.Status.StorageState switch {
+            DiagnosticStorageState.Ready => "Local diagnostics · up to 256 events, kept for 7 days.",
+            DiagnosticStorageState.Malformed => "An unreadable local log was preserved. You can export this session.",
+            DiagnosticStorageState.Disposed => "Local diagnostic logging is closed.",
+            _ => "Local log storage is unavailable. You can still export this session."
+        };
+        OnPropertyChanged(nameof(DiagnosticStatusText));
+    }
+
+    public async Task RefreshDiagnosticsStatusAsync()
+    {
+        if (_diagnosticJournal == null || _diagnosticsDisposed) return;
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+        try { await _diagnosticJournal.FlushAsync(timeout.Token); }
+        catch (OperationCanceledException) { }
+        UpdateDiagnosticStatus();
+    }
+
+    private void RecordDiagnostic(DiagnosticEventKind kind, DiagnosticErrorCode error = DiagnosticErrorCode.None)
+    {
+        var journal = _diagnosticJournal;
+        if (journal == null || _diagnosticsDisposed) return;
+        var observation = DiagnosticObservation.FromHealth(kind, _health.Snapshot, error);
+        // A repeated failed poll must not turn into one persistent write per tick.
+        if (observation == _lastDiagnosticObservation) return;
+        if (journal.TryRecord(observation)) _lastDiagnosticObservation = observation;
+    }
+
+    private static DiagnosticErrorCode DiagnosticFailure(string code, string message = "")
+    {
+        if (message.Contains("runtime", StringComparison.OrdinalIgnoreCase) ||
+            message.Contains("executable not found", StringComparison.OrdinalIgnoreCase) ||
+            message.Contains("DLL", StringComparison.OrdinalIgnoreCase) ||
+            message.Contains("ffprobe", StringComparison.OrdinalIgnoreCase)) return DiagnosticErrorCode.DependencyMissing;
+        if (message.Contains("encoder", StringComparison.OrdinalIgnoreCase) ||
+            message.Contains("GPU driver", StringComparison.OrdinalIgnoreCase)) return DiagnosticErrorCode.EncoderUnavailable;
+        return code switch {
+            "missing-source" => DiagnosticErrorCode.MissingSource,
+            "startup-refused" => DiagnosticErrorCode.StartupRefused,
+            "startup-failed" => DiagnosticErrorCode.StartupFailed,
+            "host-unresponsive" => DiagnosticErrorCode.HostUnresponsive,
+            "host-exited" => DiagnosticErrorCode.HostExited,
+            "unexpected-stop" or "capture-fault" or "target-or-engine-fault" => DiagnosticErrorCode.EngineFault,
+            "forced-stop" or "stop-failed" => DiagnosticErrorCode.ForcedStop,
+            "not-ready" => DiagnosticErrorCode.NotReady,
+            _ => DiagnosticErrorCode.Unknown
+        };
+    }
+
+    public async Task ExportDiagnosticsAsync(string destination)
+    {
+        if (!CanExportDiagnostics) return;
+        _isExportingDiagnostics = true;
+        var completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        _diagnosticExportCompletion = completion;
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+        _diagnosticExportCancellation = timeout;
+        OnPropertyChanged(nameof(CanExportDiagnostics));
+        OnPropertyChanged(nameof(IsBackgroundWorkActive));
+        try
+        {
+            if (!Path.GetExtension(destination).Equals(".zip", StringComparison.OrdinalIgnoreCase))
+            {
+                _diagnosticStatusMessage = "Choose a ZIP filename for the troubleshooting report.";
+                return;
+            }
+            await InitializeDiagnosticsAsync().WaitAsync(timeout.Token);
+            if (_diagnosticJournal == null)
+            {
+                _diagnosticStatusMessage = "Diagnostics are unavailable. Recording remains available.";
+                return;
+            }
+            var journal = _diagnosticJournal;
+            var result = await Task.Run(() => journal.ExportZipAsync(destination,
+                overwriteConfirmed: true, cancellationToken: timeout.Token), timeout.Token);
+            _diagnosticStatusMessage = result.Success
+                ? "Diagnostics exported locally. No videos or personal file details included."
+                : "Could not export diagnostics. Choose an accessible folder and try again.";
+        }
+        catch (OperationCanceledException) { _diagnosticStatusMessage = "Diagnostic export cancelled. The existing report was kept."; }
+        catch (Exception) { _diagnosticStatusMessage = "Could not export diagnostics. Choose an accessible folder and try again."; }
+        finally
+        {
+            _isExportingDiagnostics = false;
+            _diagnosticExportCancellation = null;
+            _diagnosticExportCompletion = null;
+            completion.TrySetResult();
+            OnPropertyChanged(nameof(DiagnosticStatusText));
+            OnPropertyChanged(nameof(CanExportDiagnostics));
+            OnPropertyChanged(nameof(IsBackgroundWorkActive));
+        }
+    }
 
     // Engine health and save completion are independent: a stopped engine may
     // still have a real save being validated. Source identity is fixed at request.
@@ -87,7 +236,17 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
     public void ReportHotkeyHealth(string action, string requested, string? registered, string message = "")
     {
         _health.SetHotkeyHealth(new RecordingHotkeyHealth(action, requested, registered, registered != null, Message: message));
+        RecordDiagnosticHotkey(action, registered != null, message);
         PublishHealth();
+    }
+
+    private void RecordDiagnosticHotkey(string action, bool registered, string message)
+    {
+        if (_diagnosticsDisposed) return;
+        _diagnosticJournal?.TryRecord(new DiagnosticObservation(DiagnosticEventKind.HotkeyChanged,
+            HotkeyAction: action == "Save replay" ? DiagnosticHotkeyAction.SaveReplay : DiagnosticHotkeyAction.ToggleReplay,
+            HotkeyRegistered: registered, Error: !registered || !string.IsNullOrWhiteSpace(message)
+                ? DiagnosticErrorCode.HotkeyConflict : DiagnosticErrorCode.None));
     }
 
     private void PublishHealth()
@@ -103,15 +262,17 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
     private void RecordCaptureFailure(string code, string message, bool faulted = true)
     {
         _health.RecordRecordingIssue(_healthSession, code, message, faulted);
+        RecordDiagnostic(DiagnosticEventKind.RecordingFailed, DiagnosticFailure(code, message));
         StatusDetails = message;
         PublishHealth();
     }
 
-    private void RecordSaveFailure(string saveId, string reason)
+    private void RecordSaveFailure(string saveId, string reason, DiagnosticErrorCode error = DiagnosticErrorCode.Unknown)
     {
         if (_saveContexts.Remove(saveId, out var context))
             _health.RecordSaveFailure(context.Session, saveId, "save-failed", reason);
         else _health.RecordSaveIssue("save-failed", reason);
+        RecordDiagnostic(DiagnosticEventKind.SaveFailed, error);
         StatusDetails = reason;
         PublishHealth();
     }
@@ -168,7 +329,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
     // These operations outlive their initiating page. The updater also checks
     // the separate capture/save/import/export flags before closing the app.
     public bool IsBackgroundWorkActive => Volatile.Read(ref _discordUploadOperations) > 0
-        || Volatile.Read(ref _libraryRescanOperations) > 0;
+        || Volatile.Read(ref _libraryRescanOperations) > 0 || _isExportingDiagnostics;
     public bool IsCaptureActive => CaptureActive;
     public bool CanEditClip => SelectedClip?.IsAvailable == true && !IsExporting;
     public bool CanStartExport => CanEditClip && !IsImporting;
@@ -231,6 +392,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
         get => _captureStatus;
         set
         {
+            bool engineChanged = _captureStatus != value;
             _captureStatus = value;
             IsArmed = value == "Armed";
             if (value is "Off" or "Faulted" or "Paused")
@@ -246,6 +408,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
                 "Faulted" => RecordingEngineState.Faulted,
                 _ => RecordingEngineState.Off
             });
+            if (engineChanged) RecordDiagnostic(DiagnosticEventKind.EngineChanged);
             OnPropertyChanged();
             PublishHealth();
         }
@@ -258,7 +421,11 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
     {
         if (_captureProfile == profile) return;
         _captureProfile = profile;
-        if (profile != null) _health.ObserveProfile(_healthSession, profile);
+        if (profile != null)
+        {
+            _health.ObserveProfile(_healthSession, profile);
+            RecordDiagnostic(DiagnosticEventKind.CaptureConfigured);
+        }
         PublishHealth();
         OnPropertyChanged(nameof(CaptureEncodingText));
         OnPropertyChanged(nameof(SoftwareFallbackWarning));
@@ -474,6 +641,8 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
 
     public async Task InitializeAsync()
     {
+        // Optional log storage must not delay source discovery or replay.
+        _ = InitializeDiagnosticsAsync();
         await RefreshTargetsAsync();
     }
 
@@ -655,11 +824,26 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
         bool ready = false;
         try
         {
+            // An active ZIP owns a temporary file. Cancel and await its cleanup
+            // before allowing the process to exit; a slow I/O cancellation
+            // refuses this quit attempt rather than abandoning that operation.
+            _diagnosticExportCancellation?.Cancel();
+            if (_diagnosticExportCompletion is { } export)
+            {
+                try { await export.Task.WaitAsync(TimeSpan.FromSeconds(3)); }
+                catch (TimeoutException) { return false; }
+            }
             await StopCaptureAsync();
             var deadline = Stopwatch.StartNew();
             while (IsReplaySavePending && deadline.Elapsed < TimeSpan.FromSeconds(30))
                 await Task.Delay(100);
             ready = !IsReplaySavePending;
+            if (ready && _diagnosticJournal != null)
+            {
+                using var flushDeadline = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+                try { await _diagnosticJournal.FlushAsync(flushDeadline.Token); }
+                catch (OperationCanceledException) { } // Logs cannot prevent a normal quit.
+            }
             return ready;
         }
         finally { if (!ready) _pollTimer.Start(); }
@@ -678,6 +862,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
                 _ => "Replay is not ready to save. Start replay and wait until Replay Ready."
             };
             _health.RecordSaveIssue("not-ready", StatusDetails);
+            RecordDiagnostic(DiagnosticEventKind.SaveFailed, DiagnosticErrorCode.NotReady);
             PublishHealth();
             ReplaySaveFailed?.Invoke(StatusDetails);
             return;
@@ -688,6 +873,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
         if (!_health.BeginSave(saveSession, saveId))
         {
             _health.RecordSaveIssue("health-not-ready", "Replay health is not ready. Restart replay before saving.");
+            RecordDiagnostic(DiagnosticEventKind.SaveFailed, DiagnosticErrorCode.NotReady);
             PublishHealth();
             ReplaySaveFailed?.Invoke("Replay health is not ready. Restart replay before saving.");
             return;
@@ -696,6 +882,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
         _saveRequestOperations++;
         OnPropertyChanged(nameof(IsReplaySavePending));
         StatusDetails = "Snapshotting replay buffer to original MKV...";
+        RecordDiagnostic(DiagnosticEventKind.SaveRequested);
         PublishHealth();
         try
         {
@@ -704,11 +891,17 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
                 // A real terminal file may have overtaken its command ACK.
                 if (_saveContexts.TryGetValue(saveId, out var pending) && !pending.Validating)
                 {
-                    RecordSaveFailure(saveId, _captureHost.LastSaveError);
+                    RecordSaveFailure(saveId, _captureHost.LastSaveError, DiagnosticErrorCode.CommandRejected);
                     ReplaySaveFailed?.Invoke(StatusDetails);
                 }
             }
-            else { _health.AcknowledgeSave(saveSession, saveId, true); PublishHealth(); }
+            else
+            {
+                if (_saveContexts.TryGetValue(saveId, out var acknowledged) && !acknowledged.Validating &&
+                    _health.AcknowledgeSave(saveSession, saveId, true))
+                    RecordDiagnostic(DiagnosticEventKind.SaveAccepted);
+                PublishHealth();
+            }
         }
         catch (Exception ex)
         {
@@ -719,8 +912,14 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
                 StatusDetails = _captureHost.HasPendingReplaySaves
                     ? "Replay save status could not be confirmed. Flick is still tracking the save: " + ex.Message
                     : "Replay save failed: " + ex.Message;
-                if (!_captureHost.HasPendingReplaySaves) RecordSaveFailure(saveId, StatusDetails);
-                else { _health.RecordSaveIssue("save-unconfirmed", StatusDetails); PublishHealth(); }
+                if (!_captureHost.HasPendingReplaySaves)
+                    RecordSaveFailure(saveId, StatusDetails, DiagnosticErrorCode.HostExited);
+                else
+                {
+                    _health.RecordSaveIssue("save-unconfirmed", StatusDetails);
+                    RecordDiagnostic(DiagnosticEventKind.HostChanged, DiagnosticErrorCode.HostUnresponsive);
+                    PublishHealth();
+                }
                 ReplaySaveFailed?.Invoke(StatusDetails);
             }
         }
@@ -746,7 +945,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
             void ReportFailure()
             {
                 foreach (var pending in _saveContexts.Where(p => !p.Value.Validating).Select(p => p.Key).ToArray())
-                    RecordSaveFailure(pending, reason);
+                    RecordSaveFailure(pending, reason, DiagnosticErrorCode.HostExited);
                 ReplaySaveFailed?.Invoke(reason);
             }
             if (dispatcher.CheckAccess()) ReportFailure();
@@ -813,6 +1012,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
                             : FilteredClips.FirstOrDefault(c => c.Id == editing.Id) ?? editing;
                         _health.RecordValidatedClip(context.Session, saveId, clip.Id, clip.DurationSeconds);
                         _saveContexts.Remove(saveId);
+                        RecordDiagnostic(DiagnosticEventKind.SaveValidated);
                         StatusDetails = "Clip Saved";
                         PublishHealth();
                         try { ClipSavedConfirmed?.Invoke(clip); }
@@ -823,13 +1023,16 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
                     }
                     catch (Exception ex)
                     {
-                        RecordSaveFailure(saveId, "Saved clip could not be validated or indexed: " + ex.Message);
+                        RecordSaveFailure(saveId, "Saved clip could not be validated or indexed: " + ex.Message,
+                            ex is UnauthorizedAccessException or IOException ? DiagnosticErrorCode.StorageUnavailable
+                                : DiagnosticErrorCode.InvalidMedia);
                         ReplaySaveFailed?.Invoke(StatusDetails);
                     }
                 }
                 else
                 {
-                    RecordSaveFailure(saveId, "The capture helper reported a saved clip, but its original file is unavailable.");
+                    RecordSaveFailure(saveId, "The capture helper reported a saved clip, but its original file is unavailable.",
+                        DiagnosticErrorCode.StorageUnavailable);
                     ReplaySaveFailed?.Invoke(StatusDetails);
                 }
             }
@@ -852,7 +1055,9 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
             _ = dispatcher.BeginInvoke(new Action(() =>
             {
                 string saveId = data.HasValue && data.Value.TryGetProperty("save_id", out var id) ? id.GetString() ?? "" : "";
-                RecordSaveFailure(saveId, "Replay save failed: " + reason);
+                RecordSaveFailure(saveId, "Replay save failed: " + reason,
+                    reason.Contains("timed out", StringComparison.OrdinalIgnoreCase) ? DiagnosticErrorCode.SaveTimedOut
+                        : DiagnosticErrorCode.CommandRejected);
                 ReplaySaveFailed?.Invoke(reason);
             }));
         // Save errors leave an otherwise healthy replay buffer armed.
@@ -1504,6 +1709,11 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
         _captureHost.FaultOccurred -= OnHostFaultOccurred;
         _captureHost.EventReceived -= OnHostEventReceived;
         _captureHost.Dispose();
+        _diagnosticsDisposed = true;
+        _diagnosticExportCancellation?.Cancel();
+        // Normal quit flushes asynchronously. Disposal is also used by unshown
+        // fixtures, which never open a journal. The writer owns no UI context.
+        if (_diagnosticJournal != null) _ = _diagnosticJournal.DisposeAsync();
         GC.SuppressFinalize(this);
     }
 
