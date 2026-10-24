@@ -1,5 +1,6 @@
 using System.IO;
 using System.Reflection;
+using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -54,6 +55,7 @@ internal static class Program
         // Do not show the Window: Loaded would discover recording targets. Render
         // its actual WPF client visual directly, without starting a host/decoder.
         var root = (FrameworkElement)main.Content;
+        var layoutObservations = new List<object>();
         // The Window normally paints this underneath its content. Rendering
         // Content alone otherwise leaves transparent/black gaps around panels.
         if (root is Panel panel) panel.Background = main.Background;
@@ -219,7 +221,7 @@ internal static class Program
             "Compact Share: default, Custom 250 MB and expanded optional posting; no export or post action invoked.\n" +
             "Encoder status: synthetic Intel/CPU profiles exercise real bindings and the persistent compatibility warning. No encoder or capture host started.\n" +
             "Recording health: synthetic ledger observations exercise actual fault/retained-error, validating, success and stopped bindings at wide/compact sizes. Hotkey outcomes are simulated; no hotkeys registered and no clip validated by this renderer.\n" +
-            "The VM polling timer is stopped for fixture isolation. Binding/render dispatcher work and repeated WPF measure/arrange passes settle changed labels before rasterization; no control widths or pixels are substituted.\n" +
+            "The VM polling timer is stopped for fixture isolation. Binding/render dispatcher work and recursive visual-tree measure invalidation settle changed labels before rasterization; no control widths or pixels are substituted. layout-observations.json records actual Save button geometry and an unconstrained caption measurement; clipped captions fail this renderer.\n" +
             "The health disclosure is rendered as part of the actual same-window WPF visual; native focus, keyboard and physical placement acceptance are separate.\n" +
             "Brand samples: actual shared Image style rasterized by WPF at 96/120/144/192 DPI; not a physical per-monitor DPI session.\n" +
             "No gameplay, media decoder, OS titlebar, real recording, updater network request, or full UI acceptance claimed.\n");
@@ -231,20 +233,64 @@ internal static class Program
         {
             var viewport = new Size(width, height);
             var bounds = new Rect(0, 0, width, height);
+            void SettleLayout()
+            {
+                for (int pass = 0; pass < 3; pass++)
+                {
+                    root.Dispatcher.Invoke(() => { }, DispatcherPriority.DataBind);
+                    InvalidateVisualMeasure(root);
+                    root.Measure(viewport);
+                    root.Arrange(bounds);
+                    root.UpdateLayout();
+                    root.Dispatcher.Invoke(() => { }, DispatcherPriority.Render);
+                    root.UpdateLayout();
+                }
+            }
             // A live Window schedules another measure after binding/template
             // changes. This detached client visual must explicitly repeat the
             // same work when compact/wide labels change their desired size.
             // Drain bindings/layout only; the unshown Window never runs Loaded.
-            for (int pass = 0; pass < 3; pass++)
+            SettleLayout();
+            var saveButton = Find<Button>("BtnSaveReplay");
+            var presenter = FindVisualDescendant<ContentPresenter>(saveButton)
+                ?? throw new InvalidOperationException("The real Save button has no content presenter.");
+            // Measure the real caption unconstrained, then restore the entire
+            // actual viewport layout. This observes its required size without
+            // assigning a width or substituting another rendered control.
+            presenter.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+            double unconstrainedPresenterWidth = presenter.DesiredSize.Width;
+            double captionWidth = Math.Max(0, unconstrainedPresenterWidth -
+                presenter.Margin.Left - presenter.Margin.Right);
+            SettleLayout();
+            double requiredWidth = captionWidth + saveButton.Padding.Left + saveButton.Padding.Right +
+                saveButton.BorderThickness.Left + saveButton.BorderThickness.Right;
+            double roundingTolerance = 0.5 / VisualTreeHelper.GetDpi(saveButton).DpiScaleX;
+            bool captionFits = saveButton.ActualWidth + roundingTolerance >= requiredWidth &&
+                presenter.ActualWidth + roundingTolerance >= captionWidth;
+            layoutObservations.Add(new
             {
-                root.Dispatcher.Invoke(() => { }, DispatcherPriority.DataBind);
-                root.InvalidateMeasure();
-                root.Measure(viewport);
-                root.Arrange(bounds);
-                root.UpdateLayout();
-                root.Dispatcher.Invoke(() => { }, DispatcherPriority.Render);
-                root.UpdateLayout();
-            }
+                image = file,
+                viewportWidth = width,
+                viewportHeight = height,
+                layoutMode = ((WorkspaceLayoutMode)typeof(MainWindow).GetField("_layoutMode", Private)!.GetValue(main)!).ToString(),
+                saveCaption = Convert.ToString(saveButton.Content),
+                saveDesiredWidth = saveButton.DesiredSize.Width,
+                saveDesiredHeight = saveButton.DesiredSize.Height,
+                saveActualWidth = saveButton.ActualWidth,
+                contentPresenterDesiredWidth = presenter.DesiredSize.Width,
+                contentPresenterActualWidth = presenter.ActualWidth,
+                contentPresenterUnconstrainedDesiredWidth = unconstrainedPresenterWidth,
+                captionUnconstrainedDesiredWidth = captionWidth,
+                requiredButtonWidth = requiredWidth,
+                roundingTolerance,
+                captionFits
+            });
+            File.WriteAllText(Path.Combine(output, "layout-observations.json"),
+                JsonSerializer.Serialize(layoutObservations, new JsonSerializerOptions { WriteIndented = true }));
+            if (!captionFits)
+                throw new InvalidOperationException($"Save caption is clipped in {file}: actual button width " +
+                    $"{saveButton.ActualWidth:F2}, required {requiredWidth:F2}; presenter width " +
+                    $"{presenter.ActualWidth:F2}, caption {captionWidth:F2}.");
             var bitmap = new RenderTargetBitmap(width, height, 96, 96, PixelFormats.Pbgra32);
             bitmap.Render(root);
             var encoder = new PngBitmapEncoder();
@@ -253,6 +299,24 @@ internal static class Program
             encoder.Save(stream);
             Console.WriteLine("Rendered " + file);
         }
+    }
+
+    private static void InvalidateVisualMeasure(DependencyObject visual)
+    {
+        for (int i = 0; i < VisualTreeHelper.GetChildrenCount(visual); i++)
+            InvalidateVisualMeasure(VisualTreeHelper.GetChild(visual, i));
+        if (visual is UIElement element) element.InvalidateMeasure();
+    }
+
+    private static T? FindVisualDescendant<T>(DependencyObject visual) where T : DependencyObject
+    {
+        for (int i = 0; i < VisualTreeHelper.GetChildrenCount(visual); i++)
+        {
+            var child = VisualTreeHelper.GetChild(visual, i);
+            if (child is T match) return match;
+            if (FindVisualDescendant<T>(child) is { } nested) return nested;
+        }
+        return null;
     }
 
     private static void RenderBrandScaleSamples(Application app, string output)
