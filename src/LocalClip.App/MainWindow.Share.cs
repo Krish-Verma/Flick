@@ -47,12 +47,13 @@ public partial class MainWindow
     private void UpdateEditorContextHeight()
     {
         bool share = SharePanel.Visibility == Visibility.Visible;
-        // Share owns a finite, complete card rather than participating in the
-        // scrolling Trim/Audio host. The full editor allocation also fits the
-        // custom size, recent exports and Cancel controls at minimum height.
-        Grid.SetRow(EditorContextLayer, share ? 0 : 1);
-        Grid.SetRowSpan(EditorContextLayer, share ? 5 : 1);
-        double available = share ? ClipEditorPanel.ActualHeight : PreviewSurface.ActualHeight;
+        // Share owns a finite complete card outside the Trim/Audio scroll host.
+        // Keep playback controls clear when the preview can fit the card; use
+        // the full editor allocation only when a compact viewport needs it.
+        bool useEditorArea = share && PreviewSurface.ActualHeight < 360;
+        Grid.SetRow(EditorContextLayer, useEditorArea ? 0 : 1);
+        Grid.SetRowSpan(EditorContextLayer, useEditorArea ? 5 : 1);
+        double available = useEditorArea ? ClipEditorPanel.ActualHeight : PreviewSurface.ActualHeight;
         EditorContextLayer.Width = share ? Math.Min(600, Math.Max(280, ClipEditorPanel.ActualWidth - 24)) : double.NaN;
         EditorContextLayer.MaxHeight = Math.Max(100, available - 24);
         if (!share) EditorContextScroll.MaxHeight = Math.Max(32, available - 100);

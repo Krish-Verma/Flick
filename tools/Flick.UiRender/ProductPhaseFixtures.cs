@@ -169,7 +169,9 @@ internal static partial class Program
         {
             render(file, width, height);
             bool contextFits = true;
-            if (Find<Border>("EditorContextLayer").Visibility == Visibility.Visible)
+            if (Find<Grid>("WorkspaceContentGrid").Visibility == Visibility.Visible &&
+                Find<Grid>("ClipEditorPanel").Visibility == Visibility.Visible &&
+                Find<Border>("EditorContextLayer").Visibility == Visibility.Visible)
             {
                 var root = (FrameworkElement)window.Content;
                 Rect Bounds(FrameworkElement element) => element.TransformToAncestor(root).TransformBounds(new Rect(element.RenderSize));

@@ -12,6 +12,7 @@ using LocalClip.App;
 using LocalClip.App.Services;
 using LocalClip.App.ViewModels;
 using LocalClip.Core.Media;
+using LocalClip.Core.Ipc;
 using LocalClip.Core.Models;
 using LocalClip.Core.Process;
 using LocalClip.Core.Rules;
@@ -121,6 +122,19 @@ internal static partial class Program
         ShareFrame("68-share-more-minimum.png", 720, 480, requireReady: true);
         observations.Add(new { OptionalPostingAvailable = postingAvailable, MenuDataContextIsViewModel = ReferenceEquals(menu.DataContext, vm),
             NativeMenuOpened = false, PostingInvoked = false });
+
+        var captureProfile = typeof(MainViewModel).GetField("_captureProfile", Private)!.GetValue(vm);
+        var setCaptureProfile = typeof(MainViewModel).GetMethod("SetCaptureProfile", Private)!;
+        try
+        {
+            setCaptureProfile.Invoke(vm, [new CaptureEncodingProfile("obs_x264", "CPU x264 H.264", true, 1280, 720, 30)]);
+            if (string.IsNullOrWhiteSpace(vm.SoftwareFallbackWarning))
+                throw new InvalidOperationException("The synthetic CPU profile must exercise the production warning.");
+            ShareFrame("76-share-cpu-warning-minimum.png", 720, 480, requireReady: true);
+            observations.Add(new { SyntheticCpuProfileOnly = true, Warning = vm.SoftwareFallbackWarning,
+                ShareAtMinimumWithCpuWarning = true, CaptureStarted = false });
+        }
+        finally { setCaptureProfile.Invoke(vm, [captureProfile]); }
 
         int originalCap = vm.TargetSizeMb;
         byte[] originalPreferences = File.ReadAllBytes(AppSettings.GetSettingsFilePath());

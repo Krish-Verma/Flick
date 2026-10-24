@@ -454,7 +454,12 @@ internal static partial class Program
             object? healthLayout = null;
             object? shareLayout = null;
             string? healthLayoutFailure = null;
-            if (Find<Border>("SharePanel").Visibility == Visibility.Visible &&
+            // Descendants keep their local Visibility when Settings hides the
+            // workspace. Check the rendered path, not Window.IsVisible: this
+            // harness deliberately never shows its production Window.
+            if (Find<Grid>("WorkspaceContentGrid").Visibility == Visibility.Visible &&
+                Find<Grid>("ClipEditorPanel").Visibility == Visibility.Visible &&
+                Find<Border>("SharePanel").Visibility == Visibility.Visible &&
                 Find<Border>("EditorContextLayer").Visibility == Visibility.Visible)
             {
                 var measured = InspectShareNoScrollLayout(main);
