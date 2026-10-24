@@ -45,33 +45,18 @@ public class StorageAndRecoveryTests : IDisposable
     [Fact]
     public void TestAppSettingsCorruptedFileRecovery()
     {
-        string settingsPath = AppSettings.GetSettingsFilePath();
-        string backupPath = settingsPath + ".bak";
+        string settingsPath = Path.Combine(_testDir, "settings.json");
+        byte[] corrupted = System.Text.Encoding.UTF8.GetBytes("{ this is invalid json !!! }}}");
+        File.WriteAllBytes(settingsPath, corrupted);
 
-        try
-        {
-            if (File.Exists(settingsPath))
-            {
-                File.Copy(settingsPath, backupPath, true);
-            }
+        var loaded = AppSettings.LoadExistingFile(settingsPath);
 
-            // Write completely corrupted garbage to settings file
-            File.WriteAllText(settingsPath, "{ this is invalid json !!! }}}");
-
-            // AppSettings.Load() should recover without throwing and return clean default
-            var loaded = AppSettings.Load();
-            Assert.NotNull(loaded);
-            Assert.False(loaded.StartArmed);
-            Assert.Equal(30, loaded.ReplayDurationSeconds);
-        }
-        finally
-        {
-            if (File.Exists(backupPath))
-            {
-                File.Copy(backupPath, settingsPath, true);
-                File.Delete(backupPath);
-            }
-        }
+        Assert.NotNull(loaded);
+        Assert.False(loaded.StartArmed);
+        Assert.Equal(30, loaded.ReplayDurationSeconds);
+        Assert.True(loaded.RequiresExplicitSettingsSave);
+        Assert.NotEmpty(loaded.LoadWarning);
+        Assert.Equal(corrupted, File.ReadAllBytes(settingsPath));
     }
 
     [Fact]
@@ -91,7 +76,7 @@ public class StorageAndRecoveryTests : IDisposable
         string filePath = Path.Combine(settings.OriginalsFolder, unicodeFileName);
         File.WriteAllText(filePath, "dummy mkv content for testing storage indexing");
 
-        var storage = new ClipStorage(settings);
+        var storage = new ClipStorage(settings, metadataDirectory: Path.Combine(_testDir, "Metadata"));
 
         var meta = new ClipMetadata
         {

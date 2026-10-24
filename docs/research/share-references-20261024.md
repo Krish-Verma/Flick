@@ -218,3 +218,20 @@ that absence. As a research subagent without its own user interview, I used the
 lead's explicit brief and preserved the incumbent identity/architecture. No new
 product/design authority or UI implementation was written. The lead presents
 this proposal before feature coding.
+
+## Follow-up visual verification in Chrome
+
+On October24, the lead opened the official Steam product page and inspected its
+actual DOM-linked publisher sharing-menu image in Chrome:
+https://clan.akamai.steamstatic.com/images/39049601/bd3533e149581f27a2fe96ebc62fa2952e169010.png
+
+The image visibly separates Save/Export Video File from clipboard/device/link
+sharing. This verifies the menu's appearance, not its underlying clipboard
+format or current installed-client behavior. The lead also directly inspected
+SteelSeries' genuine6b preparation image (large thumbnail, duration, cap choices
+and drag instruction),6c Discord attachment preview, and Medal's genuine2025
+preview/details/Copy Link screenshot linked above. These are publisher images
+viewed in Chrome; no competitor executable was installed or operated, and no
+file was uploaded or message sent. This resolves the earlier pixel-inspection
+limitation for those specific reference images only. Historical size limits
+remain unsuitable as current product defaults.

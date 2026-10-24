@@ -7,6 +7,7 @@ namespace LocalClip.Core.Ipc;
 public sealed class PendingReplaySaves
 {
     private readonly HashSet<string> _pending = new(StringComparer.Ordinal);
+    private readonly HashSet<string> _dispatching = new(StringComparer.Ordinal);
     private readonly object _gate = new();
 
     public int Count { get { lock (_gate) return _pending.Count; } }
@@ -22,7 +23,21 @@ public sealed class PendingReplaySaves
 
     public bool Complete(string saveId)
     {
-        lock (_gate) return _pending.Remove(saveId);
+        lock (_gate)
+            return !_dispatching.Contains(saveId) && _pending.Remove(saveId);
+    }
+
+    /// <summary>Claim one terminal event without releasing protection during subscriber dispatch.</summary>
+    public bool TryClaimCompletion(string saveId)
+    {
+        lock (_gate)
+            return _pending.Contains(saveId) && _dispatching.Add(saveId);
+    }
+
+    public bool FinishCompletion(string saveId)
+    {
+        lock (_gate)
+            return _dispatching.Remove(saveId) && _pending.Remove(saveId);
     }
 
     public IReadOnlyList<string> HostExited(bool confirmed)
@@ -30,8 +45,10 @@ public sealed class PendingReplaySaves
         lock (_gate)
         {
             if (!confirmed || _pending.Count == 0) return Array.Empty<string>();
-            var abandoned = _pending.ToArray();
-            _pending.Clear();
+            // A matching terminal event already being delivered owns its completion.
+            // Keep the updater protected until its synchronous subscribers return.
+            var abandoned = _pending.Where(id => !_dispatching.Contains(id)).ToArray();
+            foreach (string saveId in abandoned) _pending.Remove(saveId);
             return abandoned;
         }
     }

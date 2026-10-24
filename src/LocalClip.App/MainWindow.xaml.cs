@@ -136,7 +136,7 @@ public partial class MainWindow : Window
         // Wire CaptureStatus badge color updates
         _vm.PropertyChanged += (s, ev) =>
         {
-            if (ev.PropertyName == nameof(MainViewModel.CaptureStatus))
+            if (ev.PropertyName is nameof(MainViewModel.CaptureStatus) or nameof(MainViewModel.HealthStatusText))
             {
                 UpdateStatusBadgeColor();
                 if (_vm.CaptureStatus == "Starting")
@@ -183,7 +183,23 @@ public partial class MainWindow : Window
                 _vm.Settings.Save();
             }
         }
+        _vm.ReportHotkeyHealth("Toggle replay", _vm.Settings.CaptureToggleHotkey,
+            _hotkeyManager.RegisteredToggleHotkey, error);
+        _vm.ReportHotkeyHealth("Save replay", _vm.Settings.SaveReplayHotkey,
+            _hotkeyManager.RegisteredSaveHotkey, error);
         BtnSaveReplay.ToolTip = $"Save a replay ({_vm.Settings.SaveReplayHotkey})";
+    }
+
+    private void BtnRecordingHealth_Click(object sender, RoutedEventArgs e)
+    {
+        RecordingHealthPanel.Visibility = Visibility.Visible;
+        BtnCloseRecordingHealth.Focus();
+    }
+
+    private void BtnCloseRecordingHealth_Click(object sender, RoutedEventArgs e)
+    {
+        RecordingHealthPanel.Visibility = Visibility.Collapsed;
+        BtnRecordingHealth.Focus();
     }
 
     [DllImport("user32.dll", SetLastError = true)]
@@ -310,14 +326,15 @@ public partial class MainWindow : Window
     private void UpdateStatusBadgeColor()
     {
         string status = _vm.CaptureStatus;
-        bool ready = status == "Armed";
+        bool ready = status == "Armed" && _vm.IsArmed;
         bool buffering = status == "Buffering";
-        bool active = ready || buffering;
+        bool active = status is "Armed" or "Buffering";
         bool transitional = status == "Starting" || status == "Stopping";
         bool fault = status == "Faulted";
 
         bool compact = _layoutMode == WorkspaceLayoutMode.Compact;
-        TxtCaptureStatus.Text = status switch
+        TxtCaptureStatus.Text = _vm.RecordingHealth.SessionId != Guid.Empty || _vm.RecordingHealth.LastSaveIssue != null
+            ? _vm.HealthStatusText : status switch
         {
             "Armed" => compact ? "Ready" : "Replay Ready",
             "Buffering" => compact ? "Buffering" : "Buffering Replay",
@@ -831,7 +848,14 @@ public partial class MainWindow : Window
 
     private void MainWindow_PreviewKeyDown(object sender, KeyEventArgs e)
     {
-        if (FlickDialog.IsOpen || WorkspacePageLayer.Visibility == Visibility.Visible) return;
+        if (FlickDialog.IsOpen) return;
+        if (e.Key == Key.Escape && RecordingHealthPanel.Visibility == Visibility.Visible)
+        {
+            BtnCloseRecordingHealth_Click(sender, e);
+            e.Handled = true;
+            return;
+        }
+        if (WorkspacePageLayer.Visibility == Visibility.Visible) return;
         if (e.Key == Key.Escape && EditorContextLayer.Visibility == Visibility.Visible)
         {
             CloseEditorContext();

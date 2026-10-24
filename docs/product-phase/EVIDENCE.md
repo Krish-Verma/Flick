@@ -4,12 +4,13 @@ Updated 2026-10-24. Planned work is not implementation evidence.
 
 | Slice | Implemented | Automated evidence | Windows/visual | Physical hardware | Integrated/released |
 |---|---|---|---|---|---|
-| Phase0 | audit and plans | live GitHub main/release/PR/issue inventory | baseline WPF artifact recovered | unavailable, access question pending | plan branch only; no release |
-| A1–A4 | pending | pending | pending | pending | pending |
+| Phase0 | audit and plans | live GitHub inventory; plan CI40087047146 passed | baseline WPF artifact recovered | initial SSH metadata only; later timeouts | PR43 merged842d3b9; no release |
+| A1 | health ledger, correlated IPC and WPF disclosure authored | local focused IPC34/34; health16/16; cross-build zero warnings/errors | Windows CI/render pending | not verified | uncommitted candidate |
+| A2–A4 | pending | pending | pending | pending | pending |
 | B1–B4 | pending | pending | pending | pending | pending |
 | C1–C4 | pending | pending | pending | pending | pending |
 | D1–D4 | pending | pending | pending | pending | pending |
-| E1 | research in progress | primary references | baseline recovered | not applicable to research | pending |
+| E1 | research specification authored | Steam/Moments/Medal primary docs and genuine publisher images inspected in Chrome | digest-verified WPF baseline visually reviewed | not applicable to research; no live competitor operation | plan PR43 plus follow-up research in A1 branch |
 | E2–E4 | pending | pending | pending | Discord desktop pending | pending |
 
 ## Measurement rules
