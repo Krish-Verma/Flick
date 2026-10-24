@@ -565,7 +565,15 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
     {
         if (CaptureStatus != "Buffering" && CaptureStatus != "Armed")
         {
-            StatusDetails = "Turn replay capture on before saving a clip.";
+            StatusDetails = CaptureStatus switch
+            {
+                "Off" => $"Replay is off. Start replay ({_settings.CaptureToggleHotkey}) before saving a clip.",
+                "Starting" => "Replay is starting. Wait until Replay Ready before saving.",
+                "Faulted" when !string.IsNullOrWhiteSpace(StatusDetails) => StatusDetails,
+                "Faulted" => "Replay capture failed. Review the capture error and start replay again.",
+                _ => "Replay is not ready to save. Start replay and wait until Replay Ready."
+            };
+            ReplaySaveFailed?.Invoke(StatusDetails);
             return;
         }
 
@@ -1196,7 +1204,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
         bool imported = SelectedClip.IsImported;
         string question = imported
             ? $"Remove '{SelectedClip.Title}' from Flick? The original video and any export will NOT be deleted. It will stay excluded from rescans until you unlink and reconnect its folder."
-            : $"Delete '{SelectedClip.Title}'? The original video will be sent to the Recycle Bin.";
+            : $"Delete '{SelectedClip.Title}'? The original video will be sent to the Recycle Bin. Any associated exported MP4 may be permanently deleted.";
         var answer = LocalClip.App.Services.FlickDialog.Show(question,
             imported ? "Remove From Library" : "Delete Original Video",
             MessageBoxButton.YesNo, MessageBoxImage.Question);
@@ -1224,8 +1232,22 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
     public void RenameSelectedClip(string newTitle)
     {
         if (SelectedClip == null || string.IsNullOrWhiteSpace(newTitle)) return;
-        _storage.RenameClip(SelectedClip.Id, newTitle.Trim());
-        ReloadClips();
+        try
+        {
+            if (!_storage.RenameClip(SelectedClip.Id, newTitle.Trim()))
+            {
+                StatusDetails = "Clip could not be found for renaming.";
+                return;
+            }
+            ReloadClips();
+            StatusDetails = "Clip renamed.";
+        }
+        catch (Exception ex)
+        {
+            // A locked, damaged or inaccessible metadata index should report
+            // an error, never terminate Flick through the WPF click handler.
+            StatusDetails = "Couldn't rename clip: " + ex.Message;
+        }
     }
 
     public async Task SendToDiscordWebhookAsync(string message = "")

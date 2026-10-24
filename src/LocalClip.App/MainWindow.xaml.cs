@@ -348,7 +348,8 @@ public partial class MainWindow : Window
         BtnSaveReplay.Content = WorkspaceLayoutRules.SaveActionLabel(
             _vm.Settings.ReplayDurationSeconds, _layoutMode == WorkspaceLayoutMode.Compact);
         BtnSaveReplay.ToolTip = $"Save a replay ({_vm.Settings.SaveReplayHotkey})";
-        BtnSaveReplay.IsEnabled = active;
+        // A buffering encoder is not yet guaranteed to hold a decodable replay.
+        BtnSaveReplay.IsEnabled = ready;
         BtnSaveReplay.Style = (Style)FindResource(
             active ? "Flick.Button.Primary" : "Flick.Button.Secondary");
 
@@ -360,7 +361,7 @@ public partial class MainWindow : Window
         if (_traySaveItem != null)
         {
             _traySaveItem.Text = saveLabel;
-            _traySaveItem.Enabled = active;
+            _traySaveItem.Enabled = ready;
         }
         if (_notifyIcon != null)
             _notifyIcon.Text = $"Flick — {TxtCaptureStatus.Text}";

@@ -94,10 +94,13 @@ public class HotkeyManager : IDisposable
         string? oldToggle = _toggleHotkey, oldSave = _saveHotkey;
         ClearRegistrations();
         bool toggleOk = RegisterToggleHotkey(toggle, out var toggleError);
-        bool saveOk = toggleOk && RegisterSaveHotkey(save, out var saveError);
+        string saveError = "";
+        bool saveOk = toggleOk && RegisterSaveHotkey(save, out saveError);
         if (toggleOk && saveOk) return true;
 
-        error = toggleOk ? "Save hotkey is unavailable." : toggleError;
+        // Report the actual Win32 registration failure rather than hiding it
+        // behind a generic message when the save shortcut is unavailable.
+        error = toggleOk ? saveError : toggleError;
         ClearRegistrations();
         if (oldToggle != null) RegisterToggleHotkey(oldToggle, out _);
         if (oldSave != null) RegisterSaveHotkey(oldSave, out _);
