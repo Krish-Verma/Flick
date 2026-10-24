@@ -24,7 +24,11 @@ public partial class MainWindow
     private void ApplyShareAccessiblePalette(bool highContrast)
     {
         _vm?.NotifyShareAccessibility();
-        foreach (string key in SharePaletteKeys) EditorContextLayer.Resources.Remove("Flick.Brush." + key);
+        foreach (string key in SharePaletteKeys)
+        {
+            EditorContextLayer.Resources.Remove("Flick.Brush." + key);
+            ShareMoreMenu.Resources.Remove("Flick.Brush." + key);
+        }
         if (!highContrast) return;
         foreach (string key in SharePaletteKeys)
         {
@@ -36,21 +40,37 @@ public partial class MainWindow
                 _ => SystemColors.WindowBrush
             };
             EditorContextLayer.Resources["Flick.Brush." + key] = brush;
+            ShareMoreMenu.Resources["Flick.Brush." + key] = brush;
         }
     }
 
     private void UpdateEditorContextHeight()
     {
         bool share = SharePanel.Visibility == Visibility.Visible;
-        // At minimum height the video row cannot contain a usable drawer.
-        // Let Share use the editor's full area while keeping its fixed actions.
-        bool useEditorArea = share && PreviewSurface.ActualHeight < 320;
+        // Share owns a finite complete card outside the Trim/Audio scroll host.
+        // Keep playback controls clear when the preview can fit the card; use
+        // the full editor allocation only when a compact viewport needs it.
+        bool useEditorArea = share && PreviewSurface.ActualHeight < 360;
         Grid.SetRow(EditorContextLayer, useEditorArea ? 0 : 1);
         Grid.SetRowSpan(EditorContextLayer, useEditorArea ? 5 : 1);
         double available = useEditorArea ? ClipEditorPanel.ActualHeight : PreviewSurface.ActualHeight;
-        double chrome = share ? 90 + ShareActionFooter.ActualHeight : 100;
-        EditorContextScroll.MaxHeight = Math.Max(32, available - chrome);
+        EditorContextLayer.Width = share ? Math.Min(600, Math.Max(280, ClipEditorPanel.ActualWidth - 24)) : double.NaN;
         EditorContextLayer.MaxHeight = Math.Max(100, available - 24);
+        if (!share) EditorContextScroll.MaxHeight = Math.Max(32, available - 100);
+    }
+
+    private void ShareMoreButton_Click(object sender, RoutedEventArgs args)
+    {
+        ShareMoreMenu.PlacementTarget = ShareMoreButton;
+        ShareMoreMenu.IsOpen = true;
+    }
+
+    private void ShareDetails_Click(object sender, RoutedEventArgs args)
+    {
+        string message = _vm.ExportStatusMessage;
+        if (string.IsNullOrWhiteSpace(message)) message = _vm.ShareTileHint;
+        Services.FlickDialog.Show(message + "\n\n" + _vm.ExportAspectDescription + "\n" + _vm.ShareSizeHint,
+            "Export Details", MessageBoxButton.OK, MessageBoxImage.Information);
     }
 
     private void ShareFooter_SizeChanged(object sender, SizeChangedEventArgs args) => UpdateEditorContextHeight();

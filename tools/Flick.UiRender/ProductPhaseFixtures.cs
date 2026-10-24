@@ -169,7 +169,10 @@ internal static partial class Program
         {
             render(file, width, height);
             bool contextFits = true;
-            if (Find<Border>("EditorContextLayer").Visibility == Visibility.Visible)
+            bool renderedShare = false;
+            if (Find<Grid>("WorkspaceContentGrid").Visibility == Visibility.Visible &&
+                Find<Grid>("ClipEditorPanel").Visibility == Visibility.Visible &&
+                Find<Border>("EditorContextLayer").Visibility == Visibility.Visible)
             {
                 var root = (FrameworkElement)window.Content;
                 Rect Bounds(FrameworkElement element) => element.TransformToAncestor(root).TransformBounds(new Rect(element.RenderSize));
@@ -177,9 +180,12 @@ internal static partial class Program
                 var contextScroll = Find<ScrollViewer>("EditorContextScroll");
                 FrameworkElement allocation = Grid.GetRowSpan(context) > 1
                     ? Find<FrameworkElement>("ClipEditorPanel") : Find<Border>("PreviewSurface");
-                contextFits = ProductContains(Bounds(allocation), Bounds(context)) &&
-                    ProductContains(Bounds(context), Bounds(Find<Button>("CloseEditorTool"))) &&
-                    contextScroll.ViewportHeight > 0 && double.IsFinite(contextScroll.ViewportHeight);
+                renderedShare = Find<Border>("SharePanel").Visibility == Visibility.Visible;
+                contextFits = renderedShare
+                    ? InspectShareNoScrollLayout(window).Fits
+                    : ProductContains(Bounds(allocation), Bounds(context)) &&
+                      ProductContains(Bounds(context), Bounds(Find<Button>("CloseEditorTool"))) &&
+                      contextScroll.ViewportHeight > 0 && double.IsFinite(contextScroll.ViewportHeight);
             }
             bool libraryFits = true;
             double? listHeight = null;
@@ -197,7 +203,9 @@ internal static partial class Program
                 vm.ExportAspectPreset, EditorContextFits = contextFits, LibraryListFits = libraryFits,
                 ListHeight = listHeight, NoPlaybackOrCapture = true });
             WriteEvidence();
-            if (!contextFits) throw new InvalidOperationException("Editor context, Close or scroll viewport do not fit in " + file);
+            // The global renderer records all Share layout failures and throws
+            // after the last state. Preserve immediate failures for other tools.
+            if (!contextFits && !renderedShare) throw new InvalidOperationException("Editor context, Close or scroll viewport do not fit in " + file);
             if (!libraryFits) throw new InvalidOperationException("The virtualized clip list lacks a useful contained viewport in " + file);
         }
         Split();
@@ -242,11 +250,28 @@ internal static partial class Program
         Split();
         Invoke("EditorTool_Click", Find<Button>("ToolShare"), new RoutedEventArgs());
         Find<ComboBox>("CmbRecentExports").SelectedIndex = 0;
-        Find<ScrollViewer>("EditorContextScroll").ScrollToBottom();
         ProductFrame("61-recent-exports-720.png", 1280, 720, "Recent validated MP4 selected; history timestamp synthetic");
         Compact(library: false);
-        Find<ScrollViewer>("EditorContextScroll").ScrollToBottom();
         ProductFrame("62-recent-exports-minimum.png", 720, 480, "Minimum recent exports selector and library");
+        int priorCap = vm.TargetSizeMb;
+        string priorTitle = media.Title;
+        vm.TargetSizeMb = 250;
+        Invoke("UpdateSharePresetSelection");
+        media.Title = "Synthetic recent clip with a deliberately long title to verify the full tooltip and compact metadata at minimum size";
+        vm.ActivateSharePresentation();
+        ProductFrame("73-share-recent-custom-long-minimum.png", 720, 480, "Recent export plus real Custom250 choice and long title; no new export");
+        vm.IsExporting = true;
+        vm.ExportProgress = 42;
+        vm.ExportStatusMessage = "Visual fixture: preparing Custom250 output; no encode worker is running.";
+        Invoke("UpdateSharePresetSelection");
+        ProductFrame("74-share-recent-custom-busy-minimum.png", 720, 480, "Recent export plus Custom limit and all four actions during synthetic export");
+        vm.CancelShareExport();
+        ProductFrame("75-share-recent-custom-cancelling-minimum.png", 720, 480, "Recent export plus Custom limit and pending synthetic cancellation");
+        vm.IsExporting = false;
+        vm.TargetSizeMb = priorCap;
+        Invoke("UpdateSharePresetSelection");
+        media.Title = priorTitle;
+        vm.ActivateSharePresentation();
         Invoke("CloseEditorContext");
         vm.LibrarySort = "Game";
         Split();

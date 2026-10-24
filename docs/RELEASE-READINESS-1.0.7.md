@@ -53,3 +53,7 @@ The separate recording and audio harness payloads must be built from matching so
 This candidate remains an unsigned developer preview. GitHub Latest is a catalogue position, not a Windows trust or stable-quality certification. Checksums are not signatures; do not ask users to lower Smart App Control or other protections. Keep current signed-QA identity/environment guards, upstream binary hash preservation and own-binaries-only signing allowlist intact. SignPath and Microsoft Store work remain separate from this version preparation.
 
 Original Flick code remains GPL-2.0-or-later. OBS/libobs, FFmpeg, .NET and other bundled components retain their own licenses and notices; complete redistribution/corresponding-source obligations remain a release gate. Keep historical releases/tags and approval files unchanged. If publication is later authorized, create a new pinned publisher/approval record rather than reusing the immutable 1.0.6 one.
+
+## Owner testing after the preview
+
+The owner confirmed on October24 that they will perform real gameplay and setup testing after receiving the preview. The engineering scope is coding, automated correctness/package checks and actual WPF visual review, including a Share panel with no scrolling. Physical/game/audio/Discord/performance gates remain honestly unverified and owner-operated; they do not require the engineering agent to keep attempting SSH desktop capture before preparing an unsigned preview. Public publication still requires approval of the concrete source and artifacts under the release policy above.
