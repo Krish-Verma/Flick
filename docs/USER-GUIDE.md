@@ -1,12 +1,12 @@
 # Flick — User Guide (Development Build)
 
-> Flick is currently a private developer preview. This guide covers the stacked GUI Slice 6 and PR #8 open-source preparation. Source CI is not equivalent to a fully qualified public Windows installer. Owner release approval is still required.
+> Flick v1.0.6-preview.1 is a publicly downloadable, **unsigned** developer preview. GitHub Latest identifies the newest preview, not trusted publisher status or completed physical Windows/GPU qualification. Source CI does not replace the owner's hardware acceptance.
 
 Flick is a small, free, offline-first **Windows 11 x64** gameplay clipper. It manually captures recent action, lets you review and trim the original, adjust audio for the share copy, and prepare a Discord-sized MP4 without a watermark. Initial hardware support targets **NVIDIA NVENC**; other GPUs are not qualified.
 
 ## 1. Install or run
 
-Two preview formats are available after a verified Windows build: extract `Flick-v1.0.2-win-x64.zip` and launch **Flick.exe**, or run the unsigned `Flick-Setup.exe` wizard for a normal **Start Menu** entry, optional desktop shortcut and Windows **Installed Apps** uninstall registration. The Inno Setup build is not released publicly until AntiGravity tests it. **Do not run the previous `LocalClip` `uninstall.ps1`**, which could erase the directory containing user metadata. New program files install in `%LOCALAPPDATA%\Programs\Flick`, separately from settings and clips.
+Two preview formats are available after a verified Windows build: extract `Flick-v1.0.6-win-x64.zip` and launch **Flick.exe**, or run the unsigned `Flick-Setup.exe` wizard for a normal **Start Menu** entry, optional desktop shortcut and Windows **Installed Apps** uninstall registration. The Inno Setup build is publicly available as an unsigned preview, with full physical hardware and Smart App Control qualification still outstanding. **Do not run the previous `LocalClip` `uninstall.ps1`**, which could erase the directory containing user metadata. New program files install in `%LOCALAPPDATA%\Programs\Flick`, separately from settings and clips.
 
 Flick stores settings and metadata under `%LOCALAPPDATA%\LocalClip`; originals are saved by default to `%USERPROFILE%\Videos\LocalClip\Originals`. You may change the originals folder in Settings.
 
@@ -14,7 +14,7 @@ Flick stores settings and metadata under `%LOCALAPPDATA%\LocalClip`; originals a
 
 Choose **Settings > General > Uninstall Flick**, or open **Windows Settings > Apps > Installed Apps > Flick > Uninstall**. The installed Windows uninstaller optionally removes local settings and cache only after a separate confirmation; original recordings, exports and imported sources are never deleted. Portable ZIP copies should be closed and the extracted folder deleted manually. The downloaded Setup EXE remains in Downloads until you delete it.
 
-Compatibility: Windows 11 x64 with NVIDIA NVENC is tested. AMD/Intel GPU-only systems, Windows ARM and 32-bit Windows are not supported for replay capture in this release. Windows 10 has not been qualified.
+Compatibility: Windows 11 x64 with working D3D11 graphics is the target. NVIDIA NVENC, AMD AMF, Intel Quick Sync and optional x264 CPU fallback are implemented but require physical exact-machine testing in v1.0.6. Windows ARM, 32-bit Windows and Windows 10 are not qualified.
 
 ## 2. The everyday clipping workflow
 
@@ -50,7 +50,7 @@ Open **Settings** from the navigation rail or tray. It now has six compact categ
 | Preview Notification | A button to see/hear sample feedback without saving preferences or starting capture |
 | Discord sharing | 10/20/50/100 MB and Custom cap; 20 MB default, optional encrypted direct webhook disabled by default and requiring explicit per-send confirmation |
 
-Long/high-quality replays may exceed the compressed packet budget and retain less history. A video’s settings describe the requested profile, not a guarantee of actual hardware FPS or image quality. Flick does not silently switch to CPU-heavy x264 capture when NVENC cannot start.
+Long/high-quality replays may exceed the compressed packet budget and retain less history. A video’s settings describe the requested profile, not a guarantee of actual hardware FPS or image quality. Starting with 1.0.5, Flick offers an optional CPU x264 fallback (720p/30 maximum) when no hardware encoder starts. The default enables this fallback and clearly reports the actual selected encoder; disable it under Recording if you prefer recording to fail rather than consume CPU.
 
 **Restore Defaults** stages the factory preferences; press **Save Settings** to apply them. **Cancel** leaves saved preferences unchanged. Shortcut fields accept actual key chords, and each setting category uses Flick's shared typography and control sizes. Existing originals are never deleted by Restore or Cancel.
 
@@ -104,7 +104,7 @@ Right-click a clip for contextual options. Choosing **Remove** on an imported cl
 
 ## 4. Limitations and troubleshooting
 
-- **No video captured:** Confirm replay is manually armed, the correct target is selected, and the NVIDIA hardware encoder is available. Closing the selected window must not silently fall back to a monitor.
+- **No video captured:** Replay starts OFF. Select the correct source, press **Start Replay** or **Ctrl+Shift+F9**, wait for **Replay Ready**, and only then press **Save Clip** or **Ctrl+Shift+F8**. Check the footer status for missing C++ runtime, graphics/encoder, target or file-save errors. The configured hotkeys may be different; Windows can reserve conflicting shortcuts. Closing the selected window must not silently fall back to a monitor.
 - **Clip is shorter than selected duration:** Replay duration is bounded by capture startup time, keyframe boundaries and the 256 MiB compressed buffer. Try Balanced or Light, or shorten the requested replay.
 - **Audio sounds doubled:** Use the dedicated system/mic tracks for export; don't mix the combined preview track with its source tracks. Check headset monitoring if mic sound is already in system audio.
 - **MKV playback fails:** Use **Create Local Preview** to make a temporary compatible MP4 **only when requested** (maximum first 180 seconds of a long imported recording, maximum 120 MB, and 90-second worker timeout). If a remuxed preview still fails, try **Try Compatible Preview** for an explicit reencode; otherwise use **Open in External Player**. Conversion does not run during active replay or exporting.

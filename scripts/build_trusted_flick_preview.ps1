@@ -8,8 +8,8 @@ signing identity and Artifact Signing tools must already be configured.
 param([switch]$SkipNativeBuild)
 $ErrorActionPreference = 'Stop'
 $root = (Get-Item $PSScriptRoot).Parent.FullName
-$packageDir = Join-Path $root 'dist\Flick-v1.0.5-win-x64'
-$zip = Join-Path $root 'dist\Flick-v1.0.5-win-x64.zip'
+$packageDir = Join-Path $root 'dist\Flick-v1.0.6-win-x64'
+$zip = Join-Path $root 'dist\Flick-v1.0.6-win-x64.zip'
 $setup = Join-Path $root 'dist\Flick-Setup.exe'
 $manifest = Join-Path $root 'dist\SHA256SUMS.txt'
 $signScript = Join-Path $PSScriptRoot 'sign_flick_file.ps1'
@@ -86,7 +86,7 @@ $hostHash = (Get-FileHash -LiteralPath (Join-Path $packageDir 'tools\obs\runtime
 $zipHash = (Get-FileHash -LiteralPath $zip -Algorithm SHA256).Hash
 @(
     "# Flick signed preview SHA-256 checksums, not yet Smart App Control certified",
-    "$zipHash  Flick-v1.0.5-win-x64.zip",
+    "$zipHash  Flick-v1.0.6-win-x64.zip",
     "$exeHash  Flick.exe",
     "$hostHash  LocalClip.CaptureHost.exe"
 ) | Set-Content -LiteralPath $manifest -Encoding utf8

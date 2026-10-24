@@ -1,7 +1,7 @@
 # Code signing policy
 
 Status: October 23, 2026. Flick's repository and preview downloads are public.
-The published `v1.0.5-preview.1` installer is unsigned. No Foundation approval,
+The `v1.0.6-preview.1` candidate is unsigned. The previous published `v1.0.5-preview.1` installer is also unsigned. No Foundation approval,
 certificate entitlement or completed signed release has been verified in this
 work. The free Foundation application was submitted October 23, 2026; it is awaiting review. This policy describes the intended process, not an operational signing
 service or Smart App Control certification.

@@ -6,7 +6,7 @@ $ErrorActionPreference = "Stop"
 
 $RootDir = (Get-Item $PSScriptRoot).Parent.FullName
 $DistDir = Join-Path $RootDir "dist"
-$PackageName = "Flick-v1.0.5-win-x64"
+$PackageName = "Flick-v1.0.6-win-x64"
 $PackageDir = Join-Path $DistDir $PackageName
 $ZipPath = Join-Path $DistDir "$PackageName.zip"
 
@@ -101,7 +101,7 @@ if (-not (Test-Path -LiteralPath (Join-Path $PackageDir "Flick.exe"))) {
 
 # Generate User Readme
 $Readme = @"
-# Flick v1.0.5 Preview — Windows x64 compatibility candidate
+# Flick v1.0.6 Preview — unsigned replay-hotkey-fix candidate
 
 Fast, private, offline-first gameplay clipper replicating the SteelSeries Moments workflow.
 
@@ -119,7 +119,7 @@ Fast, private, offline-first gameplay clipper replicating the SteelSeries Moment
   - **Single Instance & Leak-Free:** Subprocesses bounded by Windows Job Object (`KILL_ON_JOB_CLOSE`).
 
 ## Quick Start
-This package is an unqualified compatibility candidate. The published v1.0.4-preview.1 Design Preview predates these changes and remains NVIDIA-only. See ``docs/WINDOWS-GPU-COMPATIBILITY.md`` for the hardware acceptance matrix.
+This is an unsigned replay-hotkey-fix preview; end-to-end GPU capture remains pending qualification. Replay is OFF on launch. Start it manually and wait for Replay Ready. Save actions remain disabled until ready; hotkey save failures now explain why the replay could not be saved. See ``docs/WINDOWS-GPU-COMPATIBILITY.md`` for the hardware acceptance matrix.
 
 Windows 11 x64, a working Direct3D 11 graphics driver and the Microsoft Visual C++ v14 x64 runtime are required. Software video encoding still needs the graphics/capture runtime. Do not remove individual bundled OBS folders or helper programs.
 
@@ -143,8 +143,8 @@ $ExeHash = (Get-FileHash -Path (Join-Path $PackageDir "Flick.exe") -Algorithm SH
 $HostHash = (Get-FileHash -Path (Join-Path $PackageDir "tools\obs\runtime\bin\64bit\LocalClip.CaptureHost.exe") -Algorithm SHA256).Hash
 
 $ChecksumContent = @"
-# Flick v1.0.5 Preview (Windows x64 compatibility candidate) SHA-256 Checksums
-$ZipHash  Flick-v1.0.5-win-x64.zip
+# Flick v1.0.6 Preview (unsigned Windows x64 replay-fix candidate) SHA-256 Checksums
+$ZipHash  Flick-v1.0.6-win-x64.zip
 $ExeHash  Flick.exe
 $HostHash  LocalClip.CaptureHost.exe
 "@

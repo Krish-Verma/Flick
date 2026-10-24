@@ -1,17 +1,30 @@
-# Flick 1.0.5 — Windows compatibility candidate (UNSIGNED)
+# Flick 1.0.6 Preview 1 — Replay Hotkey & Library Safety Fixes (UNSIGNED)
 
-This candidate adds automatic NVIDIA NVENC, AMD AMF and Intel Quick Sync H.264 recording, with an optional CPU fallback capped at 720p/30 fps. Sharing retries with CPU encoding if NVENC is unavailable. The existing purple interface, refined toolbar icons, subtle gradients and compact share panel remain.
+This Windows 11 x64 preview improves the reliability and clarity of replay controls. **Recording remains OFF on every launch**, including automatic Windows startup. Choose a source, press **Start Replay** (default `Ctrl+Shift+F9`), wait for **Replay Ready**, then press **Save Clip** (default `Ctrl+Shift+F8`) to save the preceding replay. A save hotkey pressed while replay is off or starting now reports an actionable failure rather than silently updating a footer.
 
-Replay readiness now follows observed decodable packets, and quitting waits for accepted replay saves and library indexing. Damaged library indexes are preserved instead of overwritten. Imported portrait/rotated and odd-sized video receives compatible export dimensions. FFmpeg is updated to the pinned 9.0.2 build with its exact upstream license and build notices.
+## Changes from 1.0.5
+
+- Save Clip stays disabled in the capture bar and tray until the native replay state is **Armed / Replay Ready**, not merely Buffering.
+- The save hotkey displays a failed-save notification when replay is off, starting, or faulted; it never fabricates a successful clip.
+- Windows shortcut-registration failures retain the actual Win32 error and conflicting chord information.
+- A clip rename metadata-write error now reports an in-app failure instead of propagating through the WPF click handler.
+- The delete-original confirmation now explicitly warns that its associated exported MP4 may also be permanently removed. Existing deletion semantics are unchanged.
+- Windows WPF regression coverage includes Save button readiness and replay-off feedback.
+
+The 1.0.5 recording improvements remain, including NVIDIA NVENC / AMD AMF / Intel Quick Sync auto selection and an optional bounded x264 CPU fallback, replay packet readiness, media verification, and safer index handling. No native recording algorithm or media codec is changed in this patch release.
 
 ## Installation and updates
 
-Use Flick-Setup.exe for a per-user installation. Existing installed Flick 1.0.4 copies can check Settings → General → Software Updates once this candidate is published. Older copies without the installer updater need one manual upgrade. Portable copies require quitting Flick and replacing the extracted application folder.
+Use **Flick-Setup.exe** for normal per-user installation over any existing installed Flick preview without uninstalling first. Preserve your recordings, preferences and library. Installed 1.0.4/1.0.5 users may check **Settings → General → Software Updates** with preview releases enabled; older builds may require a one-time manual installer upgrade. Portable users should quit Flick and replace the extracted portable folder. Keep the packaged OBS, FFmpeg, and .NET files together.
 
-Windows 11 x64, a working Direct3D 11 driver, and Microsoft Visual C++ v14 x64 runtime are required. Keep the bundled tools together. Verify the downloaded installer against SHA256SUMS.txt from the same release.
+Requires Windows 11 x64, Direct3D 11-compatible graphics drivers, and the Microsoft Visual C++ v14 x64 Redistributable. Check the downloaded installer against the release's **SHA256SUMS.txt** before running.
 
-## Qualification
+## Important preview limitations
 
-This is an unsigned compatibility candidate. Windows may block it; SHA-256 checks do not confer publisher trust. SignPath approval and a trusted signed build are separate gates. No new NVIDIA, AMD, Intel, hybrid or CPU hardware recording row is qualified by hosted CI. See docs/WINDOWS-GPU-COMPATIBILITY.md and docs/RELEASE-READINESS-1.0.5.md for current evidence and outstanding acceptance.
+**UNSIGNED:** This developer preview has no authenticated Windows publisher signature. Windows Smart App Control may block installation or execution, and SHA-256 checksums do not give publisher trust. Do not disable Windows security protections to install Flick; a Store-signed MSIX or trusted signed GitHub installer will require separate validation.
 
-The release workflow must record the exact source SHA, successful CI runs, final asset hashes and installer upgrade receipt before publishing these notes. This source file does not itself announce a published release.
+**HARDWARE ACCEPTANCE PENDING:** Passing GitHub-hosted Windows CI, synthetic FFmpeg tests, UI rendering and installer lifecycle checks does not prove hotkeys, NVENC/AMD/Intel recording, in-game overlays, or GPU/FPS behavior on a physical Windows PC. Owner-hardware acceptance and endurance tests remain outstanding. Do not describe this version as stable or fully compatible. See [GPU compatibility testing](../docs/WINDOWS-GPU-COMPATIBILITY.md) and [release readiness](../docs/RELEASE-READINESS-1.0.6.md).
+
+This preview remains GPL-2.0-or-later for original Flick code, with separate upstream third-party licenses and notices. No telemetry, required account, automatic recording at launch, or silent uploads are introduced.
+
+The publication workflow must pin the exact source commit/tree, successful Windows CI/render/package runs, artifact archive digest, Setup SHA-256 and validated public downloads. These draft notes alone do not authorize publication.

@@ -1,6 +1,6 @@
 ; Flick per-user Windows installer. Retain user files on uninstall.
 #define MyAppName "Flick"
-#define MyAppVersion "1.0.5"
+#define MyAppVersion "1.0.6"
 #define MyAppExeName "Flick.exe"
 
 [Setup]
@@ -8,8 +8,8 @@ AppId={{F3C41F96-EF62-4CB1-A292-91EF3F6C18E8}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 VersionInfoProductName=Flick
-VersionInfoProductTextVersion=1.0.5-preview.1
-AppVerName=Flick 1.0.5 — Windows GPU Compatibility Candidate
+VersionInfoProductTextVersion=1.0.6-preview.1
+AppVerName=Flick 1.0.6 — Replay Hotkey Fix Preview
 AppPublisher=Flick Contributors
 AppPublisherURL=https://github.com/Krish-Verma/Flick
 AppSupportURL=https://github.com/Krish-Verma/Flick/issues
@@ -48,7 +48,7 @@ InfoBeforeFile=PREVIEW-SYSTEM-REQUIREMENTS.txt
 Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription: "Shortcuts:"; Flags: unchecked
 
 [Files]
-Source: "..\dist\Flick-v1.0.5-win-x64\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "..\dist\Flick-v1.0.6-win-x64\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
 Name: "{autoprograms}\Flick"; Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{app}"
