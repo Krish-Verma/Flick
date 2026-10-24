@@ -1446,7 +1446,6 @@ public partial class MainWindow : Window
         {
             _vm.IsExportReady = false; // No copy/drag with a rejected size draft.
             _vm.ExportStatusMessage = "Choose a custom size from 1 to 250 MB before exporting.";
-            _vm.StatusDetails = _vm.ExportStatusMessage;
             return false;
         }
         ApplyExportSize(cap);

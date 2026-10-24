@@ -30,7 +30,7 @@ internal static class SharePresentationAssertions
         object? Invoke(string name, params object?[] values) => typeof(MainViewModel).GetMethod(name, Private)!.Invoke(vm, values);
         void Notify(ClipMetadata clip) => Invoke("OnShareClipPropertyChanged", clip, new PropertyChangedEventArgs(nameof(ClipMetadata.ThumbnailPath)));
         Task Refresh(ClipMetadata clip) => (Task)Invoke("RefreshSharePreviewAsync", clip)!;
-        string[] savedNames = ["_selectedClip", "_sharePresentationActive", "_shareDisposed", "_shareObservedClip", "_sharePreview", "_sharePreviewCancellation", "_isExportReady", "_readyExportFilePath", "_exportStatusMessage", "_targetSizeMb"];
+        string[] savedNames = ["_selectedClip", "_sharePresentationActive", "_shareDisposed", "_shareObservedClip", "_sharePreview", "_sharePreviewCancellation", "_isExportReady", "_readyExportFilePath", "_exportStatusMessage", "_targetSizeMb", "_statusDetails"];
         var saved = savedNames.ToDictionary(name => name, Get);
         Assert.Null(saved["_sharePreviewCancellation"]); // The fixture must be idle before taking ownership.
         var gate = (SemaphoreSlim)Get("_sharePreviewGate")!;
@@ -139,6 +139,8 @@ internal static class SharePresentationAssertions
             var updatingCap = typeof(MainWindow).GetField("_updatingExportCap", Private)!;
             try
             {
+                const string globalStatus = "Recording health fixture: preserve unrelated status.";
+                vm.StatusDetails = globalStatus;
                 cap.SelectedIndex = 4;
                 foreach (string invalid in new[] { "0", "251", "not a number" })
                 {
@@ -146,6 +148,7 @@ internal static class SharePresentationAssertions
                     typeof(MainWindow).GetMethod("BtnExport_Click", Private)!.Invoke(window, [export, new RoutedEventArgs()]);
                     Assert.Equal(invalid, custom.Text); // Preserve the owner's draft for correction.
                     Assert.Contains("1 to 250", vm.ExportStatusMessage);
+                    Assert.Equal(globalStatus, vm.StatusDetails); // Share validation stays local to its card.
                     Assert.Equal(appliedCap, vm.TargetSizeMb);
                     Assert.False(vm.ShareCanCopy);
                     Assert.False(vm.IsExporting); Assert.False(vm.IsBackgroundWorkActive);
@@ -158,6 +161,7 @@ internal static class SharePresentationAssertions
                 Set("_targetSizeMb", recentCap); custom.Text = recentCap.ToString();
                 Assert.True((bool)typeof(MainWindow).GetMethod("TryApplyCustomSize", Private)!.Invoke(window, null)!);
                 Assert.Equal(recentCap, vm.TargetSizeMb); Assert.Equal(defaultCap, vm.Settings.DiscordTargetSizeMb);
+                Assert.Equal(globalStatus, vm.StatusDetails);
                 var layer = (System.Windows.Controls.Border)window.FindName("EditorContextLayer");
                 var panel = (System.Windows.Controls.Border)window.FindName("SharePanel");
                 Visibility layerBefore = layer.Visibility, panelBefore = panel.Visibility;
@@ -173,6 +177,7 @@ internal static class SharePresentationAssertions
                     };
                     var firstEscape = Escape(); custom.RaiseEvent(firstEscape);
                     Assert.True(firstEscape.Handled); Assert.Equal(recentCap.ToString(), custom.Text);
+                    Assert.Equal(globalStatus, vm.StatusDetails);
                     Assert.Equal(recentCap, vm.TargetSizeMb); Assert.Equal(defaultCap, vm.Settings.DiscordTargetSizeMb);
                     Assert.Equal(Visibility.Visible, layer.Visibility);
                     var secondEscape = Escape(); custom.RaiseEvent(secondEscape);
