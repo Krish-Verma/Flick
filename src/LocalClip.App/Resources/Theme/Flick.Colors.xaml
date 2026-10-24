@@ -49,6 +49,10 @@
     <SolidColorBrush x:Key="Flick.Brush.Success" Color="{StaticResource Flick.Color.Success}"/>
     <SolidColorBrush x:Key="Flick.Brush.Warning" Color="{StaticResource Flick.Color.Warning}"/>
     <SolidColorBrush x:Key="Flick.Brush.Danger" Color="{StaticResource Flick.Color.Danger}"/>
+    <!-- Share gains one lighter local layer; the surrounding editor stays quiet. -->
+    <SolidColorBrush x:Key="Flick.Brush.ShareSurface" Color="#FF252430"/>
+    <SolidColorBrush x:Key="Flick.Brush.ShareTile" Color="#FF353040"/>
+    <SolidColorBrush x:Key="Flick.Brush.SharePreview" Color="#FF201F2B"/>
 
     <!-- Small brand marks borrow the logo's warm edge without its dark tail.
          Application surfaces, divider lines and text remain solid colors. -->

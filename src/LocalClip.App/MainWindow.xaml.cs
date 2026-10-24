@@ -70,6 +70,13 @@ public partial class MainWindow : Window
         InitializeComponent();
         _vm = new MainViewModel();
         DataContext = _vm;
+        ApplyShareAccessiblePalette(SystemParameters.HighContrast);
+        Loaded += (_, _) => {
+            ApplyShareAccessiblePalette(SystemParameters.HighContrast);
+            SystemParameters.StaticPropertyChanged -= ShareSystemParametersChanged;
+            SystemParameters.StaticPropertyChanged += ShareSystemParametersChanged;
+        };
+        Closed += (_, _) => SystemParameters.StaticPropertyChanged -= ShareSystemParametersChanged;
         _notificationService = new FlickNotificationService(Dispatcher);
         _vm.ConfirmTargetReset = ConfirmSourceReset;
         _vm.DiagnosticReservationAllowed = () => !_updateInstallInProgress && !_quitInProgress && !_isRealClosing;
@@ -1109,6 +1116,7 @@ public partial class MainWindow : Window
 
     private void CloseEditorContext()
     {
+        _vm.DeactivateSharePresentation();
         EditorContextLayer.Visibility = Visibility.Collapsed;
         TrimPanel.Visibility = AudioPanel.Visibility = SharePanel.Visibility = Visibility.Collapsed;
         AudioExpander.IsExpanded = false;
@@ -1124,7 +1132,7 @@ public partial class MainWindow : Window
     {
         // Drawers scroll inside the existing preview allocation: no minimum
         // editor height that pushes transport/actions out of a compact window.
-        EditorContextScroll.MaxHeight = Math.Max(32, PreviewSurface.ActualHeight - 100);
+        UpdateEditorContextHeight();
     }
 
     private void EditorTool_Click(object sender, RoutedEventArgs e)
@@ -1141,7 +1149,8 @@ public partial class MainWindow : Window
         if (tool == "Audio") AudioExpander.IsExpanded = true;
         System.Windows.Automation.AutomationProperties.SetHelpText(button, "Open");
         // Opening Share is navigation only; never starts export or posting.
-        if (tool == "Share") UpdateSharePresetSelection();
+        if (tool == "Share") { UpdateSharePresetSelection(); _vm.ActivateSharePresentation(); }
+        UpdateEditorContextHeight();
         CloseEditorTool.Focus();
         EditorContextScroll.ScrollToTop();
     }
@@ -1436,8 +1445,7 @@ public partial class MainWindow : Window
 
     private void BtnCancelExport_Click(object sender, RoutedEventArgs e)
     {
-        _vm.CancelExport();
-        _vm.ExportStatusMessage = "Cancelling Local Export…";
+        _vm.CancelShareExport();
     }
 
     private void DragHandle_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
@@ -1465,8 +1473,18 @@ public partial class MainWindow : Window
             _vm.ExportStatusMessage = "Share File No Longer Valid · Export This Clip Again";
             return;
         }
-        var data = new DataObject(DataFormats.FileDrop, new[] { path });
-        DragDrop.DoDragDrop(DragHandle, data, DragDropEffects.Copy);
+        try
+        {
+            var data = ShareFileTransfer.CreateFileData(path);
+            var result = DragDrop.DoDragDrop(DragHandle, data, DragDropEffects.Copy);
+            _vm.ExportStatusMessage = result == DragDropEffects.None
+                ? "Drag cancelled. Your MP4 is still ready."
+                : "File handed to Windows. Check the attachment in Discord.";
+        }
+        catch (System.Runtime.InteropServices.ExternalException)
+        { _vm.ExportStatusMessage = "Windows could not start the drag. Try Copy File instead."; }
+        catch (IOException)
+        { _vm.IsExportReady = false; _vm.ExportStatusMessage = "The MP4 is no longer available. Export it again."; }
     }
 
     private void BtnCopyFile_Click(object sender, RoutedEventArgs e) =>

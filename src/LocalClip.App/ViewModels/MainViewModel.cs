@@ -34,7 +34,7 @@ public class TargetItem
     public override string ToString() => DisplayName;
 }
 
-public class MainViewModel : INotifyPropertyChanged, IDisposable
+public partial class MainViewModel : INotifyPropertyChanged, IDisposable
 {
     private readonly AppSettings _settings;
     private readonly CaptureHostClient _captureHost;
@@ -759,9 +759,16 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
     public bool TryGetReadyShareFile(out string path)
     {
         path = "";
-        return !IsExporting && IsExportReady &&
+        bool ready = !IsExporting && IsExportReady &&
                ReadyShareFile.TryGet(SelectedClip, TargetSizeMb, out path, _settings.ExportsFolder) &&
                string.Equals(path, ReadyExportFilePath, StringComparison.OrdinalIgnoreCase);
+        if (!ready && !IsExporting && IsExportReady)
+        {
+            IsExportReady = false;
+            ReadyExportFilePath = "";
+            ExportStatusMessage = "The share file changed or is missing. Export this clip again.";
+        }
+        return ready;
     }
 
     public void CancelExport() => _exportCancellation?.Cancel();
@@ -1917,6 +1924,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
 
     public void Dispose()
     {
+        DisposeSharePresentation();
         _exportCancellation?.Cancel();
         FlushPendingAudioEdits();
         UnsubscribeAudioEvents();
@@ -1944,6 +1952,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
     protected void OnPropertyChanged([CallerMemberName] string? name = null)
     {
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
+        OnShareDependencyChanged(name);
         if (name is nameof(IsBackgroundWorkActive) or nameof(IsReplaySavePending) or nameof(IsImporting) or nameof(IsExporting))
         {
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CanRunRecordingDiagnostic)));
