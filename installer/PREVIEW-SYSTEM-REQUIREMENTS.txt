@@ -18,15 +18,16 @@ REQUIRED BEFORE RECORDING:
 
 NVIDIA, AMD, Intel, hybrid-GPU and CPU recording paths require physical
 Windows acceptance on this exact candidate. Historical RTX 5060 results
-are not qualification of this build. The published v1.0.4-preview.1 Design
-Preview predates this compatibility work and remains NVIDIA-only.
+and hosted CI for earlier versions are not qualification of this 1.0.6 build.
 
 NOT QUALIFIED:
 - Windows on ARM/Snapdragon, 32-bit Windows, macOS and Linux.
 - Windows 10 and clean Windows installations without verified prerequisites.
 - All games, anti-cheat systems, DRM-protected content and HDR configurations.
 Software encoding does not bypass capture restrictions or missing graphics
-support. Replay starts OFF; you must select a source and enable it.
+support. Replay starts OFF; select a source, press Start Replay and wait
+for Replay Ready before pressing Save Clip. The save hotkey gives a
+failure notice if replay is off or unavailable.
 
 The browser-downloaded Flick-Setup.exe remains in Downloads until
 you delete it manually. Running the setup installs the application in
