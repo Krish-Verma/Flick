@@ -18,6 +18,7 @@ public partial class MainViewModel
     private bool _resourceSamplingPaused;
     private bool _resourceSamplingDisposed;
     private bool _resourceUsageEnabled;
+    private bool _resourceCpuWarmupRequired = true;
     private int _resourceSamplingGeneration;
     private long _resourceLastPublishedTimestamp;
     private int? _resourcePublishedHostId;
@@ -42,6 +43,7 @@ public partial class MainViewModel
         bool enabled = _settings.ShowResourceUsage;
         if (_resourceUsageEnabled == enabled) return;
         _resourceUsageEnabled = enabled;
+        _resourceCpuWarmupRequired = true;
         _resourceSamplingGeneration++;
         _resourceLastPublishedTimestamp = 0;
         try { _resourceRefreshCancellation?.Cancel(); }
@@ -58,6 +60,7 @@ public partial class MainViewModel
         _resourceSampleAsync = _resourceMonitor.SampleAsync;
         _resourceHostIdProvider = () => _captureHost.HostProcessId;
         _resourceUsageEnabled = _settings.ShowResourceUsage;
+        _resourceCpuWarmupRequired = true;
         PublishResourceSample(new ResourceSample(), null);
     }
 
@@ -105,6 +108,14 @@ public partial class MainViewModel
             await _resourceDispatcher.InvokeAsync(() =>
             {
                 if (cancellation.IsCancellationRequested || !IsCurrentResourceObservation(hostId, generation, epoch)) return;
+                if (_resourceCpuWarmupRequired)
+                {
+                    // This read advances the monitor's CPU baselines past a
+                    // pause. Display CPU only after the next fresh interval.
+                    sample.HasAppCpuSample = false;
+                    sample.HasCaptureHostCpuSample = false;
+                    _resourceCpuWarmupRequired = false;
+                }
                 PublishResourceSample(sample, hostId);
                 _resourcePublishedHostId = hostId;
                 _resourcePublishedCaptureEpoch = epoch;
@@ -193,7 +204,11 @@ public partial class MainViewModel
 
     private void ResumeResourceSampling()
     {
-        if (!_resourceSamplingDisposed) _resourceSamplingPaused = false;
+        if (!_resourceSamplingDisposed)
+        {
+            _resourceCpuWarmupRequired = true;
+            _resourceSamplingPaused = false;
+        }
     }
 
     private void DisposeResourceSampling()

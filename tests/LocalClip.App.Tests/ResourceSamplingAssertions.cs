@@ -73,52 +73,57 @@ internal static class ResourceSamplingAssertions
             vm.Settings.ShowResourceUsage = false; vm.RefreshResourceUsagePreferences();
             Assert.False(vm.ResourceStatsVisible); Assert.True(reads[2].Token.IsCancellationRequested);
             Tick(); Assert.Equal(3, reads.Count);
+            vm.Settings.ShowResourceUsage = true; vm.RefreshResourceUsagePreferences();
+            Tick(); Assert.Equal(3, reads.Count); // Re-enable cannot overlap the canceled batch.
             Finish(reads[2], Sample(999, 99));
             Assert.Equal("RAM -- · CPU --", vm.ResourceStatsText);
-            vm.Settings.ShowResourceUsage = true; vm.RefreshResourceUsagePreferences();
             Assert.Equal(3, reads.Count); Assert.Equal("RAM -- · CPU --", vm.ResourceStatsText);
             Tick(); Finish(reads[3], Sample(128, 2));
-            Assert.Contains("RAM 128 MB", vm.ResourceStatsText);
+            Assert.Equal("RAM 128 MB · CPU --", vm.ResourceStatsText); // Suppress the disabled-duration CPU average.
+            Tick(); Finish(reads[4], Sample(128, 2));
+            Assert.Equal($"RAM 128 MB · CPU {2d.ToString("F1", CultureInfo.CurrentCulture)}%", vm.ResourceStatsText);
 
             // An old host cannot publish after a switch, even if its read
             // finishes before the new host has had a chance to be sampled.
-            hostId = 101; Tick(); Assert.Equal(5, reads.Count);
-            Assert.Equal(101, reads[4].HostId); Assert.Equal("RAM -- · CPU --", vm.ResourceStatsText);
-            hostId = 202; Tick(); Assert.Equal(5, reads.Count);
-            Finish(reads[4], Sample(100, 1, 200, 2));
+            hostId = 101; Tick(); Assert.Equal(6, reads.Count);
+            Assert.Equal(101, reads[5].HostId); Assert.Equal("RAM -- · CPU --", vm.ResourceStatsText);
+            hostId = 202; Tick(); Assert.Equal(6, reads.Count);
+            Finish(reads[5], Sample(100, 1, 200, 2));
             Assert.Equal("RAM -- · CPU --", vm.ResourceStatsText);
-            Tick(); Assert.Equal(202, reads[5].HostId);
-            Finish(reads[5], Sample(128, 1, 256, 2));
+            Tick(); Assert.Equal(202, reads[6].HostId);
+            Finish(reads[6], Sample(128, 1, 256, 2));
             Assert.Equal($"RAM 384 MB · CPU {3d.ToString("F1", CultureInfo.CurrentCulture)}%", vm.ResourceStatsText);
             Assert.Contains("Flick: RAM 128 MB", vm.ResourceStatsDetails);
             Assert.Contains("Recording: RAM 256 MB", vm.ResourceStatsDetails);
 
             // A stalled batch cannot keep old numbers visible or spawn
             // overlapping work. A refused stop can resume after late settlement.
-            Tick(); Assert.Equal(7, reads.Count);
+            Tick(); Assert.Equal(8, reads.Count);
             Set("_resourceLastPublishedTimestamp", Stopwatch.GetTimestamp() - 4 * Stopwatch.Frequency);
-            Tick(); Assert.Equal(7, reads.Count); Assert.Equal("RAM -- · CPU --", vm.ResourceStatsText);
+            Tick(); Assert.Equal(8, reads.Count); Assert.Equal("RAM -- · CPU --", vm.ResourceStatsText);
             var stopped = (Task<bool>)Invoke("StopResourceSamplingAsync", TimeSpan.FromMilliseconds(20))!;
             Pump(stopped); Assert.False(stopped.GetAwaiter().GetResult());
-            Assert.True(reads[6].Token.IsCancellationRequested); Assert.False(OwnedTask().IsCompleted);
-            Invoke("ResumeResourceSampling"); Tick(); Assert.Equal(7, reads.Count);
-            Finish(reads[6], Sample(444, 44, 444, 44));
+            Assert.True(reads[7].Token.IsCancellationRequested); Assert.False(OwnedTask().IsCompleted);
+            Invoke("ResumeResourceSampling"); Tick(); Assert.Equal(8, reads.Count);
+            Finish(reads[7], Sample(444, 44, 444, 44));
             Assert.Equal("RAM -- · CPU --", vm.ResourceStatsText);
-            Tick(); Finish(reads[7], Sample(128, 1, 256, 2));
-            Assert.Contains("RAM 384 MB", vm.ResourceStatsText);
+            Tick(); Finish(reads[8], Sample(128, 1, 256, 2));
+            Assert.Equal("RAM 384 MB · CPU --", vm.ResourceStatsText); // Late canceled work did not consume warm-up.
+            Tick(); Finish(reads[9], Sample(128, 1, 256, 2));
+            Assert.Equal($"RAM 384 MB · CPU {3d.ToString("F1", CultureInfo.CurrentCulture)}%", vm.ResourceStatsText);
 
-            Tick(); reads[8].Completion.SetException(new IOException("Synthetic unavailable process metrics."));
+            Tick(); reads[10].Completion.SetException(new IOException("Synthetic unavailable process metrics."));
             Pump(OwnedTask()); Assert.Equal("RAM -- · CPU --", vm.ResourceStatsText);
             Assert.Equal(globalStatus, vm.StatusDetails);
-            Tick(); Finish(reads[9], Sample(128, 1, 256, 2));
+            Tick(); Finish(reads[11], Sample(128, 1, 256, 2));
 
             // Run through actual production Dispose while a fake reader is
             // still settling. Cancellation is not permission for late UI writes.
-            Tick(); Assert.Equal(11, reads.Count);
+            Tick(); Assert.Equal(13, reads.Count);
             string beforeDispose = vm.ResourceStatsText;
-            vm.Dispose(); Assert.True(reads[10].Token.IsCancellationRequested);
-            Tick(); Assert.Equal(11, reads.Count);
-            Finish(reads[10], Sample(777, 77, 777, 77));
+            vm.Dispose(); Assert.True(reads[12].Token.IsCancellationRequested);
+            Tick(); Assert.Equal(13, reads.Count);
+            Finish(reads[12], Sample(777, 77, 777, 77));
             Assert.Equal(beforeDispose, vm.ResourceStatsText);
             Assert.True(OwnedTask().IsCompleted);
         }
