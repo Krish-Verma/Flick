@@ -56,6 +56,7 @@ internal static partial class Program
         // its actual WPF client visual directly, without starting a host/decoder.
         var root = (FrameworkElement)main.Content;
         var layoutObservations = new List<object>();
+        var shareLayoutFailures = new List<string>();
         var consentObservations = new List<object>();
         // The Window normally paints this underneath its content. Rendering
         // Content alone otherwise leaves transparent/black gaps around panels.
@@ -388,6 +389,9 @@ internal static partial class Program
         Render("36-recording-test-failure-minimum.png", 720, 480);
         RenderShareFixtures(main, vm, settings, storage, fixtures, output, Render);
         RenderProductPhaseFixtures(main, vm, settings, storage, fixtures, output, Render);
+        if (shareLayoutFailures.Count != 0)
+            throw new InvalidOperationException("Complete Share content failed to fit without scrolling in " +
+                shareLayoutFailures.Count + " render(s): " + string.Join(", ", shareLayoutFailures));
         string applicationVersion = typeof(MainWindow).Assembly
             .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? "unknown";
         File.WriteAllText(Path.Combine(output, "PROVENANCE.txt"),
@@ -464,7 +468,15 @@ internal static partial class Program
             {
                 var measured = InspectShareNoScrollLayout(main);
                 shareLayout = measured.Observation;
-                if (!measured.Fits) healthLayoutFailure = "Complete Share content must fit without scrolling in " + file;
+                if (!measured.Fits)
+                {
+                    // Keep every genuine screenshot and remaining state for
+                    // diagnosis, then fail the batch before success provenance.
+                    shareLayoutFailures.Add(file);
+                    File.WriteAllText(Path.Combine(output, "share-layout-failures.json"),
+                        JsonSerializer.Serialize(new { FailedImages = shareLayoutFailures,
+                            BatchMustFail = true, DetailFile = "layout-observations.json" }, new JsonSerializerOptions { WriteIndented = true }));
+                }
             }
             var healthPanel = Find<Border>("RecordingHealthPanel");
             if (healthPanel.Visibility == Visibility.Visible)

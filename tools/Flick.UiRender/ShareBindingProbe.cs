@@ -162,7 +162,23 @@ internal static partial class Program
         Check("ShareActionFooter", context);
         foreach (string name in new[] { "CloseEditorTool", "ShareMoreButton" }) Check(name, context);
         foreach (string name in new[] { "DragHandle", "ShareExportOptions", "ShareFormatHint", "ShareStatusRow", "TxtShareExportStatus", "BtnShareDetails" }) Check(name, share);
-        foreach (string name in new[] { "ShareTileTitle", "ShareTileDetails", "ShareTileHint", "ShareOriginalLabel", "TxtShareTileState", "ShareThumbnail" }) Check(name, Find<Border>("DragHandle"));
+        foreach (string name in new[] { "ShareTileTitle", "ShareTileDetails", "ShareTileHint", "ShareOriginalLabel", "TxtShareTileState" }) Check(name, Find<Border>("DragHandle"));
+        var thumbnail = Find<Image>("ShareThumbnail");
+        Border? thumbnailFrame = null;
+        for (DependencyObject? node = VisualTreeHelper.GetParent(thumbnail); node is Visual && node != Find<Border>("DragHandle");
+             node = VisualTreeHelper.GetParent(node))
+            if (node is Border border) { thumbnailFrame = border; break; }
+        bool frameFits = thumbnailFrame != null && Visible(thumbnailFrame) &&
+            Contains(Bounds(Find<Border>("DragHandle")), Bounds(thumbnailFrame));
+        bool imageFits = thumbnail.Source == null || (thumbnailFrame != null && Contains(Bounds(thumbnailFrame), Bounds(thumbnail)));
+        var fallback = thumbnailFrame == null ? null : ProductVisuals(thumbnailFrame).OfType<System.Windows.Shapes.Path>().FirstOrDefault();
+        bool fallbackFits = thumbnail.Source != null || (fallback != null && Visible(fallback) &&
+            thumbnailFrame != null && Contains(Bounds(thumbnailFrame), Bounds(fallback)));
+        rows.Add(new { Name = "ShareThumbnailPresentation", HasSource = thumbnail.Source != null,
+            ThumbnailFrameContained = frameFits, ImageContainedWhenPresent = imageFits, FallbackContainedWhenNeeded = fallbackFits,
+            FrameBounds = thumbnailFrame == null ? null : Coordinates(Bounds(thumbnailFrame)),
+            ImageBounds = Coordinates(Bounds(thumbnail)), FallbackBounds = fallback == null ? null : Coordinates(Bounds(fallback)) });
+        if (!frameFits || !imageFits || !fallbackFits) failures.Add("Thumbnail frame, source image or required fallback is clipped.");
         foreach (string name in new[] { "CmbExportCap", "CmbShareAspect" }) Check(name, Find<FrameworkElement>("ShareExportOptions"));
         bool custom = Find<FrameworkElement>("CustomCapPanel").Visibility == Visibility.Visible;
         Check("CustomCapPanel", Find<FrameworkElement>("ShareExportOptions"), required: custom);

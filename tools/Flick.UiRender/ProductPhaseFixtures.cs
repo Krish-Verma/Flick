@@ -169,6 +169,7 @@ internal static partial class Program
         {
             render(file, width, height);
             bool contextFits = true;
+            bool renderedShare = false;
             if (Find<Grid>("WorkspaceContentGrid").Visibility == Visibility.Visible &&
                 Find<Grid>("ClipEditorPanel").Visibility == Visibility.Visible &&
                 Find<Border>("EditorContextLayer").Visibility == Visibility.Visible)
@@ -179,7 +180,8 @@ internal static partial class Program
                 var contextScroll = Find<ScrollViewer>("EditorContextScroll");
                 FrameworkElement allocation = Grid.GetRowSpan(context) > 1
                     ? Find<FrameworkElement>("ClipEditorPanel") : Find<Border>("PreviewSurface");
-                contextFits = Find<Border>("SharePanel").Visibility == Visibility.Visible
+                renderedShare = Find<Border>("SharePanel").Visibility == Visibility.Visible;
+                contextFits = renderedShare
                     ? InspectShareNoScrollLayout(window).Fits
                     : ProductContains(Bounds(allocation), Bounds(context)) &&
                       ProductContains(Bounds(context), Bounds(Find<Button>("CloseEditorTool"))) &&
@@ -201,7 +203,9 @@ internal static partial class Program
                 vm.ExportAspectPreset, EditorContextFits = contextFits, LibraryListFits = libraryFits,
                 ListHeight = listHeight, NoPlaybackOrCapture = true });
             WriteEvidence();
-            if (!contextFits) throw new InvalidOperationException("Editor context, Close or scroll viewport do not fit in " + file);
+            // The global renderer records all Share layout failures and throws
+            // after the last state. Preserve immediate failures for other tools.
+            if (!contextFits && !renderedShare) throw new InvalidOperationException("Editor context, Close or scroll viewport do not fit in " + file);
             if (!libraryFits) throw new InvalidOperationException("The virtualized clip list lacks a useful contained viewport in " + file);
         }
         Split();
