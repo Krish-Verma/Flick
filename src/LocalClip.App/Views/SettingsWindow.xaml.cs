@@ -50,11 +50,12 @@ public partial class SettingsWindow : UserControl
     public event Action<bool, bool, string, string>? PreviewNotificationRequested;
     public event EventHandler? ManageFoldersRequested;
 
-    public SettingsWindow(AppSettings settings, Func<bool> isCaptureActive)
+    public SettingsWindow(AppSettings settings, Func<bool> isCaptureActive, Func<Task<TargetList>>? loadAudioSources = null)
     {
         InitializeComponent();
         _settings = settings;
         _isCaptureActive = isCaptureActive ?? throw new ArgumentNullException(nameof(isCaptureActive));
+        _loadAudioSources = loadAudioSources;
         Populate(settings);
         SelectCategory("Recording");
         TxtCurrentVersion.Text = "Current version: " + FlickUpdateService.CurrentVersion;
@@ -270,6 +271,7 @@ public partial class SettingsWindow : UserControl
                 RecordingProfiles.Smooth => 2,
                 _ => 1
             };
+            PopulateAudio(settings);
             ChkMicrophone.IsChecked = settings.EnableMicrophone;
             ChkSoftwareFallback.IsChecked = settings.AllowSoftwareFallback;
             ChkStartWithWindows.IsChecked = settings.StartWithWindows;
@@ -540,9 +542,9 @@ public partial class SettingsWindow : UserControl
                 "Invalid Webhook");
             return;
         }
-        if (_isCaptureActive() && _settings.EnableMicrophone && ChkMicrophone.IsChecked != true &&
-            LocalClip.App.Services.FlickDialog.Show("Turning off an active microphone stops the current recording. Unsaved replay footage will be discarded. Continue?",
-                "Disable Microphone", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes)
+        if (_isCaptureActive() && AudioRoutingChanged() &&
+            LocalClip.App.Services.FlickDialog.Show("Changing audio routing stops the current recording. Unsaved replay footage will be discarded. Continue?",
+                "Change Recording Audio", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes)
             return;
 
         bool originalStartup = _settings.StartWithWindows;
@@ -559,6 +561,7 @@ public partial class SettingsWindow : UserControl
             staged.OriginalsFolder = originals;
             staged.ExportsFolder = exports;
             staged.ReplayDurationSeconds = duration;
+            StageAudio(staged);
             staged.EnableMicrophone = ChkMicrophone.IsChecked == true;
             staged.AllowSoftwareFallback = ChkSoftwareFallback.IsChecked == true;
             staged.StartWithWindows = ChkStartWithWindows.IsChecked == true;
@@ -596,6 +599,9 @@ public partial class SettingsWindow : UserControl
             _settings.VideoBitrateKbps = staged.VideoBitrateKbps;
             _settings.VideoEncoder = staged.VideoEncoder;
             _settings.QualityPreset = staged.QualityPreset;
+            _settings.AudioMode = staged.AudioMode;
+            _settings.GameAudioSource = staged.GameAudioSource;
+            _settings.VoiceAudioSource = staged.VoiceAudioSource;
             _settings.EnableMicrophone = staged.EnableMicrophone;
             _settings.AllowSoftwareFallback = staged.AllowSoftwareFallback;
             _settings.StartWithWindows = staged.StartWithWindows;

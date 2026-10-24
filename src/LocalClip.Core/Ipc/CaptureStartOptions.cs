@@ -26,7 +26,7 @@ public sealed record CaptureStartOptions(bool EnableSystemAudio = true,
     }
 }
 
-public sealed record CaptureHostCapabilities(int ProtocolVersion, bool DiagnosticNoSystemAudio, bool SourceIdentityBinding)
+public sealed record CaptureHostCapabilities(int ProtocolVersion, bool DiagnosticNoSystemAudio, bool SourceIdentityBinding, bool ExactProcessAudio = false)
 {
     public bool SupportsSafeDiagnostics => ProtocolVersion >= 2 && DiagnosticNoSystemAudio && SourceIdentityBinding;
 
@@ -38,6 +38,7 @@ public sealed record CaptureHostCapabilities(int ProtocolVersion, bool Diagnosti
             !value.TryGetProperty("diagnostic_no_system_audio", out var audio) || audio.ValueKind is not (JsonValueKind.True or JsonValueKind.False) ||
             !value.TryGetProperty("source_identity_binding", out var identity) || identity.ValueKind is not (JsonValueKind.True or JsonValueKind.False))
             throw new InvalidOperationException("This capture helper does not support the safe recording test. Update Flick and try again.");
-        return new(number, audio.GetBoolean(), identity.GetBoolean());
+        return new(number, audio.GetBoolean(), identity.GetBoolean(),
+            value.TryGetProperty("exact_process_audio", out var processAudio) && processAudio.ValueKind == JsonValueKind.True);
     }
 }

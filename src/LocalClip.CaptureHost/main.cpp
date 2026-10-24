@@ -21,6 +21,8 @@
 #include "json.hpp"
 #include "encoder_policy.hpp"
 #include "diagnostic_policy.hpp"
+#include "audio_policy.hpp"
+#include "exact_process_audio.hpp"
 
 using json = nlohmann::json;
 
@@ -115,6 +117,10 @@ struct ActiveCapture {
     obs_scene_t *video_scene = nullptr;
     obs_source_t *sys_audio_source = nullptr;
     obs_source_t *mic_audio_source = nullptr;
+    obs_source_t *game_audio_source = nullptr;
+    obs_source_t *voice_audio_source = nullptr;
+    DWORD game_audio_pid = 0, voice_audio_pid = 0;
+    bool separated_audio = false;
     obs_encoder_t *video_encoder = nullptr;
     std::vector<obs_encoder_t*> audio_encoders;
     obs_output_t *replay_output = nullptr;
@@ -267,6 +273,8 @@ struct WindowInfo {
     std::string title;
     DWORD pid = 0;
     std::string exe_name;
+    std::string exe_path;
+    uint64_t creation_time = 0;
     int width = 0;
     int height = 0;
 };
@@ -335,6 +343,16 @@ static BOOL CALLBACK EnumWindowsProc(HWND hwnd, LPARAM lParam) {
     info.title = std::move(title);
     info.pid = pid;
     info.exe_name = exeName;
+    HANDLE identity = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
+    if (identity) {
+        wchar_t full_path[32768]; DWORD length = 32768;
+        FILETIME created{}, exited{}, kernel{}, user{};
+        if (QueryFullProcessImageNameW(identity, 0, full_path, &length) && GetProcessTimes(identity, &created, &exited, &kernel, &user)) {
+            utf8_from_wide(std::wstring(full_path, length).c_str(), info.exe_path);
+            info.creation_time = (static_cast<uint64_t>(created.dwHighDateTime) << 32) | created.dwLowDateTime;
+        }
+        CloseHandle(identity);
+    }
     info.width = w;
     info.height = h;
 
@@ -476,6 +494,7 @@ static bool ensure_obs_init(int width, int height, int fps) {
         obs_shutdown();
         return false;
     }
+    flick::audio::register_process_audio();
     obs_post_load_modules();
     g_obs_initialized = true;
     return true;
@@ -616,39 +635,61 @@ static bool start_capture_attempt(const json &params, const flick::capture::Enco
     obs_sceneitem_set_alignment(item, OBS_ALIGN_TOP | OBS_ALIGN_LEFT);
     obs_set_output_source(0, obs_scene_get_source(g_cap.video_scene));
 
-    // 2. Audio Sources & Multi-Track Routing
-    const auto routing = flick::capture::audio_routing(g_cap.enable_system_audio, g_cap.enable_mic);
-    g_cap.track_names = routing.tracks;
-
-    // System Audio
-    if (g_cap.enable_system_audio) {
-        obs_data_t *sys_settings = obs_data_create();
-        obs_data_set_string(sys_settings, "device_id", g_cap.system_device_id.c_str());
-        g_cap.sys_audio_source = obs_source_create("wasapi_output_capture", "SystemAudio", sys_settings, nullptr);
-        obs_data_release(sys_settings);
-        if (!g_cap.sys_audio_source) {
-            out_err = "System audio loopback source could not be created";
-            return false;
-        }
-        obs_source_set_audio_mixers(g_cap.sys_audio_source, routing.system_mixers);
-        obs_set_output_source(1, g_cap.sys_audio_source);
+    // Real process isolation is explicit and never falls back to device audio.
+    g_cap.separated_audio = g_cap.audio_mode == "separated" && g_cap.enable_system_audio;
+    if (g_cap.audio_mode != "separated" && g_cap.audio_mode != "systemfallback" && g_cap.audio_mode != "system_fallback") {
+        out_err = "Unknown audio capture mode"; return false;
     }
-
-    // Microphone Audio (if enabled)
+    g_cap.game_audio_pid = g_cap.voice_audio_pid = 0;
+    auto requested_pid = [&](const char *key) -> DWORD {
+        return params.contains(key) && params[key].is_object() ? params[key].value("pid", 0u) : 0u;
+    };
+    if (g_cap.separated_audio) {
+        if (!flick::audio::supported()) { out_err = "App audio requires Windows build 20348 or newer. Select System Audio explicitly if desired."; return false; }
+        g_cap.game_audio_pid = requested_pid("game_audio"); g_cap.voice_audio_pid = requested_pid("voice_audio");
+        if (!g_cap.game_audio_pid && !g_cap.voice_audio_pid) { out_err = "Select at least one app audio source in Settings"; return false; }
+        if (g_cap.game_audio_pid && g_cap.voice_audio_pid &&
+            (flick::audio::is_ancestor(g_cap.game_audio_pid, g_cap.voice_audio_pid) || flick::audio::is_ancestor(g_cap.voice_audio_pid, g_cap.game_audio_pid))) {
+            out_err = "Game and Voice audio process trees overlap. Select distinct apps to avoid duplicate audio."; return false;
+        }
+    }
+    const auto routing = flick::audio::routing(g_cap.separated_audio,
+        g_cap.enable_system_audio && !g_cap.separated_audio, g_cap.game_audio_pid != 0, g_cap.voice_audio_pid != 0, g_cap.enable_mic);
+    g_cap.track_names = routing.tracks;
+    auto create_process = [&](const char *key, const char *name, uint32_t mask, int channel, obs_source_t *&source) {
+        if (!mask) return true;
+        const auto &identity = params.at(key);
+        const DWORD pid = identity.value("pid", 0u);
+        const auto birth = identity.value("creation_time", uint64_t{0});
+        const auto path = identity.value("path", std::string{});
+        if (!flick::audio::process_identity_valid(pid, birth, path)) { out_err = "App audio identity is incomplete; refresh and select the app again"; return false; }
+        obs_data_t *settings = obs_data_create();
+        obs_data_set_int(settings, "pid", pid); obs_data_set_int(settings, "birth", static_cast<int64_t>(birth)); obs_data_set_string(settings, "path", path.c_str());
+        source = obs_source_create("flick_exact_process_audio", name, settings, nullptr);
+        obs_data_release(settings);
+        calldata_t status; calldata_init(&status);
+        const bool attached = source && proc_handler_call(obs_source_get_proc_handler(source), "get_audio_status", &status) && calldata_bool(&status, "attached");
+        calldata_free(&status);
+        if (!attached) { out_err = std::string(name) + " could not attach to the exact selected process; refresh the source or choose System Audio explicitly"; return false; }
+        obs_source_set_audio_mixers(source, mask); obs_set_output_source(channel, source); return true;
+    };
+    if (!create_process("game_audio", "Game Audio", routing.game, 3, g_cap.game_audio_source) ||
+        !create_process("voice_audio", "Voice Audio", routing.voice, 4, g_cap.voice_audio_source)) return false;
+    if (routing.system) {
+        obs_data_t *settings = obs_data_create();
+        obs_data_set_string(settings, "device_id", g_cap.system_device_id.c_str());
+        g_cap.sys_audio_source = obs_source_create("wasapi_output_capture", "SystemAudio", settings, nullptr);
+        obs_data_release(settings);
+        if (!g_cap.sys_audio_source) { out_err = "System audio loopback source could not be created"; return false; }
+        obs_source_set_audio_mixers(g_cap.sys_audio_source, routing.system); obs_set_output_source(1, g_cap.sys_audio_source);
+    }
     if (g_cap.enable_mic) {
-        obs_data_t *mic_settings = obs_data_create();
-        obs_data_set_string(mic_settings, "device_id", g_cap.mic_device_id.c_str());
-        g_cap.mic_audio_source = obs_source_create("wasapi_input_capture", "Microphone", mic_settings, nullptr);
-        obs_data_release(mic_settings);
-
-        if (!g_cap.mic_audio_source) {
-            out_err = "Microphone source could not be created; disable mic or select an input";
-            return false;
-        }
-        if (g_cap.mic_audio_source) {
-            obs_source_set_audio_mixers(g_cap.mic_audio_source, routing.microphone_mixers);
-            obs_set_output_source(2, g_cap.mic_audio_source);
-        }
+        obs_data_t *settings = obs_data_create();
+        obs_data_set_string(settings, "device_id", g_cap.mic_device_id.c_str());
+        g_cap.mic_audio_source = obs_source_create("wasapi_input_capture", "Microphone", settings, nullptr);
+        obs_data_release(settings);
+        if (!g_cap.mic_audio_source) { out_err = "Microphone source could not be created; disable mic or select an input"; return false; }
+        obs_source_set_audio_mixers(g_cap.mic_audio_source, routing.microphone); obs_set_output_source(2, g_cap.mic_audio_source);
     }
 
     // Use vendor-specific settings from the pinned OBS 32.2.2 plugins.
@@ -754,11 +795,32 @@ static bool start_capture_attempt(const json &params, const flick::capture::Enco
     return true;
 }
 
+static json audio_configuration_json() {
+    json sources = json::array();
+    auto process = [&](const char *kind, obs_source_t *source, DWORD pid) {
+        if (!source) return;
+        calldata_t status; calldata_init(&status);
+        const bool queried = proc_handler_call(obs_source_get_proc_handler(source), "get_audio_status", &status);
+        const bool attached = queried && calldata_bool(&status, "attached");
+        sources.push_back({{"kind", kind}, {"process_id", pid}, {"state", attached ? "Attached" : "Lost"},
+                           {"signal_observed", queried && calldata_bool(&status, "signal_observed")}});
+        calldata_free(&status);
+    };
+    process("Game", g_cap.game_audio_source, g_cap.game_audio_pid);
+    process("Voice", g_cap.voice_audio_source, g_cap.voice_audio_pid);
+    if (g_cap.sys_audio_source) sources.push_back({{"kind", "System"}, {"state", "Device loopback"}, {"signal_observed", false}});
+    if (g_cap.mic_audio_source) sources.push_back({{"kind", "Microphone"}, {"state", "Input device"}, {"signal_observed", false}});
+    return {{"audio_mode_requested", g_cap.audio_mode},
+            {"audio_mode_actual", g_cap.separated_audio ? "Separated" : (g_cap.sys_audio_source ? "SystemFallback" : "NoSystemAudio")},
+            {"audio_sources", sources}};
+}
+
 static json capture_configuration_json() {
-    return {{"encoder", g_cap.encoder_id}, {"encoder_name", g_cap.encoder_name},
+    json result = {{"encoder", g_cap.encoder_id}, {"encoder_name", g_cap.encoder_name},
             {"software_fallback", g_cap.software_fallback}, {"width", g_cap.width},
             {"height", g_cap.height}, {"fps", g_cap.fps},
             {"system_audio_enabled", g_cap.enable_system_audio}, {"microphone_enabled", g_cap.enable_mic}};
+    result.update(audio_configuration_json()); return result;
 }
 
 static bool start_capture_session(const json &params, std::string &out_err) {
@@ -907,6 +969,8 @@ static void cleanup_capture_resources() {
         obs_set_output_source(0, nullptr);
         obs_set_output_source(1, nullptr);
         obs_set_output_source(2, nullptr);
+        obs_set_output_source(3, nullptr);
+        obs_set_output_source(4, nullptr);
     }
 
     if (g_cap.sys_audio_source) {
@@ -914,6 +978,10 @@ static void cleanup_capture_resources() {
         g_cap.sys_audio_source = nullptr;
     }
 
+    if (g_cap.game_audio_source) { obs_source_release(g_cap.game_audio_source); g_cap.game_audio_source = nullptr; }
+    if (g_cap.voice_audio_source) { obs_source_release(g_cap.voice_audio_source); g_cap.voice_audio_source = nullptr; }
+    g_cap.game_audio_pid = g_cap.voice_audio_pid = 0;
+    g_cap.separated_audio = false;
     if (g_cap.mic_audio_source) {
         obs_source_release(g_cap.mic_audio_source);
         g_cap.mic_audio_source = nullptr;
@@ -1043,6 +1111,13 @@ static json get_current_status() {
             send_event("fault", {{"reason", target_error}});
         }
     }
+    if (capturing() && g_cap.separated_audio) {
+        const auto audio = audio_configuration_json();
+        for (const auto &source : audio["audio_sources"]) if (source.value("state", "") == "Lost") {
+            g_cap.state = CaptureState::Faulted; g_cap.is_armed = false; fault_reason = "capture_audio_source_lost";
+            send_event("fault", {{"reason", "A selected app audio process exited or stopped. Replay stopped; refresh the audio selection."}}); break;
+        }
+    }
     const auto history = replay_snapshot();
     {
         std::lock_guard<std::mutex> history_lock(g_history_mutex);
@@ -1123,7 +1198,7 @@ int main(int argc, char **argv) {
             }
             else if (cmd == "get_capabilities") {
                 send_response(id, true, {{"protocol_version", 2}, {"diagnostic_no_system_audio", true},
-                                         {"source_identity_binding", true}});
+                                         {"source_identity_binding", true}, {"exact_process_audio", flick::audio::supported()}});
             }
             else if (cmd == "enum_targets") {
                 // Windows
@@ -1136,6 +1211,7 @@ int main(int argc, char **argv) {
                         {"title", w.title},
                         {"pid", w.pid},
                         {"exe", w.exe_name},
+                        {"exe_path", w.exe_path}, {"process_creation_time", w.creation_time},
                         {"width", w.width},
                         {"height", w.height}
                     });

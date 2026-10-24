@@ -17,6 +17,7 @@ public class AudioTrackInfo : INotifyPropertyChanged
     public int TrackIndex { get; set; }
     public string Name { get; set; } = "";
     public string Codec { get; set; } = "";
+    public LocalClip.Core.Audio.AudioTrackRole Role { get; set; }
 
     public bool IsMuted
     {

@@ -52,6 +52,7 @@ public class CaptureHostStatus
     public long PrivateBytes { get; set; }
     public long WorkingSet { get; set; }
     public CaptureEncodingProfile? Profile { get; set; }
+    public LocalClip.Core.Audio.CaptureAudioStatus? Audio { get; set; }
     public string FaultReason { get; set; } = "";
     public bool BufferedDurationEstimated { get; set; } = true;
     public bool BufferTrackingLimited { get; set; }
@@ -82,6 +83,7 @@ public class CaptureHostStatus
             PrivateBytes = ReadMemory(data, "private_bytes"),
             WorkingSet = ReadMemory(data, "working_set"),
             Profile = profile,
+            Audio = LocalClip.Core.Audio.CaptureAudioStatus.Parse(data),
             FaultReason = ReadString(data, "fault_reason"),
             BufferedDurationEstimated = ReadBoolean(data, "buffered_duration_estimated", true),
             BufferTrackingLimited = ReadBoolean(data, "buffer_tracking_limited", false),

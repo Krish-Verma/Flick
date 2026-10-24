@@ -34,7 +34,7 @@ public class TargetItem
     public override string ToString() => DisplayName;
 }
 
-public class MainViewModel : INotifyPropertyChanged, IDisposable
+public partial class MainViewModel : INotifyPropertyChanged, IDisposable
 {
     private readonly AppSettings _settings;
     private readonly CaptureHostClient _captureHost;
@@ -518,9 +518,9 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
     // These operations outlive their initiating page. The updater also checks
     // the separate capture/save/import/export flags before closing the app.
     public bool IsBackgroundWorkActive => Volatile.Read(ref _discordUploadOperations) > 0
-        || Volatile.Read(ref _libraryRescanOperations) > 0 || _isExportingDiagnostics || _isRecordingDiagnosticRunning;
+        || Volatile.Read(ref _libraryRescanOperations) > 0 || _isExportingDiagnostics || _isRecordingDiagnosticRunning || _isBuildingAudioPreview || _audioPreviewOperation.CleanupFailed;
     public bool IsCaptureActive => CaptureActive || _isRecordingDiagnosticRunning || _diagnosticCleanupUnconfirmed;
-    public bool CanEditClip => SelectedClip?.IsAvailable == true && !IsExporting;
+    public bool CanEditClip => SelectedClip?.IsAvailable == true && !IsExporting && !_isBuildingAudioPreview;
     public bool CanStartExport => CanEditClip && !IsImporting && !_isRecordingDiagnosticRunning && !_isPreparingToQuit && !_diagnosticCleanupUnconfirmed;
     // WPF shell supplies consent before an active source change discards replay.
     public Func<bool>? ConfirmTargetReset { get; set; }
@@ -967,6 +967,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
         Guid startingSession = _healthSession;
         try
         {
+            if (!await CancelAudioPreviewAndWaitAsync()) throw new InvalidOperationException("Audio preview cleanup is not finished; wait before starting replay.");
             bool started = await _captureHost.StartCaptureAsync(_settings);
             if (startingEpoch != _captureEpoch || startingSession != _healthSession) return;
             if (!started)
@@ -1030,6 +1031,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
         bool ready = false;
         try
         {
+            if (!await CancelAudioPreviewAndWaitAsync()) return false;
             CancelRecordingDiagnostic();
             if (_recordingDiagnosticCompletion is { } test)
             {
@@ -1317,6 +1319,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
             var st = await _captureHost.GetStatusAsync();
             // A query started before stop/restart must not rewrite the new session.
             if (epoch != _captureEpoch || hostPid != _captureHost.HostProcessId) return;
+            SetAudioCaptureStatus(st.Audio);
             _health.ObserveHost(_healthSession, CaptureHostHealth.Responsive);
             if (st.State == "Faulted" || !string.IsNullOrWhiteSpace(st.FaultReason) || !st.TargetValid)
             {
@@ -1565,6 +1568,8 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
 
     public void ScheduleAudioEdit()
     {
+        _audioMixRevision++;
+        OnPropertyChanged(nameof(AudioMixRevision));
         if (SelectedClip is null || !SelectedClip.IsAvailable) return;
         InvalidateExportReady(); // Never let stale exported audio look ready.
         _pendingAudioClip = SelectedClip;
@@ -1585,12 +1590,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
     public void ResetAudioMix()
     {
         if (SelectedClip == null || IsExporting || !SelectedClip.IsAvailable) return;
-        foreach (var track in SelectedClip.AudioTracks)
-        {
-            track.IsMuted = AudioMixDefaults.ShouldMute(
-                SelectedClip.IsImported, SelectedClip.AudioTracks.Count, track.TrackIndex);
-            track.Gain = 1.0;
-        }
+        LocalClip.Core.Audio.AudioTrackRoles.Reset(SelectedClip);
         ScheduleAudioEdit();
     }
 

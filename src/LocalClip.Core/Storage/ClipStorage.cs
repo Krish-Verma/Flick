@@ -204,7 +204,10 @@ public sealed class ClipStorage
         if (trackNames?.Count == probe.AudioTracks.Count)
             for (int i = 0; i < trackNames.Count; i++)
                 if (!string.IsNullOrWhiteSpace(trackNames[i]))
+                {
                     probe.AudioTracks[i].Name = trackNames[i];
+                    if (source == null) probe.AudioTracks[i].Role = LocalClip.Core.Audio.AudioTrackRoles.FromNativeName(trackNames[i]);
+                }
 
         if (source != null)
         {
@@ -220,6 +223,8 @@ public sealed class ClipStorage
             }
         }
 
+        if (source == null && trackNames?.Count == probe.AudioTracks.Count)
+            LocalClip.Core.Audio.AudioTrackRoles.Reset(new ClipMetadata { AudioTracks = probe.AudioTracks });
         var info = new FileInfo(normalized);
         var clip = new ClipMetadata
         {

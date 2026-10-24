@@ -116,21 +116,27 @@
                     <TextBlock Text="Audio" Style="{StaticResource Flick.Text.PageTitle}"/>
                     <TextBlock Text="Capture only what you choose."
                                Style="{StaticResource Flick.Text.Caption}" Margin="0,5,0,24"/>
-                    <Border Margin="0,0,0,24" Padding="0">
-                        <StackPanel>
-                            <TextBlock Text="System Audio" Style="{StaticResource Flick.Text.Section}"/>
-                            <TextBlock Text="Current Windows default output · System loopback fallback"
-                                       Style="{StaticResource Flick.Text.Caption}"
-                                       TextWrapping="Wrap" Margin="0,6,0,0"/>
-                        </StackPanel>
-                    </Border>
+                    <ComboBox x:Name="CmbAudioMode" SelectionChanged="AudioMode_SelectionChanged" Style="{StaticResource Flick.Input.Combo}" SelectedIndex="0" Margin="0,0,0,16" AutomationProperties.Name="Audio capture mode">
+                        <ComboBoxItem Content="System Audio · whole output device"/>
+                        <ComboBoxItem Content="Separate App Audio · selected process trees"/>
+                    </ComboBox>
+                    <StackPanel x:Name="AppAudioSourcesPanel" Visibility="Collapsed">
+                    <TextBlock Text="Game app" Style="{StaticResource Flick.Text.Control}"/>
+                    <ComboBox x:Name="CmbGameAudio" DisplayMemberPath="Label" Style="{StaticResource Flick.Input.Combo}" Margin="0,5,0,12" AutomationProperties.Name="Game audio app"/>
+                    <TextBlock Text="Voice app" Style="{StaticResource Flick.Text.Control}"/>
+                    <ComboBox x:Name="CmbVoiceAudio" DisplayMemberPath="Label" Style="{StaticResource Flick.Input.Combo}" Margin="0,5,0,12" AutomationProperties.Name="Voice audio app"/>
+                    <Button x:Name="BtnRefreshAudioSources" Content="Refresh Running Apps" Click="RefreshAudioSources_Click" Style="{StaticResource Flick.Button.Secondary}" HorizontalAlignment="Left" Margin="0,0,0,8"/>
+                    <TextBlock x:Name="TxtAudioSources" Text="Separate App Audio requires Windows build 20348 or newer. Select current apps after a restart; unavailable app audio stops replay. System Audio is an explicit whole-device choice, never an automatic fallback."
+                               Style="{StaticResource Flick.Text.Caption}" TextWrapping="Wrap" Margin="0,0,0,20"/>
+                    </StackPanel>
+                    <TextBlock Text="System Audio records the whole selected output device. Separate App Audio records only the chosen process trees; neither choice records the microphone unless enabled below." Style="{StaticResource Flick.Text.Caption}" TextWrapping="Wrap" Margin="0,0,0,16"/>
                     <CheckBox x:Name="ChkMicrophone"
                               Style="{StaticResource Flick.Toggle}"
                               Content="Record Microphone"
                               Checked="Microphone_Changed" Unchecked="Microphone_Changed"/>
                     <TextBlock Text="Off by default · Windows default input device"
                                Style="{StaticResource Flick.Text.Caption}" Margin="0,7,0,15"/>
-                    <TextBlock Text="Game and Discord audio are not independently isolated in fallback mode. Disabling an active microphone requires stopping replay to release the device."
+                    <TextBlock Text="Microphone is independent and off by default. Changing audio routing stops active replay; manually restart after saving. App tracks include child processes and cannot separate voices within one app."
                                Style="{StaticResource Flick.Text.Muted}"
                                TextWrapping="Wrap"/>
                 </StackPanel>

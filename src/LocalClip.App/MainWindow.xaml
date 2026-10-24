@@ -349,7 +349,7 @@
                         </Border><Border Background="Transparent" BorderThickness="0" Padding="6,3" x:Name="AudioPanel" Visibility="Collapsed" Margin="0,8,0,0">
                             <Expander x:Name="AudioExpander" Style="{StaticResource Flick.Expander.Disclosure}" IsEnabled="{Binding CanEditClip}" Header="Export Audio" IsExpanded="False" Foreground="{DynamicResource Flick.Brush.TextPrimary}" Background="Transparent" Padding="4">
                                 <StackPanel Margin="5,8,5,8">
-                                    <TextBlock Text="Export Mix · Original Recording Is Never Modified" Style="{StaticResource Flick.Text.Caption}" Margin="0,0,0,8" TextWrapping="Wrap"/>
+                                    <TextBlock Text="Audio mix · original recording is never modified. Combined is an alternate complete mix; selecting it excludes dedicated tracks." Style="{StaticResource Flick.Text.Caption}" Margin="0,0,0,8" TextWrapping="Wrap"/>
                                     <ItemsControl ItemsSource="{Binding SelectedClip.AudioTracks}">
                                         <ItemsControl.ItemTemplate>
                                             <DataTemplate>
@@ -370,7 +370,7 @@
                                     </ItemsControl>
                                     <DockPanel LastChildFill="True" Margin="0,2,0,0">
                                         <Button DockPanel.Dock="Right" Content="Reset Mix" Style="{StaticResource Flick.Button.Ghost}" Click="ResetAudioMix_Click" HorizontalAlignment="Right" MinHeight="28"/>
-                                        <TextBlock Text="Export to hear these levels in the MP4." Style="{StaticResource Flick.Text.Muted}" VerticalAlignment="Center"/>
+                                        <Button x:Name="BtnAudioMixPreview" Content="Preview Mix" Click="BuildAudioMixPreview_Click" Style="{StaticResource Flick.Button.Ghost}" HorizontalAlignment="Left"/>
                                     </DockPanel>
                                 </StackPanel>
                             </Expander>
@@ -476,6 +476,7 @@
                 <ScrollViewer x:Name="RecordingHealthScroll" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                     <StackPanel>
                         <TextBlock x:Name="TxtHealthStatus" Text="{Binding HealthStatusText}" FontWeight="SemiBold" Foreground="{DynamicResource Flick.Brush.TextPrimary}" Margin="0,0,0,10" AutomationProperties.LiveSetting="Polite"/>
+                        <TextBlock Text="{Binding AudioCaptureSummary}" TextWrapping="Wrap" Margin="0,0,0,10"/>
                         <TextBlock Text="{Binding HealthDetailsText}" TextWrapping="Wrap" Margin="0,0,0,14"/>
                         <TextBlock Text="{Binding HealthLastFailureText}" TextWrapping="Wrap" Margin="0,0,0,14"/>
                         <TextBlock Text="{Binding HealthLastSavedText}" TextWrapping="Wrap" Margin="0,0,0,14"/>

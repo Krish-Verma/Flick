@@ -72,22 +72,31 @@ public class MediaProber
         using var proc = new System.Diagnostics.Process { StartInfo = psi };
         using var job = new JobObject();
         proc.Start();
-        if (!job.AssignProcess(proc) && !proc.HasExited)
+        string output;
+        Task<string>? stderr = null;
+        try
+        {
+            if (!job.AssignProcess(proc) && !proc.HasExited)
+                throw new InvalidOperationException("Failed to confine ffprobe worker");
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(12));
+            using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeout.Token);
+            using var interrupt = linked.Token.Register(() =>
+            {
+                try { if (!proc.HasExited) proc.Kill(entireProcessTree: true); } catch { }
+            });
+            stderr = proc.StandardError.ReadToEndAsync(linked.Token);
+            output = await proc.StandardOutput.ReadToEndAsync(linked.Token);
+            await proc.WaitForExitAsync(linked.Token);
+            _ = await stderr;
+        }
+        finally
         {
             try { if (!proc.HasExited) proc.Kill(entireProcessTree: true); } catch { }
-            throw new InvalidOperationException("Failed to confine ffprobe worker");
+            job.Dispose();
+            try { await proc.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false); }
+            catch (Exception) { throw new LocalClip.Core.Audio.MediaWorkerCleanupException(); }
+            if (stderr != null) { try { await stderr.ConfigureAwait(false); } catch (Exception) { } }
         }
-        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(12));
-        using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeout.Token);
-        using var interrupt = linked.Token.Register(() =>
-        {
-            try { if (!proc.HasExited) proc.Kill(entireProcessTree: true); }
-            catch { }
-        });
-        Task<string> stderr = proc.StandardError.ReadToEndAsync(linked.Token);
-        string output = await proc.StandardOutput.ReadToEndAsync(linked.Token);
-        await proc.WaitForExitAsync(linked.Token);
-        _ = await stderr;
 
         if (proc.ExitCode != 0 || string.IsNullOrWhiteSpace(output))
         {
@@ -267,7 +276,9 @@ public class MediaProber
     /// Longer imported videos are limited to the first three minutes for preview.
     /// </summary>
     public async Task<string> BuildPlaybackPreviewAsync(string original,
-        CancellationToken cancellationToken = default, bool forceTranscode = false)
+        CancellationToken cancellationToken = default, bool forceTranscode = false,
+        IReadOnlyList<AudioTrackInfo>? audioMix = null, double trimStart = 0, double? trimEnd = null,
+        string? cacheDirectory = null)
     {
         if (!File.Exists(original)) throw new FileNotFoundException("Original video is offline.", original);
         var info = new FileInfo(original);
@@ -275,13 +286,18 @@ public class MediaProber
         if (!media.IsValid || !double.IsFinite(media.DurationSeconds) || media.DurationSeconds <= 0)
             throw new InvalidDataException("The original video is not a valid preview source.");
 
-        string cache = Path.Combine(
+        string cache = cacheDirectory ?? Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "LocalClip", "PreviewCache");
         Directory.CreateDirectory(cache);
+        if (!double.IsFinite(trimStart) || trimStart < 0 || trimStart >= media.DurationSeconds ||
+            (trimEnd.HasValue && (!double.IsFinite(trimEnd.Value) || trimEnd.Value <= trimStart || trimEnd.Value > media.DurationSeconds + .1)))
+            throw new ArgumentException("Invalid preview trim.");
+        string? mixFilter = audioMix == null ? null : ClipExporter.BuildAudioMixFilter(audioMix.ToList());
         string fingerprint = Path.GetFullPath(original).ToUpperInvariant() +
                              "|" + info.Length + "|" + info.LastWriteTimeUtc.Ticks +
-                             (forceTranscode ? "|preview-safe-v2" : "|preview-copy-v2");
+                             (forceTranscode ? "|preview-safe-v3" : "|preview-copy-v3") +
+                             "|" + mixFilter + "|" + trimStart.ToString("R", CultureInfo.InvariantCulture) + "|" + trimEnd?.ToString("R", CultureInfo.InvariantCulture);
         string key = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(fingerprint)));
         string resultFile = Path.Combine(cache, key + ".mp4");
 
@@ -306,8 +322,8 @@ public class MediaProber
         catch (IOException) { }
 
         string temp = Path.Combine(cache, ".preview-" + Guid.NewGuid().ToString("N") + ".mp4");
-        double seconds = PlaybackPreviewPolicy.PreviewSeconds(media.DurationSeconds);
-        bool copyH264 = !forceTranscode && PlaybackPreviewPolicy.CanStreamCopy(
+        double seconds = PlaybackPreviewPolicy.PreviewSeconds((trimEnd ?? media.DurationSeconds) - trimStart);
+        bool copyH264 = !forceTranscode && trimStart == 0 && PlaybackPreviewPolicy.CanStreamCopy(
             media.VideoCodec, media.DurationSeconds, info.Length);
 
         var psi = new ProcessStartInfo
@@ -319,17 +335,19 @@ public class MediaProber
         };
         string[] args = {
             "-hide_banner", "-loglevel", "error", "-nostats",
-            "-y", "-i", original,
+            "-y", "-ss", trimStart.ToString("F3", CultureInfo.InvariantCulture), "-i", original,
             "-t", seconds.ToString("F3", CultureInfo.InvariantCulture),
-            "-map", "0:v:0", "-map", "0:a:0?",
+            "-map", "0:v:0",
             "-c:v", copyH264 ? "copy" : "libx264"
         };
         foreach (string value in args) psi.ArgumentList.Add(value);
+        foreach (string value in mixFilter == null ? new[] { "-map", "0:a:0?" } : new[] { "-filter_complex", mixFilter, "-map", "[outa]" })
+            psi.ArgumentList.Add(value);
         if (!copyH264)
         {
             foreach (string value in new[]
             {
-                "-preset", "ultrafast", "-crf", "28",
+                "-preset", "ultrafast", "-threads", "2", "-crf", "28",
                 "-maxrate", "2500k", "-bufsize", "5000k",
                 "-vf", "scale=w='min(960,iw)':h=-2",
                 "-pix_fmt", "yuv420p"
@@ -346,10 +364,12 @@ public class MediaProber
         using var maxTime = new CancellationTokenSource(TimeSpan.FromSeconds(90));
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(
             cancellationToken, maxTime.Token);
+        bool workerStarted = false;
 
         try
         {
-            if (!process.Start())
+            workerStarted = process.Start();
+            if (!workerStarted)
                 throw new IOException("Could not start the local preview encoder.");
             if (!job.AssignProcess(process) && !process.HasExited)
             {
@@ -373,7 +393,7 @@ public class MediaProber
             if (length < 1024 || length > PlaybackPreviewPolicy.MaximumOutputBytes)
                 throw new IOException("Preview exceeds the bounded local preview size.");
             var verification = await ProbeFileAsync(temp, cancellationToken);
-            if (!verification.IsValid || !verification.VideoCodec.Equals(
+            if ((mixFilter != null && (verification.AudioTracks.Count != 1 || verification.AudioTracks[0].Codec != "aac")) || !verification.IsValid || !verification.VideoCodec.Equals(
                     "h264", StringComparison.OrdinalIgnoreCase))
                 throw new IOException("Generated preview failed H.264 media verification.");
 
@@ -382,9 +402,17 @@ public class MediaProber
         }
         finally
         {
-            try { if (!process.HasExited) process.Kill(entireProcessTree: true); }
-            catch { }
-            try { if (File.Exists(temp)) File.Delete(temp); } catch { }
+            try
+            {
+                if (workerStarted)
+                {
+                    try { if (!process.HasExited) process.Kill(entireProcessTree: true); } catch { }
+                    job.Dispose();
+                    try { await process.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false); }
+                    catch (Exception) { throw new LocalClip.Core.Audio.MediaWorkerCleanupException(); }
+                }
+            }
+            finally { try { if (File.Exists(temp)) File.Delete(temp); } catch { } }
         }
     }
 

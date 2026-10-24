@@ -32,6 +32,9 @@ public class AppSettings
     public bool EnableMicrophone { get; set; } = false; // Privacy: opt-in, never access mic on first run
     public string MicrophoneDeviceId { get; set; } = "default";
     public string SystemAudioDeviceId { get; set; } = "default";
+    public LocalClip.Core.Audio.AudioProcessIdentity? GameAudioSource { get; set; }
+    public LocalClip.Core.Audio.AudioProcessIdentity? VoiceAudioSource { get; set; }
+    // Legacy PID fields are retained for loading old files, never used as consent.
     public int GameProcessId { get; set; } = 0;
     public int DiscordProcessId { get; set; } = 0;
 

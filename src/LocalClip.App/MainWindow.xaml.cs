@@ -41,11 +41,12 @@ public partial class MainWindow : Window
     private ConnectedFoldersWindow? _foldersPage;
     private bool _foldersReturnToSettings;
     private bool _settingsMicrophoneWasEnabled;
+    private string _settingsAudioSnapshot = "";
     private bool _isDraggingSlider = false;
     private bool _isRealClosing = false;
     private System.Windows.Point? _shareDragStart;
     private bool _updatingExportCap;
-    private enum PlayerView { Original, Exported, LocalCopy }
+    private enum PlayerView { Original, Exported, LocalCopy, AudioMix }
     private PlayerView _playerView = PlayerView.Original;
     private CancellationTokenSource? _previewCancellation;
     private MediaProber? _localPreviewProber;
@@ -147,6 +148,11 @@ public partial class MainWindow : Window
                     _previewCancellation?.Cancel();
                     SuspendPlayback(clearSource: true);
                 }
+            }
+            else if (ev.PropertyName == nameof(MainViewModel.AudioMixRevision))
+            {
+                CancelPendingPreview();
+                if (_playerView is PlayerView.Exported or PlayerView.LocalCopy or PlayerView.AudioMix) ShowOriginalPreview(startPlaying: false);
             }
             else if (ev.PropertyName == nameof(MainViewModel.SelectedClip))
             {
@@ -720,8 +726,9 @@ public partial class MainWindow : Window
             return;
         }
         _settingsMicrophoneWasEnabled = _vm.Settings.EnableMicrophone;
+        _settingsAudioSnapshot = AudioSettingsSnapshot();
         var settings = new SettingsWindow(_vm.Settings,
-            () => _vm.IsCaptureActive);
+            () => _vm.IsCaptureActive, _vm.GetAudioSourcesAsync);
         settings.CloseRequested += CloseSettingsPage;
         settings.InstallUpdateRequested += InstallUpdateAsync;
         settings.ShortcutEditingChanged += editing => _hotkeyManager.IsShortcutEditing = editing;
@@ -828,8 +835,8 @@ public partial class MainWindow : Window
         UpdateSharePresetSelection();
         UpdateStatusBadgeColor();
         bool captureActive = _vm.IsCaptureActive;
-        if (captureActive && _settingsMicrophoneWasEnabled &&
-            !_vm.Settings.EnableMicrophone)
+        if (captureActive && (_settingsAudioSnapshot != AudioSettingsSnapshot() || (_settingsMicrophoneWasEnabled &&
+            !_vm.Settings.EnableMicrophone)))
         {
             _ = StopCaptureForMicPrivacyAsync();
             return;
@@ -838,6 +845,10 @@ public partial class MainWindow : Window
             ? "Preferences saved. New capture profile takes effect on the next manual replay start."
             : "Preferences saved. Replay remains off until manually started.";
     }
+
+    private string AudioSettingsSnapshot() => System.Text.Json.JsonSerializer.Serialize(new {
+        _vm.Settings.AudioMode, _vm.Settings.GameAudioSource, _vm.Settings.VoiceAudioSource,
+        _vm.Settings.EnableMicrophone, _vm.Settings.MicrophoneDeviceId, _vm.Settings.SystemAudioDeviceId });
 
     private async System.Threading.Tasks.Task StopCaptureForMicPrivacyAsync()
     {
@@ -853,7 +864,7 @@ public partial class MainWindow : Window
                 return;
             }
             await _vm.StopCaptureAsync();
-            _vm.StatusDetails = "Microphone disabled and capture stopped. Manually start replay when ready.";
+            _vm.StatusDetails = "Audio preferences saved and capture stopped. Manually start replay when ready.";
         }
         catch (Exception ex)
         {
@@ -1035,6 +1046,7 @@ public partial class MainWindow : Window
         {
             PlayerView.Exported => "Export Preview",
             PlayerView.LocalCopy => "Local Preview",
+            PlayerView.AudioMix => "Mix Preview",
             _ => "Original"
         };
         BtnPlayPause.Content = "Play";
@@ -1060,7 +1072,7 @@ public partial class MainWindow : Window
             SetPreviewSource(clip.OriginalFilePath, PlayerView.Original, startPlaying: true);
         else
             ResetPlayerForSelection(); // Inactive editor retains the cheap poster.
-        _vm.StatusDetails = "Original Preview · Edits Affect Only the Exported Copy";
+        _vm.StatusDetails = "Original preview · recorded audio · use Preview Mix for current edits";
     }
 
     private void VideoPlayer_MediaOpened(object sender, RoutedEventArgs e)
@@ -1232,12 +1244,14 @@ public partial class MainWindow : Window
             ? Visibility.Visible : Visibility.Collapsed;
         BtnBuildPreview.Content = _playerView == PlayerView.LocalCopy
             ? "Try Compatible Preview" : "Create Local Preview";
-        TxtPreviewIssue.Text = _playerView == PlayerView.Exported
-            ? "Windows Couldn't Preview the Exported MP4"
-            : "Windows Couldn't Play This Original";
-        _vm.StatusDetails = _playerView == PlayerView.Exported
-            ? "Export preview unavailable. Open the validated MP4 externally."
-            : "Original MKV playback unsupported by Windows. Create a temporary local MP4 or open the original in another player.";
+        TxtPreviewIssue.Text = _playerView switch {
+            PlayerView.Exported => "Windows Couldn't Preview the Exported MP4",
+            PlayerView.AudioMix => "Windows Couldn't Play the Audio Mix Preview",
+            _ => "Windows Couldn't Play This Original" };
+        _vm.StatusDetails = _playerView switch {
+            PlayerView.Exported => "Export preview unavailable. Open the validated MP4 externally.",
+            PlayerView.AudioMix => "Mix playback unavailable. The original remains unchanged; export the mix to hear it in another player.",
+            _ => "Original MKV playback unsupported by Windows. Create a temporary local MP4 or open the original in another player." };
     }
 
     private async void BuildPlayablePreview_Click(object sender, RoutedEventArgs e)

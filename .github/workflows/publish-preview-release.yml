@@ -55,7 +55,7 @@ jobs:
             -Itools/obs/include/libobs -Isrc/LocalClip.CaptureHost \
             src/LocalClip.CaptureHost/main.cpp native-build/capture-version.o \
             -Ltools/obs/runtime/bin/64bit -Wl,-Bstatic -lwinpthread \
-            -Wl,-Bdynamic -lobs -ldwmapi \
+            -Wl,-Bdynamic -lobs -ldwmapi -lole32 \
             -o tools/obs/runtime/bin/64bit/LocalClip.CaptureHost.exe
           test -f tools/obs/runtime/bin/64bit/LocalClip.CaptureHost.exe
       - name: Run offline source/design contracts

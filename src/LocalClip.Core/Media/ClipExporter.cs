@@ -317,18 +317,7 @@ public class ClipExporter
 
     public static string BuildAudioMixFilter(List<AudioTrackInfo>? tracks)
     {
-        // Filter out muted tracks and tracks with 0 gain
-        var activeTracks = new List<AudioTrackInfo>();
-        if (tracks != null)
-        {
-            foreach (var t in tracks)
-            {
-                if (!t.IsMuted && t.Gain > 0.001)
-                {
-                    activeTracks.Add(t);
-                }
-            }
-        }
+        var activeTracks = LocalClip.Core.Audio.AudioTrackRoles.EffectiveMix(tracks);
 
         if (activeTracks.Count == 0)
         {

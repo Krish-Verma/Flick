@@ -10,7 +10,7 @@ namespace LocalClip.Core.Rules;
 
 public static class ExportFingerprint
 {
-    public const int PROFILE_VERSION = 2;
+    public const int PROFILE_VERSION = 3;
 
     public static string Compute(
         string sourceFilePath,
@@ -40,7 +40,7 @@ public static class ExportFingerprint
         {
             foreach (var t in tracks)
             {
-                sb.Append($"T:{t.StreamIndex}:{t.IsMuted}:{t.Gain.ToString("R", CultureInfo.InvariantCulture)}|");
+                sb.Append($"T:{t.StreamIndex}:{t.TrackIndex}:{t.Role}:{t.IsMuted}:{t.Gain.ToString("R", CultureInfo.InvariantCulture)}|");
             }
         }
 

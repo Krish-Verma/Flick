@@ -88,6 +88,10 @@ jobs:
             tests/LocalClip.CaptureHost.Tests/encoder_policy_tests.cpp \
             -o native-policy-ci/encoder-policy-tests
           native-policy-ci/encoder-policy-tests
+          g++ -std=c++17 -O2 -Wall -Wextra -Werror \
+            tests/LocalClip.CaptureHost.Tests/audio_policy_tests.cpp \
+            -o native-policy-ci/audio-policy-tests
+          native-policy-ci/audio-policy-tests
 
   dotnet:
     name: WPF build and hardware-independent tests
@@ -189,6 +193,14 @@ jobs:
           dotnet run --project tools/Flick.RecordingHarness/Flick.RecordingHarness.csproj -c Release --no-build
           if ($LASTEXITCODE -ne 2) { throw 'Harness must refuse capture without explicit arguments and opt-in' }
           exit 0 # The expected refusal is the assertion; do not propagate its exit2 as a CI failure.
+      - name: Build generated-process audio harness and exercise no-argument refusal
+        shell: pwsh
+        run: |
+          dotnet build tools/Flick.AudioQualification/Flick.AudioQualification.csproj -c Release --warnaserror
+          if ($LASTEXITCODE -ne 0) { throw 'Audio qualification harness build failed' }
+          dotnet run --project tools/Flick.AudioQualification/Flick.AudioQualification.csproj -c Release --no-build
+          if ($LASTEXITCODE -ne 2) { throw 'Audio harness must refuse playback/capture without explicit arguments' }
+          exit 0
       - name: Smoke-check self-contained Windows publish
         run: dotnet publish src/LocalClip.App/LocalClip.App.csproj -c Release -r win-x64 --self-contained true -o publish-smoke --nologo
       - name: Validate branded published app and generated icon
@@ -244,7 +256,7 @@ jobs:
             -Itools/obs/include/libobs -Isrc/LocalClip.CaptureHost \
             src/LocalClip.CaptureHost/main.cpp native-ci/capture-version.o \
             -Ltools/obs/runtime/bin/64bit -Wl,-Bstatic -lwinpthread \
-            -Wl,-Bdynamic -lobs -ldwmapi -o native-ci/LocalClip.CaptureHost.exe
+            -Wl,-Bdynamic -lobs -ldwmapi -lole32 -o native-ci/LocalClip.CaptureHost.exe
       - name: Confirm native executable exists
         shell: pwsh
         run: |

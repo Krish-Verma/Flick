@@ -45,6 +45,19 @@ public class SettingsStagingTests
                 Assert.True(Find<CheckBox>("ChkPreviewUpdates").IsChecked);
                 Assert.True(Find<CheckBox>("ChkSoftwareFallback").IsChecked);
                 Assert.True(settings.AllowSoftwareFallback);
+                // Audio choices are staged, preserve exact process provenance,
+                // and never enable a microphone or commit live preferences.
+                var audioPreferences = new AppSettings { AudioMode = "Separated",
+                    GameAudioSource = new LocalClip.Core.Audio.AudioProcessIdentity(42, 123, @"C:\Synthetic\game.exe", "Generated game") };
+                typeof(SettingsWindow).GetMethod("PopulateAudio", BindingFlags.NonPublic | BindingFlags.Instance)!.Invoke(page, new object[] { audioPreferences });
+                Assert.Equal("SystemFallback", settings.AudioMode);
+                var audioStaged = new AppSettings();
+                typeof(SettingsWindow).GetMethod("StageAudio", BindingFlags.NonPublic | BindingFlags.Instance)!.Invoke(page, new object[] { audioStaged });
+                Assert.Equal("Separated", audioStaged.AudioMode);
+                Assert.Equal(audioPreferences.GameAudioSource, audioStaged.GameAudioSource);
+                Assert.False(audioStaged.EnableMicrophone);
+                Assert.Null(settings.GameAudioSource);
+                typeof(SettingsWindow).GetMethod("PopulateAudio", BindingFlags.NonPublic | BindingFlags.Instance)!.Invoke(page, new object[] { settings });
                 // Exercise the actual disclosure template: its keyboard-focusable
                 // toggle must update the Expander and reveal/hide its content.
                 var disclosure = Find<Expander>("WebhookExpander");
