@@ -421,10 +421,10 @@
                 <Button Grid.Column="0" Content="Restore Defaults"
                         Style="{StaticResource Flick.Button.Ghost}"
                         HorizontalAlignment="Left" Click="RestoreDefaults_Click"/>
-                <Button Grid.Column="1" Content="Cancel"
+                <Button x:Name="BtnCancelSettings" Grid.Column="1" Content="Cancel"
                         Style="{StaticResource Flick.Button.Secondary}"
                         Click="Cancel_Click" Margin="0,0,9,0"/>
-                <Button Grid.Column="2" Content="Save Settings"
+                <Button x:Name="BtnSaveSettings" Grid.Column="2" Content="Save Settings"
                         Style="{StaticResource Flick.Button.Primary}"
                         Click="Save_Click"/>
             </Grid>

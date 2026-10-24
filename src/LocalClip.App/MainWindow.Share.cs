@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using Brush = System.Windows.Media.Brush;
@@ -41,9 +42,15 @@ public partial class MainWindow
     private void UpdateEditorContextHeight()
     {
         bool share = SharePanel.Visibility == Visibility.Visible;
+        // At minimum height the video row cannot contain a usable drawer.
+        // Let Share use the editor's full area while keeping its fixed actions.
+        bool useEditorArea = share && PreviewSurface.ActualHeight < 320;
+        Grid.SetRow(EditorContextLayer, useEditorArea ? 0 : 1);
+        Grid.SetRowSpan(EditorContextLayer, useEditorArea ? 5 : 1);
+        double available = useEditorArea ? ClipEditorPanel.ActualHeight : PreviewSurface.ActualHeight;
         double chrome = share ? 90 + ShareActionFooter.ActualHeight : 100;
-        EditorContextScroll.MaxHeight = Math.Max(32, PreviewSurface.ActualHeight - chrome);
-        EditorContextLayer.MaxHeight = Math.Max(100, PreviewSurface.ActualHeight - 18);
+        EditorContextScroll.MaxHeight = Math.Max(32, available - chrome);
+        EditorContextLayer.MaxHeight = Math.Max(100, available - 24);
     }
 
     private void ShareFooter_SizeChanged(object sender, SizeChangedEventArgs args) => UpdateEditorContextHeight();

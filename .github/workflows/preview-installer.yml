@@ -143,12 +143,12 @@ jobs:
           ./scripts/verify_flick_release.ps1
           $checksums = 'dist/SHA256SUMS.txt'
           $setup = 'dist/Flick-Setup.exe'
-          $portable = 'dist/Flick-v1.0.6-win-x64.zip'
+          $portable = 'dist/Flick-v1.0.7-win-x64.zip'
           foreach ($path in @($checksums, $setup, $portable)) {
             if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw "Missing $path" }
           }
           $manifest = Get-Content -LiteralPath $checksums -Raw
-          foreach ($name in @('Flick.exe', 'Flick-v1.0.6-win-x64.zip',
+          foreach ($name in @('Flick.exe', 'Flick-v1.0.7-win-x64.zip',
                               'Flick-Setup.exe', 'LocalClip.CaptureHost.exe')) {
             if (-not $manifest.Contains($name)) { throw "Missing hash entry: $name" }
           }
@@ -178,7 +178,7 @@ jobs:
           name: flick-unsigned-preview-${{ github.sha }}
           path: |
             dist/Flick-Setup.exe
-            dist/Flick-v1.0.6-win-x64.zip
+            dist/Flick-v1.0.7-win-x64.zip
             dist/SHA256SUMS.txt
           if-no-files-found: error
           retention-days: 7

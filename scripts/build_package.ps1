@@ -6,7 +6,7 @@ $ErrorActionPreference = "Stop"
 
 $RootDir = (Get-Item $PSScriptRoot).Parent.FullName
 $DistDir = Join-Path $RootDir "dist"
-$PackageName = "Flick-v1.0.6-win-x64"
+$PackageName = "Flick-v1.0.7-win-x64"
 $PackageDir = Join-Path $DistDir $PackageName
 $ZipPath = Join-Path $DistDir "$PackageName.zip"
 
@@ -100,37 +100,56 @@ if (-not (Test-Path -LiteralPath (Join-Path $PackageDir "Flick.exe"))) {
 }
 
 # Generate User Readme
-$Readme = @"
-# Flick v1.0.6 Preview — unsigned replay-hotkey-fix candidate
+$Readme = @'
+# Flick 1.0.7 Preview 1 — UNRELEASED · UNSIGNED
 
-Fast, private, offline-first gameplay clipper replicating the SteelSeries Moments workflow.
+This Windows x64 development candidate adds recording health, opt-in game replay, selected-app audio, nondestructive editing and a file-based Share surface. Its implementation and earlier focused checks do not qualify this exact package. Publication requires separate approval after the final source, Windows workflows and artifacts have been verified.
 
-## Key Features
-- **100% Free & Offline Core:** Zero accounts, zero ads, zero telemetry, zero watermarks.
-- **Automatic H.264 Encoder Selection:** Tries available NVIDIA NVENC, AMD AMF and Intel Quick Sync hardware paths. A compatible GPU and installed driver are required; vendor branding alone does not prove encoding support.
-- **CPU Compatibility Fallback:** If allowed and no hardware path starts, uses x264 at no more than 1280x720 and 30 fps. This can increase CPU use and reduce gameplay performance; disable the fallback if you prefer recording to fail instead.
-- **SteelSeries Moments Workflow:**
-  - Starts **DISARMED** by default.
-  - Press **Ctrl+Shift+F9** to Arm/Disarm capture.
-  - Press **Ctrl+Shift+F8** to Save preceding 30s replay to immutable MKV.
-  - Review in built-in gallery, non-destructive trim, audio track mute/gain adjustment.
-  - **Export for Discord (20 MB / 50 MB / 100 MB):** Watermark-free H.264/AAC MP4 strictly within budget.
-  - **Direct Drag & Paste:** Native drag handle or "Copy File" button directly drops into real Discord desktop client.
-  - **Single Instance & Leak-Free:** Subprocesses bounded by Windows Job Object (`KILL_ON_JOB_CLOSE`).
+## Start and save a replay
 
-## Quick Start
-This is an unsigned replay-hotkey-fix preview; end-to-end GPU capture remains pending qualification. Replay is OFF on launch. Start it manually and wait for Replay Ready. Save actions remain disabled until ready; hotkey save failures now explain why the replay could not be saved. See ``docs/WINDOWS-GPU-COMPATIBILITY.md`` for the hardware acceptance matrix.
+1. Keep every bundled OBS, FFmpeg and .NET file together. Run Flick.exe for portable use, or use the matching Flick-Setup.exe for a per-user installation.
+2. Select an available window or display. Manual replay starts off. Use Start Replay (default Ctrl+Shift+F9), wait for Replay Ready, then Save Clip (default Ctrl+Shift+F8).
+3. Recording Health shows the actual encoder/profile, retained-buffer estimate, source and save errors. A save is successful only after its original MKV is validated and indexed.
+4. The recording test uses the confirmed source and saves an actual test clip. Audio is off in its consent dialog unless explicitly included. Its result does not certify every game or device.
 
-Windows 11 x64, a working Direct3D 11 graphics driver and the Microsoft Visual C++ v14 x64 runtime are required. Software video encoding still needs the graphics/capture runtime. Do not remove individual bundled OBS folders or helper programs.
+## Optional automatic game replay
 
-1. Run ``Flick.exe`` directly (portable mode).
-2. To install with Start Menu, Installed Apps and optional desktop shortcut, use the Flick Setup EXE built by scripts/build_installer.ps1.
-3. Your settings and library index remain in LocalAppData/LocalClip for backwards compatibility; do not run an older LocalClip uninstall.ps1.
+Games settings are off by default. To opt in, refresh running games, approve an exact executable and choose its replay profile. When enabled, this setting may start replay automatically for an eligible approved game, including after a later Flick launch. It does not select a display when the approved window is missing. Stop Replay pauses that running game session. Manual replay and its preferences remain separate.
 
-## Documentation
-- See ``docs/USER-GUIDE.md`` for complete usage and shortcut customization.
-- See ``docs/ARCHITECTURE.md`` for technical specifications and IPC protocol details.
-"@
+## Choose actual audio sources
+
+System Audio records the whole selected output device. Separate App Audio records explicitly selected Game and/or Voice process trees on supported Windows builds; app restarts require refreshing those selections. An unavailable process refuses or stops capture instead of silently substituting system audio. Attachment and observed sound are reported separately. Microphone capture remains an independent, explicit opt-in.
+
+Dedicated tracks represent real configured sources. Game/Voice are user-assigned roles; they do not identify individual people or prove endpoint isolation. Physical app/Discord/endpoint acceptance remains pending.
+
+## Edit without changing the original recording
+
+Use favorites, tags, game grouping, markers, search and sorting to organize the local library. Trim and audio mute/gain settings affect derived copies. Reset Mix restores the known source defaults. Combined is an alternate complete mix and is not added to its own dedicated tracks a second time.
+
+Original playback plays the recorded file. Preview Mix creates an on-demand playback copy using current trim/levels; compatibility previews and mix previews share an owned worker. Previews are limited to the first 3 minutes of the selected range and a 120 MB output budget. Optional timeline frames are limited to six small stills. These limits are implementation safeguards, not measured guarantees of FPS or memory overhead.
+
+## Prepare a real file to share
+
+Choose a size limit and Original, Portrait or Square framing, then export an H.264/AAC MP4. Copy File and the Share tile provide a Windows file attachment; they do not upload or paste a URL. The destination's size limits and file acceptance may differ. Actual Discord desktop drag/paste still requires acceptance testing. Optional webhook posting requires a configured destination and explicit confirmation.
+
+## Settings, updates and removal
+
+Settings, the library index and bounded local diagnostics live separately from installed binaries under LocalAppData/LocalClip. Original/imported videos and exports stay in their selected folders. Diagnostics are local, allowlisted events; export them only when requested. Local capture/edit/export requires no account, and there are no automatic uploads.
+
+Installed copies can check Settings > General > Software Updates; preview updates require the preview channel and an actually published matching release. Portable copies require quitting Flick before replacing the extracted app folder. This unreleased candidate is not yet offered as an update. Older versions may need a one-time manual installer upgrade.
+
+Use Uninstall Flick or Windows Installed Apps to remove the program. Silent uninstall preserves user data. The interactive uninstaller separately asks whether to remove app-owned preferences/index/cache; recordings and exports are retained. Do not use historical LocalClip uninstall scripts.
+
+## Requirements and qualification limits
+
+Targets Windows 11 x64 with working Direct3D11 graphics, current drivers and the Microsoft Visual C++ v14 x64 runtime. Selected-app audio uses the documented process-loopback API floor of Windows build 20348, and still requires successful attachment. Available NVIDIA/AMD/Intel H.264 encoders are attempted; optional x264 fallback is capped at 1280x720 and 30 fps and can increase CPU use or reduce gameplay performance.
+
+GPU/hybrid setups, hotkeys during games, actual audio isolation, Discord transfer, default-device changes, high-DPI interaction and endurance/performance are not universally qualified. No leak-free, zero-impact or all-GPU claim is made.
+
+This preview has no trusted publisher signature. Windows Smart App Control may block it. Checksums verify transfer consistency, not publisher trust; keep Windows security protections enabled. SignPath/trusted signing and Microsoft Store certification remain separate work.
+
+See docs/USER-GUIDE.md, docs/RELEASE-READINESS-1.0.7.md and docs/product-phase/MASTER-PLAN.md. Original Flick source remains GPL-2.0-or-later; bundled components retain their separate notices and obligations.
+'@
 $Readme | Set-Content (Join-Path $PackageDir "README.md") -Encoding utf8
 
 Write-Host "=== Step 5: Creating Portable ZIP Archive ===" -ForegroundColor Cyan
@@ -143,8 +162,8 @@ $ExeHash = (Get-FileHash -Path (Join-Path $PackageDir "Flick.exe") -Algorithm SH
 $HostHash = (Get-FileHash -Path (Join-Path $PackageDir "tools\obs\runtime\bin\64bit\LocalClip.CaptureHost.exe") -Algorithm SHA256).Hash
 
 $ChecksumContent = @"
-# Flick v1.0.6 Preview (unsigned Windows x64 replay-fix candidate) SHA-256 Checksums
-$ZipHash  Flick-v1.0.6-win-x64.zip
+# Flick v1.0.7 Preview (unreleased unsigned Windows x64 product-features candidate) SHA-256 Checksums
+$ZipHash  Flick-v1.0.7-win-x64.zip
 $ExeHash  Flick.exe
 $HostHash  LocalClip.CaptureHost.exe
 "@

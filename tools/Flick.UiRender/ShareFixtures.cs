@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.ComponentModel;
 using System.IO;
 using System.Security.Cryptography;
 using System.Text.Json;
@@ -25,6 +26,23 @@ internal static partial class Program
     {
         T Find<T>(string name) => (T)window.FindName(name);
         void Invoke(string method, params object[] values) => typeof(MainWindow).GetMethod(method, Private)!.Invoke(window, values);
+        var bindingObservations = new List<object>();
+        var notifications = new System.Collections.Concurrent.ConcurrentQueue<object>();
+        PropertyChangedEventHandler observeNotification = (_, args) =>
+        {
+            if (notifications.Count < 256 && (args.PropertyName?.StartsWith("Share", StringComparison.Ordinal) == true ||
+                args.PropertyName is nameof(vm.SelectedClip) or nameof(vm.IsExportReady) or nameof(vm.ExportStatusMessage)))
+                notifications.Enqueue(new { Property = args.PropertyName, Thread = Environment.CurrentManagedThreadId,
+                    OnDispatcher = window.Dispatcher.CheckAccess(), Title = vm.ShareClipTitle,
+                    State = vm.ShareTileStateText, CanCopy = vm.ShareCanCopy, HasPreview = vm.ShareHasPreview });
+        };
+        vm.PropertyChanged += observeNotification;
+        void ShareFrame(string file, int width, int height, bool requireReady = false)
+        {
+            render(file, width, height);
+            ObserveShareBindings(window, vm, file, bindingObservations, notifications.ToArray(), output, requireMatch: true, requireReady);
+        }
+        ObserveShareBindings(window, vm, "entry before synthetic-media selection", bindingObservations, notifications.ToArray(), output, requireMatch: false);
         Find<Border>("RecordingHealthPanel").Visibility = Visibility.Collapsed;
         Invoke("ReturnToClipWorkspace");
         Invoke("CloseEditorContext");
@@ -65,12 +83,12 @@ internal static partial class Program
         typeof(MainWindow).GetField("_layoutMode", Private)!.SetValue(window, WorkspaceLayoutMode.Split);
         Invoke("EditorTool_Click", Find<Button>("ToolShare"), new RoutedEventArgs());
         PumpUntil(() => !vm.IsBackgroundWorkActive && typeof(MainViewModel).GetField("_sharePreviewCancellation", Private)!.GetValue(vm) == null, window.Dispatcher);
-        render("37-share-ready-1080.png", 1920, 1080);
-        render("38-share-ready-1440.png", 2560, 1440);
+        ShareFrame("37-share-ready-1080.png", 1920, 1080, requireReady: true);
+        ShareFrame("38-share-ready-1440.png", 2560, 1440, requireReady: true);
         typeof(MainWindow).GetField("_layoutMode", Private)!.SetValue(window, WorkspaceLayoutMode.Compact);
         Invoke("ShowCompactEditor");
-        render("39-share-ready-720.png", 1280, 720);
-        render("40-share-ready-minimum.png", 720, 480);
+        ShareFrame("39-share-ready-720.png", 1280, 720, requireReady: true);
+        ShareFrame("40-share-ready-minimum.png", 720, 480, requireReady: true);
 
         var observations = new List<object>();
         foreach (int percent in new[] { 100, 125, 150, 200 })
@@ -78,6 +96,8 @@ internal static partial class Program
             double scale = percent / 100d;
             var root = (FrameworkElement)window.Content;
             root.Measure(new Size(1280, 720)); root.Arrange(new Rect(0, 0, 1280, 720)); root.UpdateLayout();
+            ObserveShareBindings(window, vm, $"share-ready-scale-{percent}.png", bindingObservations, notifications.ToArray(), output,
+                requireMatch: true, requireReady: true);
             var bitmap = new RenderTargetBitmap((int)(1280 * scale), (int)(720 * scale), 96 * scale, 96 * scale, PixelFormats.Pbgra32);
             bitmap.Render(root);
             var encoder = new PngBitmapEncoder(); encoder.Frames.Add(BitmapFrame.Create(bitmap));
@@ -86,33 +106,33 @@ internal static partial class Program
                 CopyEnabled = Find<Button>("BtnShareCopyFile").IsEnabled, TileWidth = Find<Border>("DragHandle").ActualWidth });
         }
         Invoke("ApplyShareAccessiblePalette", true);
-        render("41-share-ready-accessible-palette.png", 1280, 720);
+        ShareFrame("41-share-ready-accessible-palette.png", 1280, 720, requireReady: true);
         Invoke("ApplyShareAccessiblePalette", false);
 
         vm.IsExporting = true; vm.IsExportReady = false; vm.ExportProgress = 42;
         vm.ExportStatusMessage = "Visual fixture: encoding a local MP4 (42%). No export is running for this state capture.";
-        render("42-share-exporting-minimum.png", 720, 480);
+        ShareFrame("42-share-exporting-minimum.png", 720, 480);
         vm.CancelShareExport();
-        render("43-share-cancelling-minimum.png", 720, 480);
+        ShareFrame("43-share-cancelling-minimum.png", 720, 480);
         vm.IsExporting = false;
         vm.ExportStatusMessage = "Export Failed: Synthetic storage failure. Choose an accessible export folder and try again. Your original is unchanged.";
-        render("44-share-failed-minimum.png", 720, 480);
+        ShareFrame("44-share-failed-minimum.png", 720, 480);
         vm.SelectedClip!.TrimStartSeconds = .2;
         vm.ActivateSharePresentation();
-        render("45-share-stale-minimum.png", 720, 480);
+        ShareFrame("45-share-stale-minimum.png", 720, 480);
         vm.SelectedClip.TrimStartSeconds = 0;
         File.Move(original, original + ".offline-fixture");
         clip.RefreshAvailability();
         vm.ActivateSharePresentation();
-        render("46-share-offline-minimum.png", 720, 480);
+        ShareFrame("46-share-offline-minimum.png", 720, 480);
         File.Move(original + ".offline-fixture", original);
         clip.RefreshAvailability();
         vm.SelectedClip = null;
-        render("47-share-empty-minimum.png", 720, 480);
+        ShareFrame("47-share-empty-minimum.png", 720, 480);
         clip.Title = "Overtime finish · a deliberately long synthetic fixture title to check readable wrapping and stable actions at minimum window size";
         vm.SelectedClip = clip;
         vm.ActivateSharePresentation();
-        render("48-share-long-title-minimum.png", 720, 480);
+        ShareFrame("48-share-long-title-minimum.png", 720, 480);
         if (Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(original))) != originalHash)
             throw new InvalidOperationException("Share fixtures changed the immutable original.");
         File.WriteAllText(Path.Combine(output, "share-fixture-evidence.json"), JsonSerializer.Serialize(new {
@@ -123,6 +143,7 @@ internal static partial class Program
             ClipboardOrExternalDragExecuted = false, ActualDiscordAcceptance = false,
             StatesExportingCancellingFailedAreVisualFixtures = true, Scales = observations
         }, new JsonSerializerOptions { WriteIndented = true }));
+        vm.PropertyChanged -= observeNotification;
     }
 
     private static void PumpUntil(Func<bool> completed, Dispatcher dispatcher)

@@ -58,8 +58,8 @@ internal static partial class Program
         void SettingsFrame(string file, int width, int height, string category)
         {
             render(file, width, height);
-            var save = ProductVisuals(page).OfType<Button>().Single(button => Equals(button.Content, "Save Settings"));
-            var cancel = ProductVisuals(page).OfType<Button>().Single(button => Equals(button.Content, "Cancel"));
+            var save = Page<Button>("BtnSaveSettings");
+            var cancel = Page<Button>("BtnCancelSettings");
             var bounds = new Rect(page.RenderSize);
             Rect Bounds(FrameworkElement control) => control.TransformToAncestor(page).TransformBounds(new Rect(control.RenderSize));
             bool visibleActions = ProductContains(bounds, Bounds(save)) && ProductContains(bounds, Bounds(cancel));
@@ -152,7 +152,9 @@ internal static partial class Program
                 Rect Bounds(FrameworkElement element) => element.TransformToAncestor(root).TransformBounds(new Rect(element.RenderSize));
                 var context = Find<Border>("EditorContextLayer");
                 var contextScroll = Find<ScrollViewer>("EditorContextScroll");
-                contextFits = ProductContains(Bounds(Find<Border>("PreviewSurface")), Bounds(context)) &&
+                FrameworkElement allocation = Grid.GetRowSpan(context) > 1
+                    ? Find<FrameworkElement>("ClipEditorPanel") : Find<Border>("PreviewSurface");
+                contextFits = ProductContains(Bounds(allocation), Bounds(context)) &&
                     ProductContains(Bounds(context), Bounds(Find<Button>("CloseEditorTool"))) &&
                     contextScroll.ViewportHeight > 0 && double.IsFinite(contextScroll.ViewportHeight);
             }

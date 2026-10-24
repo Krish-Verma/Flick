@@ -1,4 +1,4 @@
-Flick — Windows GPU compatibility candidate
+Flick 1.0.7-preview.1 — UNRELEASED UNSIGNED product-features candidate
 
 THIS BUILD IS AN UNQUALIFIED DEVELOPMENT CANDIDATE:
 - Targets Windows 11 with a 64-bit x86-64 CPU and working Direct3D 11 graphics.
@@ -18,16 +18,25 @@ REQUIRED BEFORE RECORDING:
 
 NVIDIA, AMD, Intel, hybrid-GPU and CPU recording paths require physical
 Windows acceptance on this exact candidate. Historical RTX 5060 results
-and hosted CI for earlier versions are not qualification of this 1.0.6 build.
+and hosted CI for earlier versions are not qualification of this 1.0.7 build.
 
 NOT QUALIFIED:
 - Windows on ARM/Snapdragon, 32-bit Windows, macOS and Linux.
 - Windows 10 and clean Windows installations without verified prerequisites.
 - All games, anti-cheat systems, DRM-protected content and HDR configurations.
 Software encoding does not bypass capture restrictions or missing graphics
-support. Replay starts OFF; select a source, press Start Replay and wait
-for Replay Ready before pressing Save Clip. The save hotkey gives a
-failure notice if replay is off or unavailable.
+support. Manual replay starts OFF; select a source, press Start Replay and
+wait for Replay Ready before pressing Save Clip. Games automation is OFF by
+default; if explicitly enabled, it may start recording an eligible approved
+game automatically, including after a later Flick launch. Stop Replay pauses
+that running game session. The save hotkey reports unavailable replay.
+
+Separate App Audio requires supported Windows process-loopback capability
+and a current exact process selection. It includes selected process trees,
+never silently substitutes whole-device loopback, and stops on source loss.
+Microphone capture is a separate opt-in. Attachment is not proof of correct
+source isolation. Physical audio/Discord and gameplay performance acceptance
+remain pending for this candidate. No leak-free or zero-overhead claim is made.
 
 The browser-downloaded Flick-Setup.exe remains in Downloads until
 you delete it manually. Running the setup installs the application in
@@ -39,5 +48,8 @@ Start Menu shortcut, or Windows Settings > Apps > Installed Apps.
 The uninstaller asks separately whether to erase Flick settings/cache,
 with NO selected by default. Clips and exports are not removed.
 
-This preview installer is unsigned. Verify its checksum and GitHub
-source before installing; do not run untrusted files.
+This unreleased candidate is unsigned. Windows Smart App Control may block
+it. Checksums verify transfer consistency, not publisher trust; keep Windows
+security protections enabled. No public release, trusted signing, Microsoft
+Store certification or universal hardware qualification is claimed. A new
+publication requires separate explicit approval and exact-source evidence.

@@ -459,13 +459,14 @@ internal static partial class Program
                 var context = Find<Border>("EditorContextLayer");
                 var footer = Find<WrapPanel>("ShareActionFooter");
                 var scroll = Find<ScrollViewer>("EditorContextScroll");
-                bool controlsFit = Contains(Bounds(Find<Border>("PreviewSurface")), Bounds(context)) &&
+                FrameworkElement shareArea = Grid.GetRowSpan(context) > 1 ? Find<Grid>("ClipEditorPanel") : Find<Border>("PreviewSurface");
+                bool controlsFit = Contains(Bounds(shareArea), Bounds(context)) &&
                     Contains(Bounds(context), Bounds(footer)) && Contains(Bounds(context), Bounds(Find<Button>("CloseEditorTool"))) &&
                     Contains(Bounds(footer), Bounds(Find<Button>("BtnExport"))) &&
                     Contains(Bounds(footer), Bounds(Find<Button>("BtnShareCopyFile"))) &&
                     Contains(Bounds(footer), Bounds(Find<Button>("BtnShareOpenFolder"))) &&
                     (Find<Button>("BtnShareCancel").Visibility != Visibility.Visible || Contains(Bounds(footer), Bounds(Find<Button>("BtnShareCancel")))) &&
-                    scroll.ViewportHeight > 0 && double.IsFinite(scroll.ViewportHeight);
+                    scroll.ViewportHeight >= Math.Min(160, Math.Max(32, shareArea.ActualHeight - 160)) && double.IsFinite(scroll.ViewportHeight);
                 shareLayout = new { controlsFit, scroll.ViewportHeight, scroll.ExtentHeight, scroll.ScrollableHeight,
                     tileWidth = Find<Border>("DragHandle").ActualWidth, footerHeight = footer.ActualHeight,
                     copyEnabled = Find<Button>("BtnShareCopyFile").IsEnabled, state = vm.ShareTileStateText };
