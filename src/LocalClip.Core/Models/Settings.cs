@@ -64,6 +64,8 @@ public class AppSettings
     public bool StartWithWindows { get; set; } = false;
     public bool StartMinimizedToTray { get; set; } = false;
     public bool ShowResourceUsage { get; set; } = true;
+    // Explicit release-channel preference; checking for updates never changes it implicitly.
+    public bool IncludePreviewUpdates { get; set; } = true;
 
     // Clip feedback is independently opt-out. No overlay or sound engine is
     // resident until a confirmed saved clip or a user-initiated preview.
@@ -231,6 +233,24 @@ public class AppSettings
     }
 
     public void Save() => SaveToFile(GetSettingsFilePath());
+
+    /// <summary>
+    /// Used only after a user-reviewed Settings Save. Verifies the persisted
+    /// JSON against the complete staged snapshot, not merely that WriteAllText
+    /// returned. Tests may supply an isolated path without touching a real profile.
+    /// </summary>
+    public void SaveReviewedToFile(string path)
+    {
+        if (RequiresExplicitSettingsSave)
+            throw new InvalidOperationException("Only a reviewed, unlocked settings snapshot can be saved.");
+        SaveToFile(path);
+        var expected = JsonSerializer.Serialize(this);
+        var persisted = File.ReadAllText(path);
+        using var expectedJson = JsonDocument.Parse(expected);
+        using var actualJson = JsonDocument.Parse(persisted);
+        if (!JsonElement.DeepEquals(expectedJson.RootElement, actualJson.RootElement))
+            throw new IOException("Saved settings verification failed; review the saved preferences before continuing.");
+    }
 
     /// <summary>
     /// Writes only an already-valid settings snapshot. Incidental actions such

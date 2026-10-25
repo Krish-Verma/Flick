@@ -35,6 +35,14 @@ After the candidate branch PR is created, record the exact PR head, merge source
 
 Do not mark the candidate package verified until every applicable workflow has completed with `success` on the same candidate source. Failed, cancelled or unexecuted checks are not passes.
 
+## Full Settings Save and hover polish
+
+- Actual WPF Save Settings now stages complete Recording/Games/Audio/Shortcuts/Storage/General/Sharing preferences and writes/reads back the exact reviewed JSON before it closes or alters the live model. Preview-update inclusion now persists. A failed Windows HKCU Run registration cannot block or falsely report the saving of unrelated options; a specific warning is retained for the caller.
+- General now offers **Minimize to Tray (also start hidden)**: hiding on user Minimize as well as next launch, while X remains the established hide-to-tray action. Replay recording is not armed by these controls.
+- Shared WPF styles apply limited hover feedback to buttons, menus, settings navigation, checkboxes/toggles, input dropdowns, sliders, clip rows, folder rows and the usable Share drag tile. Animations run only for actual pointer interaction and respect Windows reduced-motion/high-contrast settings; no render loop or GPU shaders are introduced. Existing keyboard focus and disabled states are preserved.
+- A new isolated real-WPF Save-to-disk/reopen/Cancel regression uses a unique temp root and injectable Windows startup registration, so no installed user settings, live registry or clips are changed in tests. It verifies independent preferences persist even when startup registration throws. Separate style tests inspect actual production WPF theme resources and header affordances.
+- Remaining owner acceptance: minimize-to-tray on an interactive Windows desktop, settings persistence across a real app restart, pointer hover/focus in gaming DPI/High Contrast, real audio devices and hotkeys.
+
 ## User-performed physical gameplay acceptance
 
 On a compatible authorized Windows 11 PC, owner will verify:

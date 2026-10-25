@@ -46,6 +46,8 @@ public partial class SettingsStagingTests
                         Source = new Uri($"/Flick;component/Resources/Theme/Flick.{dictionary}.xaml", UriKind.Relative)
                     });
                 ResourceUsageSettingsAssertions.Run();
+                SettingsPersistenceAssertions.Run();
+                FlickHoverStyleAssertions.Run();
                 var settings = AppSettings.CreateDefault();
                 var page = new SettingsWindow(settings, () => false);
                 T Find<T>(string name) => (T)page.FindName(name);
@@ -109,6 +111,7 @@ public partial class SettingsStagingTests
                 header.IsChecked = true;
                 DrainBindings();
                 Assert.True(disclosure.IsExpanded);
+                Assert.True(LocalClip.App.Services.FlickHoverFeedback.GetEnabled(header));
                 Assert.Equal(Visibility.Visible, disclosureContent.Visibility);
                 header.IsChecked = false;
                 DrainBindings();

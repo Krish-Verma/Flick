@@ -103,6 +103,9 @@ public partial class MainWindow : Window
             {
                 SuspendPlayback(clearSource: true);
                 ReleasePosterWhileHidden();
+                // Minimize to tray is a user preference, not only a
+                // launch-time flag. Capture continues safely in the tray.
+                if (_vm.Settings.StartMinimizedToTray) Hide();
             }
             else if (WorkspacePageLayer.Visibility != Visibility.Visible)
                 RestorePosterAfterShow();
@@ -822,6 +825,7 @@ public partial class MainWindow : Window
     private void CloseSettingsPage(bool saved)
     {
         bool uninstall = _settingsPage?.UninstallRequested == true;
+        string saveWarning = _settingsPage?.LastSaveWarning ?? "";
         ReturnToClipWorkspace();
         if (uninstall)
         {
@@ -853,10 +857,11 @@ public partial class MainWindow : Window
             _ = StopCaptureForMicPrivacyAsync();
             return;
         }
-        _vm.StatusDetails = _vm.Settings.GameDetectionEnabled
-            ? "Preferences saved. Approved game replay follows Games settings; manual preferences are retained."
-            : captureActive ? "Preferences saved. New capture profile takes effect on the next manual replay start."
-            : "Preferences saved. Replay remains off until manually started.";
+        _vm.StatusDetails = saveWarning.Length > 0 ? saveWarning
+            : _vm.Settings.GameDetectionEnabled
+                ? "All preferences saved and verified. Approved game replay follows Games settings."
+                : captureActive ? "All preferences saved and verified. Recording changes apply next replay."
+                : "All preferences saved and verified. Replay remains off until manually started.";
     }
 
     private string AudioSettingsSnapshot() => System.Text.Json.JsonSerializer.Serialize(new {

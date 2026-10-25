@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:services="clr-namespace:LocalClip.App.Services">
     <!-- Quiet desktop controls share Flick's violet surfaces; primary actions carry the accent. -->
 
     <Style x:Key="Flick.Surface.Panel" TargetType="{x:Type Border}">
@@ -23,6 +24,7 @@
     </Style>
 
     <Style x:Key="Flick.Button.Base" TargetType="{x:Type Button}">
+        <Setter Property="services:FlickHoverFeedback.Enabled" Value="True"/>
         <Setter Property="Background" Value="{DynamicResource Flick.Brush.Raised}"/>
         <Setter Property="Foreground" Value="{DynamicResource Flick.Brush.TextPrimary}"/>
         <Setter Property="BorderBrush" Value="{DynamicResource Flick.Brush.Border}"/>
@@ -138,7 +140,7 @@
                             <Setter TargetName="TextChrome" Property="BorderThickness" Value="2"/>
                         </Trigger>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="TextChrome" Property="Opacity" Value=".94"/>
+                            <Setter TargetName="TextChrome" Property="BorderBrush" Value="{DynamicResource Flick.Brush.BorderStrong}"/>
                         </Trigger>
                         <Trigger Property="IsEnabled" Value="False">
                             <Setter Property="Opacity" Value=".45"/>
@@ -151,6 +153,8 @@
 
     <!-- Native ComboBox behavior retained; only one themed input chrome. -->
     <Style x:Key="Flick.Input.ComboItem" TargetType="{x:Type ComboBoxItem}">
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="services:FlickHoverFeedback.Enabled" Value="True"/>
         <Setter Property="Foreground" Value="{DynamicResource Flick.Brush.TextPrimary}"/>
         <Setter Property="FontFamily" Value="{StaticResource Flick.Font.UI}"/>
         <Setter Property="FontSize" Value="{StaticResource Flick.Font.Control}"/>
@@ -183,6 +187,8 @@
         </Setter>
     </Style>
     <Style x:Key="Flick.Input.Combo" TargetType="{x:Type ComboBox}">
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="services:FlickHoverFeedback.Enabled" Value="True"/>
         <Setter Property="MinHeight" Value="{StaticResource Flick.Size.Control}"/>
         <Setter Property="MinWidth" Value="126"/>
         <Setter Property="Background" Value="{DynamicResource Flick.Brush.Raised}"/>
@@ -213,6 +219,7 @@
                                     <ControlTemplate.Triggers>
                                         <Trigger Property="IsMouseOver" Value="True">
                                             <Setter TargetName="ComboChrome" Property="Background" Value="{DynamicResource Flick.Brush.Hover}"/>
+                                            <Setter TargetName="ComboChrome" Property="BorderBrush" Value="{DynamicResource Flick.Brush.BorderStrong}"/>
                                         </Trigger>
                                         <Trigger Property="IsPressed" Value="True">
                                             <Setter TargetName="ComboChrome" Property="Opacity" Value=".82"/>
@@ -270,6 +277,7 @@
     </Style>
 
     <Style x:Key="Flick.Toggle" TargetType="{x:Type CheckBox}">
+        <Setter Property="services:FlickHoverFeedback.Enabled" Value="True"/>
         <Setter Property="Foreground" Value="{DynamicResource Flick.Brush.TextPrimary}"/>
         <Setter Property="FontFamily" Value="{StaticResource Flick.Font.UI}"/>
         <Setter Property="FontSize" Value="{StaticResource Flick.Font.Body}"/>
@@ -302,6 +310,9 @@
                             <Setter TargetName="ToggleThumb" Property="Margin" Value="0,0,3,0"/>
                             <Setter TargetName="ToggleThumb" Property="Fill" Value="{DynamicResource Flick.Brush.TextPrimary}"/>
                         </Trigger>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="ToggleTrack" Property="BorderBrush" Value="{DynamicResource Flick.Brush.AccentHover}"/>
+                        </Trigger>
                         <Trigger Property="IsKeyboardFocused" Value="True">
                             <Setter TargetName="ToggleTrack" Property="BorderBrush" Value="{DynamicResource Flick.Brush.Focus}"/>
                             <Setter TargetName="ToggleTrack" Property="BorderThickness" Value="2"/>
@@ -318,6 +329,8 @@
     <!-- A conventional compact checkbox for the editor's Mute action. The
          native CheckBox still owns toggling, three-state behavior and access keys. -->
     <Style x:Key="Flick.Input.CheckBox" TargetType="{x:Type CheckBox}">
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="services:FlickHoverFeedback.Enabled" Value="True"/>
         <Setter Property="Foreground" Value="{DynamicResource Flick.Brush.TextPrimary}"/>
         <Setter Property="FontFamily" Value="{StaticResource Flick.Font.UI}"/>
         <Setter Property="FontSize" Value="{StaticResource Flick.Font.Control}"/>
@@ -441,6 +454,8 @@
         </Setter>
     </Style>
     <Style x:Key="Flick.Input.Slider" TargetType="{x:Type Slider}">
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="services:FlickHoverFeedback.Enabled" Value="True"/>
         <Setter Property="MinHeight" Value="32"/>
         <Setter Property="Foreground" Value="{DynamicResource Flick.Brush.TextPrimary}"/>
         <Setter Property="Template">
@@ -504,6 +519,7 @@
                                 <RowDefinition Height="*"/>
                             </Grid.RowDefinitions>
                             <ToggleButton x:Name="HeaderSite" Grid.Row="0" MinHeight="32"
+                                          Cursor="Hand" services:FlickHoverFeedback.Enabled="True"
                                           Foreground="{TemplateBinding Foreground}"
                                           FontFamily="{TemplateBinding FontFamily}" FontSize="{TemplateBinding FontSize}"
                                           FontWeight="{TemplateBinding FontWeight}" FocusVisualStyle="{x:Null}"
@@ -587,6 +603,7 @@
         <Setter Property="SnapsToDevicePixels" Value="True"/>
     </Style>
     <Style x:Key="Flick.Library.FilterChip" TargetType="{x:Type RadioButton}">
+        <Setter Property="services:FlickHoverFeedback.Enabled" Value="True"/>
         <Setter Property="FontFamily" Value="{StaticResource Flick.Font.UI}"/>
         <Setter Property="FontSize" Value="{StaticResource Flick.Font.Caption}"/>
         <Setter Property="FontWeight" Value="Normal"/>
@@ -639,6 +656,8 @@
         <Setter Property="VirtualizingPanel.ScrollUnit" Value="Item"/>
     </Style>
     <Style x:Key="Flick.Library.Item" TargetType="{x:Type ListBoxItem}">
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="services:FlickHoverFeedback.Enabled" Value="True"/>
         <Setter Property="Padding" Value="0"/>
         <Setter Property="Margin" Value="0,0,0,4"/>
         <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
