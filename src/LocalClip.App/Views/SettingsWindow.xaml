@@ -161,7 +161,7 @@
                 </StackPanel>
 
                 <!-- Audio -->
-                <StackPanel x:Name="PanelAudio" Visibility="Collapsed">
+                <StackPanel x:Name="PanelAudio" Visibility="Collapsed" Loaded="AudioPanel_Loaded">
                     <TextBlock Text="Audio" Style="{StaticResource Flick.Text.PageTitle}"/>
                     <TextBlock Text="Capture only what you choose."
                                Style="{StaticResource Flick.Text.Caption}" Margin="0,5,0,24"/>
@@ -178,13 +178,28 @@
                     <TextBlock x:Name="TxtAudioSources" Text="Separate App Audio requires Windows build 20348 or newer. Select current apps after a restart; unavailable app audio stops replay. System Audio is an explicit whole-device choice, never an automatic fallback."
                                Style="{StaticResource Flick.Text.Caption}" TextWrapping="Wrap" Margin="0,0,0,20"/>
                     </StackPanel>
-                    <TextBlock Text="System Audio records the whole selected output device. Separate App Audio records only the chosen process trees; neither choice records the microphone unless enabled below." Style="{StaticResource Flick.Text.Caption}" TextWrapping="Wrap" Margin="0,0,0,16"/>
+                    <TextBlock Text="System Audio records the selected playback device. Separate App Audio records only the chosen process trees; neither choice records your microphone unless enabled below." Style="{StaticResource Flick.Text.Caption}" TextWrapping="Wrap" Margin="0,0,0,16"/>
+                    <StackPanel x:Name="SystemAudioDevicePanel" Margin="0,0,0,15">
+                        <TextBlock Text="Audio output · speakers or headphones" Style="{StaticResource Flick.Text.Control}" Margin="0,0,0,5"/>
+                        <ComboBox x:Name="CmbSystemAudioDevice" DisplayMemberPath="Label" Style="{StaticResource Flick.Input.Combo}"
+                                  AutomationProperties.Name="Audio output capture device"/>
+                        <TextBlock Text="Records sound playing through this device. Choosing it does not switch your Windows playback output. Used only in System Audio mode."
+                                   Style="{StaticResource Flick.Text.Caption}" TextWrapping="Wrap" Margin="0,5,0,0"/>
+                    </StackPanel>
                     <CheckBox x:Name="ChkMicrophone"
                               Style="{StaticResource Flick.Toggle}"
                               Content="Record Microphone"
                               Checked="Microphone_Changed" Unchecked="Microphone_Changed"/>
-                    <TextBlock Text="Off by default · Windows default input device"
-                               Style="{StaticResource Flick.Text.Caption}" Margin="0,7,0,15"/>
+                    <TextBlock Text="Microphone input device" Style="{StaticResource Flick.Text.Control}" Margin="0,10,0,5"/>
+                    <ComboBox x:Name="CmbMicrophoneDevice" DisplayMemberPath="Label" Style="{StaticResource Flick.Input.Combo}"
+                              IsEnabled="{Binding IsChecked, ElementName=ChkMicrophone}"
+                              AutomationProperties.Name="Microphone input capture device" Margin="0,0,0,7"/>
+                    <TextBlock Text="Microphone capture is OFF by default. Choosing a device will not enable it; check Record Microphone to opt in."
+                               Style="{StaticResource Flick.Text.Caption}" TextWrapping="Wrap" Margin="0,0,0,13"/>
+                    <Button x:Name="BtnRefreshAudioDevices" Content="Refresh Audio Devices" Click="RefreshAudioDevices_Click"
+                            Style="{StaticResource Flick.Button.Secondary}" HorizontalAlignment="Left" Margin="0,0,0,8"/>
+                    <TextBlock x:Name="TxtAudioDeviceStatus" Text="Using Windows default devices. Refresh to find connected headsets and microphones."
+                               Style="{StaticResource Flick.Text.Caption}" TextWrapping="Wrap" Margin="0,0,0,13"/>
                     <TextBlock Text="Microphone is independent and off by default. Changing audio routing stops active replay; manually restart after saving. App tracks include child processes and cannot separate voices within one app."
                                Style="{StaticResource Flick.Text.Muted}"
                                TextWrapping="Wrap"/>
