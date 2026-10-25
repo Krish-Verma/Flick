@@ -1,6 +1,6 @@
 # Flick — lightweight gameplay clipping for Windows
 
-**Latest download: [Flick 1.0.6 — UNSIGNED Replay Fix Preview](https://github.com/Krish-Verma/Flick/releases/latest).** See [software updates](docs/SOFTWARE-UPDATES.md) for the one-time upgrade from older builds.
+**Latest download: [Flick 1.0.7 — UNSIGNED Product Features Preview](https://github.com/Krish-Verma/Flick/releases/latest).** See [software updates](docs/SOFTWARE-UPDATES.md) for the one-time upgrade from older builds.
 
 
 Flick is a Windows-native game clipper for capturing the last 15–120 seconds, trimming a clip without altering its original file, and exporting an MP4 suitable for sharing. The product is designed to be free, offline-first and open source, without accounts, telemetry, forced uploads or a heavyweight permanent gaming overlay.
@@ -24,7 +24,7 @@ The development branch adds **Settings → Games**: explicit running-window appr
 
 ## What the current Windows build supports
 
-**Latest preview — v1.0.6-preview.1:** fixes premature Save Clip enabling, silent save-hotkey errors while replay is off, hotkey registration feedback, clip rename error handling, and the clip-deletion warning. The preceding 1.0.5 preview added NVIDIA/AMD/Intel hardware selection and CPU fallback; neither preview has fresh physical GPU qualification.
+**Earlier replay fix preview — v1.0.6-preview.1:** fixes premature Save Clip enabling, silent save-hotkey errors while replay is off, hotkey registration feedback, clip rename error handling, and the clip-deletion warning. The preceding 1.0.5 preview added NVIDIA/AMD/Intel hardware selection and CPU fallback; neither preview has fresh physical GPU qualification.
 
 **Implemented since 1.0.5; physical hardware qualification pending:** automatic H.264 selection across available NVIDIA NVENC, AMD AMF and Intel Quick Sync encoders, with optional x264 CPU compatibility recording capped at 720p/30 fps. CPU fallback is enabled by default and can be disabled in Recording settings; it can increase CPU use and reduce game performance. Hardware registration and successful initialization, rather than the GPU's brand name, determine the path. See the [compatibility matrix and exact-machine test procedure](docs/WINDOWS-GPU-COMPATIBILITY.md).
 
@@ -40,9 +40,9 @@ Keep the entire bundled OBS and FFmpeg runtime with the application. Self-contai
 
 ## Download Flick for Windows
 
-**[Flick v1.0.6 Preview 1 — UNSIGNED](https://github.com/Krish-Verma/Flick/releases/tag/v1.0.5-preview.1)**
+**[Current public latest — Flick 1.0.7 Preview 1 (UNSIGNED)](https://github.com/Krish-Verma/Flick/releases/tag/v1.0.7-preview.1)**
 
-**[Download Flick-Setup.exe](https://github.com/Krish-Verma/Flick/releases/download/v1.0.6-preview.1/Flick-Setup.exe)**
+**[Download Flick-Setup.exe](https://github.com/Krish-Verma/Flick/releases/download/v1.0.7-preview.1/Flick-Setup.exe)**
 
 Run Setup to install Flick for your Windows account, with a Start Menu shortcut and optional desktop shortcut. The package includes .NET, OBS and FFmpeg. Windows may block this unsigned preview; it has no verified publisher identity. Check SHA-256 against the release's SHA256SUMS.txt. Trusted signing and fresh physical GPU/CPU acceptance remain pending.
 
@@ -51,7 +51,7 @@ Installed 1.0.4 and 1.0.5 previews can use the in-app updater. Versions 1.0.3 an
 ## Run or install
 
 1. **Flick-Setup.exe** installs under **%LOCALAPPDATA%\Programs\Flick**, registers Flick in Windows Installed Apps and needs no administrator access.
-2. **[Flick-v1.0.6-win-x64.zip](https://github.com/Krish-Verma/Flick/releases/download/v1.0.6-preview.1/Flick-v1.0.6-win-x64.zip)** runs as a portable copy. Extract the entire folder before launching Flick.exe; keep the packaged runtime files together. Portable copies link to Releases for manual folder replacement after quitting Flick.
+2. **[Flick-v1.0.7-win-x64.zip](https://github.com/Krish-Verma/Flick/releases/download/v1.0.7-preview.1/Flick-v1.0.7-win-x64.zip)** runs as a portable copy. Extract the entire folder before launching Flick.exe; keep the packaged runtime files together. Portable copies link to Releases for manual folder replacement after quitting Flick.
 
 Flick saves settings, indexes and thumbnail cache under the **legacy %LOCALAPPDATA%\LocalClip** path for compatibility with previous builds. Default original videos are in your Videos/LocalClip/Originals folder (or a user-selected folder). The new program directory is **different**: an ordinary uninstall removes program files, not your recordings or legacy profile data. **Do not run older LocalClip uninstall.ps1 scripts:** those previously removed the whole legacy data directory.
 
