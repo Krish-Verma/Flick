@@ -6,7 +6,7 @@ $ErrorActionPreference = "Stop"
 
 $RootDir = (Get-Item $PSScriptRoot).Parent.FullName
 $DistDir = Join-Path $RootDir "dist"
-$PackageName = "Flick-v1.0.7-win-x64"
+$PackageName = "Flick-v1.0.8-win-x64"
 $PackageDir = Join-Path $DistDir $PackageName
 $ZipPath = Join-Path $DistDir "$PackageName.zip"
 
@@ -101,7 +101,7 @@ if (-not (Test-Path -LiteralPath (Join-Path $PackageDir "Flick.exe"))) {
 
 # Generate User Readme
 $Readme = @'
-# Flick 1.0.7 Preview 1 — UNRELEASED · UNSIGNED
+# Flick 1.0.8 Preview 1 — UNRELEASED · UNSIGNED
 
 This Windows x64 development candidate adds recording health, opt-in game replay, selected-app audio, nondestructive editing and a file-based Share surface. Its implementation and earlier focused checks do not qualify this exact package. Publication requires separate approval after the final source, Windows workflows and artifacts have been verified.
 
@@ -162,8 +162,8 @@ $ExeHash = (Get-FileHash -Path (Join-Path $PackageDir "Flick.exe") -Algorithm SH
 $HostHash = (Get-FileHash -Path (Join-Path $PackageDir "tools\obs\runtime\bin\64bit\LocalClip.CaptureHost.exe") -Algorithm SHA256).Hash
 
 $ChecksumContent = @"
-# Flick v1.0.7 Preview (unreleased unsigned Windows x64 product-features candidate) SHA-256 Checksums
-$ZipHash  Flick-v1.0.7-win-x64.zip
+# Flick v1.0.8 Preview (unreleased unsigned Windows x64 product-features candidate) SHA-256 Checksums
+$ZipHash  Flick-v1.0.8-win-x64.zip
 $ExeHash  Flick.exe
 $HostHash  LocalClip.CaptureHost.exe
 "@
