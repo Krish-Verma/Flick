@@ -173,6 +173,24 @@ public partial class SettingsStagingTests
                     Assert.Equal(RecordingEngineState.Ready, vm.RecordingHealth.EngineState);
                     Assert.Equal(ReplaySaveState.Validating, vm.RecordingHealth.SaveState);
                     Assert.True(vm.IsArmed); // Saving does not pretend the engine stopped.
+
+                    // A misrouted/repeated replay-toggle WM_HOTKEY while a
+                    // genuine clip is still pending must not turn recording Off.
+                    // Exercise the actual ViewModel route without creating a host.
+                    var saveRequestField = typeof(MainViewModel).GetField(
+                        "_saveRequestOperations", BindingFlags.NonPublic | BindingFlags.Instance)!;
+                    saveRequestField.SetValue(vm, 1);
+                    try
+                    {
+                        vm.ToggleCaptureAsync(DiagnosticControlOrigin.GlobalHotkey).GetAwaiter().GetResult();
+                        Assert.Equal("Armed", vm.CaptureStatus);
+                        Assert.Contains("still saving", vm.StatusDetails, StringComparison.OrdinalIgnoreCase);
+                        reported = null;
+                        vm.SaveReplayAsync(DiagnosticControlOrigin.GlobalHotkey).GetAwaiter().GetResult();
+                        Assert.Null(reported); // Never show a second false failure toast.
+                    }
+                    finally { saveRequestField.SetValue(vm, 0); }
+
                     var healthStatus = Assert.IsType<TextBlock>(window.FindName("TxtHealthStatus"));
                     Assert.Equal("Saving Clip", healthStatus.Text);
 
