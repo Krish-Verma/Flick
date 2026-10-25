@@ -512,7 +512,8 @@ public partial class SettingsWindow : UserControl
         {
             ShortcutHint.Text = "Save or cancel the shortcut change before saving Settings.";
             TxtSaveStatus.Text = "Finish recording your shortcut, or cancel that edit, then Save Settings.";
-            SelectCategory("Shortcuts");
+            // Do not navigate categories here: that path cancels the pending
+            // shortcut recording and would silently lose the user's chord.
             return; // Never silently apply or discard an unfinished shortcut.
         }
         if (!int.TryParse(TxtDuration.Text, out int duration) ||
