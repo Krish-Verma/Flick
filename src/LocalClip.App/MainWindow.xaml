@@ -469,6 +469,7 @@
                         <Border Background="Transparent" BorderThickness="0" Padding="0" Margin="0" x:Name="SharePanel" Visibility="Collapsed">
                             <StackPanel>
                                 <Border x:Name="DragHandle" Padding="8" CornerRadius="12" Focusable="True"
+                                        services:FlickHoverFeedback.Enabled="{Binding ShareCanCopy}"
                                         PreviewMouseLeftButtonDown="DragHandle_MouseLeftButtonDown" PreviewMouseMove="DragHandle_PreviewMouseMove"
                                         PreviewKeyDown="ShareTile_PreviewKeyDown" ToolTip="{Binding ShareTileHint}"
                                         AutomationProperties.Name="{Binding ShareClipTitle}" AutomationProperties.HelpText="{Binding ShareTileHint}">
