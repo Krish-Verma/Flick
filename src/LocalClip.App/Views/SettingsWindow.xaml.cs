@@ -29,6 +29,11 @@ public partial class SettingsWindow : UserControl
     // The recording bar remains interactive while Settings is open; query
     // live capture status at Save time instead of using a stale snapshot.
     private readonly Func<bool> _isCaptureActive;
+    // Injected only by isolated WPF tests; production uses the verified
+    // actual-profile write and per-user Windows startup registration.
+    private readonly Action<AppSettings> _saveReviewedSettings;
+    private readonly Action<bool, bool> _applyWindowsStartup;
+    public string LastSaveWarning { get; private set; } = "";
     private string _customSoundPath = "";
     private bool _loading;
     private TextBox? _editingShortcut;
@@ -53,17 +58,21 @@ public partial class SettingsWindow : UserControl
     public event EventHandler? ManageFoldersRequested;
 
     public SettingsWindow(AppSettings settings, Func<bool> isCaptureActive, Func<Task<TargetList>>? loadAudioSources = null,
-        Func<AudioEndpointFlow, IReadOnlyList<AudioEndpoint>>? loadAudioEndpoints = null)
+        Func<AudioEndpointFlow, IReadOnlyList<AudioEndpoint>>? loadAudioEndpoints = null,
+        Action<AppSettings>? saveReviewedSettings = null, Action<bool, bool>? applyWindowsStartup = null)
     {
         InitializeComponent();
         _settings = settings;
         _isCaptureActive = isCaptureActive ?? throw new ArgumentNullException(nameof(isCaptureActive));
         _loadAudioSources = loadAudioSources;
         _loadAudioEndpoints = loadAudioEndpoints ?? WindowsAudioEndpointEnumerator.Enumerate;
+        _saveReviewedSettings = saveReviewedSettings ??
+            (reviewed => reviewed.SaveReviewedToFile(AppSettings.GetSettingsFilePath()));
+        _applyWindowsStartup = applyWindowsStartup ?? WindowsStartupRegistration.Apply;
         Populate(settings);
         SelectCategory("Recording");
         TxtCurrentVersion.Text = "Current version: " + FlickUpdateService.CurrentVersion;
-        ChkPreviewUpdates.IsChecked = ReleaseVersion.TryParse(FlickUpdateService.CurrentVersion, out var currentVersion) && currentVersion.IsPrerelease;
+        ChkPreviewUpdates.IsChecked = settings.IncludePreviewUpdates;
         TxtUpdateMode.Text = FlickUninstallLauncher.IsInstalled
             ? "Updates keep your clips and saved preferences. Save settings before installing; pending changes on this page are not applied by an update."
             : "Portable copy: open the release page for a new ZIP, then quit Flick and replace the extracted application folder. Your clips and preferences live separately.";
@@ -286,6 +295,7 @@ public partial class SettingsWindow : UserControl
             ChkStartWithWindows.IsChecked = settings.StartWithWindows;
             ChkStartMinimized.IsChecked = settings.StartMinimizedToTray;
             ChkShowResourceUsage.IsChecked = settings.ShowResourceUsage;
+            ChkPreviewUpdates.IsChecked = settings.IncludePreviewUpdates;
             ChkClipSavedOverlay.IsChecked = settings.ShowClipSavedOverlay;
             ChkClipSavedSound.IsChecked = settings.PlayClipSavedSound;
             CmbNotificationTone.SelectedIndex = settings.ClipSavedSoundTone switch { "Quiet" => 1, "Custom" => 2, _ => 0 };
@@ -496,9 +506,13 @@ public partial class SettingsWindow : UserControl
 
     private void Save_Click(object sender, RoutedEventArgs e)
     {
+        LastSaveWarning = "";
+        TxtSaveStatus.Text = "Checking and saving all preferences…";
         if (_editingShortcut != null)
         {
             ShortcutHint.Text = "Save or cancel the shortcut change before saving Settings.";
+            TxtSaveStatus.Text = "Finish recording your shortcut, or cancel that edit, then Save Settings.";
+            SelectCategory("Shortcuts");
             return; // Never silently apply or discard an unfinished shortcut.
         }
         if (!int.TryParse(TxtDuration.Text, out int duration) ||
@@ -584,6 +598,7 @@ public partial class SettingsWindow : UserControl
             staged.AllowSoftwareFallback = ChkSoftwareFallback.IsChecked == true;
             staged.StartWithWindows = ChkStartWithWindows.IsChecked == true;
             staged.StartMinimizedToTray = ChkStartMinimized.IsChecked == true;
+            staged.IncludePreviewUpdates = ChkPreviewUpdates.IsChecked == true;
             StageDisplay(staged);
             staged.ShowClipSavedOverlay = ChkClipSavedOverlay.IsChecked == true;
             staged.PlayClipSavedSound = ChkClipSavedSound.IsChecked == true;
@@ -598,9 +613,29 @@ public partial class SettingsWindow : UserControl
 
             Directory.CreateDirectory(originals);
             Directory.CreateDirectory(exports);
-            WindowsStartupRegistration.Apply(staged.StartWithWindows, staged.StartMinimizedToTray);
-            startupTouched = true;
-            staged.Save();
+            // Windows startup is a separate OS registration; failure must not
+            // discard unrelated settings such as RAM/CPU or tray preferences.
+            // Only touch HKCU Run when its desired command actually changed.
+            bool startupChanged = staged.StartWithWindows != originalStartup ||
+                (staged.StartWithWindows && staged.StartMinimizedToTray != originalMinimized);
+            if (startupChanged)
+            {
+                try
+                {
+                    _applyWindowsStartup(staged.StartWithWindows, staged.StartMinimizedToTray);
+                    startupTouched = true;
+                }
+                catch (Exception startupError)
+                {
+                    // Don't persist a false claim that Windows startup was changed.
+                    staged.StartWithWindows = originalStartup;
+                    LastSaveWarning = "Other preferences were saved, but Windows startup registration was not changed: " +
+                        startupError.Message;
+                }
+            }
+            // Save all fields together and independently re-read the complete
+            // persisted JSON before updating the running application's model.
+            _saveReviewedSettings(staged);
 
             // Only this user-initiated Save may replace a recovered settings
             // file. Incidental startup/source changes are deliberately deferred.
@@ -631,6 +666,7 @@ public partial class SettingsWindow : UserControl
             _settings.StartWithWindows = staged.StartWithWindows;
             _settings.StartMinimizedToTray = staged.StartMinimizedToTray;
             _settings.ShowResourceUsage = staged.ShowResourceUsage;
+            _settings.IncludePreviewUpdates = staged.IncludePreviewUpdates;
             _settings.ShowClipSavedOverlay = staged.ShowClipSavedOverlay;
             _settings.PlayClipSavedSound = staged.PlayClipSavedSound;
             _settings.ClipSavedSoundTone = staged.ClipSavedSoundTone;
@@ -639,15 +675,19 @@ public partial class SettingsWindow : UserControl
             _settings.DiscordWebhookChannelName = staged.DiscordWebhookChannelName;
             _settings.MaskedWebhookUrl = staged.MaskedWebhookUrl;
             _settings.EnableDiscordWebhook = staged.EnableDiscordWebhook;
+            TxtSaveStatus.Text = LastSaveWarning.Length > 0
+                ? "Preferences saved with a Windows startup warning."
+                : "All preferences saved and verified.";
             CloseRequested?.Invoke(true);
         }
         catch (Exception ex)
         {
             if (startupTouched)
             {
-                try { WindowsStartupRegistration.Apply(originalStartup, originalMinimized); }
+                try { _applyWindowsStartup(originalStartup, originalMinimized); }
                 catch { /* Warn: the original registry entry may need manual review. */ }
             }
+            TxtSaveStatus.Text = "Save failed. No settings were applied: " + ex.Message;
             LocalClip.App.Services.FlickDialog.Show("Settings Couldn't Be Saved: " + ex.Message, "Flick Settings");
         }
     }
