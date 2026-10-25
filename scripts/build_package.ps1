@@ -148,7 +148,7 @@ GPU/hybrid setups, hotkeys during games, actual audio isolation, Discord transfe
 
 This preview has no trusted publisher signature. Windows Smart App Control may block it. Checksums verify transfer consistency, not publisher trust; keep Windows security protections enabled. SignPath/trusted signing and Microsoft Store certification remain separate work.
 
-See docs/USER-GUIDE.md, docs/RELEASE-READINESS-1.0.7.md and docs/product-phase/MASTER-PLAN.md. Original Flick source remains GPL-2.0-or-later; bundled components retain their separate notices and obligations.
+See docs/USER-GUIDE.md, docs/RELEASE-READINESS-1.0.8.md and docs/product-phase/MASTER-PLAN.md. Original Flick source remains GPL-2.0-or-later; bundled components retain their separate notices and obligations.
 '@
 $Readme | Set-Content (Join-Path $PackageDir "README.md") -Encoding utf8
 
@@ -162,7 +162,7 @@ $ExeHash = (Get-FileHash -Path (Join-Path $PackageDir "Flick.exe") -Algorithm SH
 $HostHash = (Get-FileHash -Path (Join-Path $PackageDir "tools\obs\runtime\bin\64bit\LocalClip.CaptureHost.exe") -Algorithm SHA256).Hash
 
 $ChecksumContent = @"
-# Flick v1.0.8 Preview (unreleased unsigned Windows x64 product-features candidate) SHA-256 Checksums
+# Flick v1.0.8 Preview (unreleased unsigned Windows x64 replay-and-audio-fix candidate) SHA-256 Checksums
 $ZipHash  Flick-v1.0.8-win-x64.zip
 $ExeHash  Flick.exe
 $HostHash  LocalClip.CaptureHost.exe
