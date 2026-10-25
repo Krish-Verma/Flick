@@ -291,7 +291,8 @@
                               Margin="0,0,0,14"/>
                     <CheckBox x:Name="ChkStartMinimized"
                               Style="{StaticResource Flick.Toggle}"
-                              Content="Start Minimized to Tray"
+                              Content="Minimize to Tray (also start hidden)"
+                              ToolTip="Minimizing hides Flick in the system tray; the next app launch also starts hidden. This does not start replay."
                               Margin="0,0,0,22"/>
                     <Separator Background="{DynamicResource Flick.Brush.Divider}" Margin="0,0,0,21"/>
                     <TextBlock Text="Display" Style="{StaticResource Flick.Text.Section}" Margin="0,0,0,12"/>
@@ -442,9 +443,22 @@
                     <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
-                <Button Grid.Column="0" Content="Restore Defaults"
-                        Style="{StaticResource Flick.Button.Ghost}"
-                        HorizontalAlignment="Left" Click="RestoreDefaults_Click"/>
+                <Grid Grid.Column="0" MinWidth="0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <Button Content="Restore Defaults"
+                            Style="{StaticResource Flick.Button.Ghost}"
+                            HorizontalAlignment="Left" Click="RestoreDefaults_Click"/>
+                    <TextBlock x:Name="TxtSaveStatus" Grid.Column="1"
+                               Style="{StaticResource Flick.Text.Caption}"
+                               Margin="12,0,12,0" VerticalAlignment="Center"
+                               TextTrimming="CharacterEllipsis" TextWrapping="NoWrap"
+                               ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"
+                               AutomationProperties.LiveSetting="Polite"
+                               AutomationProperties.Name="Settings save status"/>
+                </Grid>
                 <Button x:Name="BtnCancelSettings" Grid.Column="1" Content="Cancel"
                         Style="{StaticResource Flick.Button.Secondary}"
                         Click="Cancel_Click" Margin="0,0,9,0"/>
