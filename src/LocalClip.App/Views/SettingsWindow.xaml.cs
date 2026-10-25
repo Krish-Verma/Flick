@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
@@ -9,6 +10,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using LocalClip.App.Hotkeys;
 using LocalClip.App.Services;
+using LocalClip.Core.Audio;
 using LocalClip.Core.Models;
 using LocalClip.Core.Rules;
 using LocalClip.Core.Sharing;
@@ -50,12 +52,14 @@ public partial class SettingsWindow : UserControl
     public event Action<bool, bool, string, string>? PreviewNotificationRequested;
     public event EventHandler? ManageFoldersRequested;
 
-    public SettingsWindow(AppSettings settings, Func<bool> isCaptureActive, Func<Task<TargetList>>? loadAudioSources = null)
+    public SettingsWindow(AppSettings settings, Func<bool> isCaptureActive, Func<Task<TargetList>>? loadAudioSources = null,
+        Func<AudioEndpointFlow, IReadOnlyList<AudioEndpoint>>? loadAudioEndpoints = null)
     {
         InitializeComponent();
         _settings = settings;
         _isCaptureActive = isCaptureActive ?? throw new ArgumentNullException(nameof(isCaptureActive));
         _loadAudioSources = loadAudioSources;
+        _loadAudioEndpoints = loadAudioEndpoints ?? WindowsAudioEndpointEnumerator.Enumerate;
         Populate(settings);
         SelectCategory("Recording");
         TxtCurrentVersion.Text = "Current version: " + FlickUpdateService.CurrentVersion;
@@ -69,6 +73,8 @@ public partial class SettingsWindow : UserControl
     /// <summary>Leaving Settings cancels network work and removes this page's staged installer.</summary>
     public void LeavePage()
     {
+        // Discard an in-flight read-only endpoint enumeration when leaving.
+        _audioDevicesEpoch++;
         _gameApprovalCancellation?.Cancel();
         _updateCancellation?.Cancel();
         _installationCancellation?.Cancel();
@@ -618,6 +624,8 @@ public partial class SettingsWindow : UserControl
             _settings.AudioMode = staged.AudioMode;
             _settings.GameAudioSource = staged.GameAudioSource;
             _settings.VoiceAudioSource = staged.VoiceAudioSource;
+            _settings.SystemAudioDeviceId = staged.SystemAudioDeviceId;
+            _settings.MicrophoneDeviceId = staged.MicrophoneDeviceId;
             _settings.EnableMicrophone = staged.EnableMicrophone;
             _settings.AllowSoftwareFallback = staged.AllowSoftwareFallback;
             _settings.StartWithWindows = staged.StartWithWindows;
