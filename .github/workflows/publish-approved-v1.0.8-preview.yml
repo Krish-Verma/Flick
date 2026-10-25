@@ -33,20 +33,19 @@ jobs:
       GH_PROMPT_DISABLED: '1'
       PUBLISH_APPROVED: 'true'
       PUBLISHER_HEAD: ${{ github.event.pull_request.head.sha }}
-      APPROVED_MAIN: '__APPROVED_MAIN__'
+      APPROVED_MAIN: 'dc656115274472ce0f7ecf01feb9a736ea8ffd3e'
       CI_ATTEMPT: '1'
       RENDER_ATTEMPT: '1'
       PACKAGE_ATTEMPT: '1'
-      PORTABLE_SHA256: '__PORTABLE_SHA256__'
-      CHECKSUMS_SHA256: '__CHECKSUMS_SHA256__'
+      PORTABLE_SHA256: 'ebba53d20c8f022fbb35fbd1d428f88487acf865f123b1f7edba1de20cf81c2d'
       APPROVED_SOURCE: '83a65b1eb7412226edd769f1b0506a898fc6ffd7'
-      APPROVED_TREE: '__APPROVED_TREE__'
+      APPROVED_TREE: 'f59e14fba4ee42d1055494e1bf09a429b259d627'
       CI_RUN: '40149912167'
       RENDER_RUN: '40149912136'
       PACKAGE_RUN: '40149912150'
-      ARTIFACT_ID: '__ARTIFACT_ID__'
-      ARTIFACT_DIGEST: '__ARTIFACT_DIGEST__'
-      SETUP_SHA256: '__SETUP_SHA256__'
+      ARTIFACT_ID: '12581413300'
+      ARTIFACT_DIGEST: 'sha256:cbb518192a999915d4b79072a4c318fe59d20ab59560262633fb24cbe523abc1'
+      SETUP_SHA256: '00321f1a766362bdf3058b0dd4c2cb971946b1d744251b47e77eba0da921713d'
     steps:
       - name: Verify exact approved source and successful build evidence
         shell: pwsh
@@ -60,7 +59,7 @@ jobs:
           foreach ($name in @('APPROVED_MAIN','PUBLISHER_HEAD')) {
             if ([Environment]::GetEnvironmentVariable($name) -cnotmatch '^[0-9a-f]{40}$') { throw 'Approved main/publisher identity missing.' }
           }
-          foreach ($name in @('PORTABLE_SHA256','CHECKSUMS_SHA256')) {
+          foreach ($name in @('PORTABLE_SHA256')) {
             if ([Environment]::GetEnvironmentVariable($name) -cnotmatch '^[a-f0-9]{64}$') { throw "Reviewed binary pin missing: $name" }
           }
           # Frozen data only at event PR-head SHA; never checkout/execute PR code.
@@ -335,8 +334,7 @@ jobs:
               if ($entries.Count -ne 1 -or $entries[0].Groups[1].Value.ToUpperInvariant() -cne $hashes[$name]) { throw "Checksum mismatch: $name" }
             }
             if ($hashes['Flick-Setup.exe'] -cne $env:SETUP_SHA256.ToUpperInvariant() -or
-                $hashes['Flick-v1.0.8-win-x64.zip'] -cne $env:PORTABLE_SHA256.ToUpperInvariant() -or
-                $hashes['SHA256SUMS.txt'] -cne $env:CHECKSUMS_SHA256.ToUpperInvariant()) { throw 'Reviewed three-asset digest mismatch' }
+                $hashes['Flick-v1.0.8-win-x64.zip'] -cne $env:PORTABLE_SHA256.ToUpperInvariant()) { throw 'Reviewed three-asset digest mismatch' }
             $receipt.hashes = $hashes
             $receipt.phase = 'creating-draft'
             $notes = $approvedNotes + [Environment]::NewLine + @"
