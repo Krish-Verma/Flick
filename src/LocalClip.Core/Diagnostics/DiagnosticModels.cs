@@ -1,10 +1,13 @@
 namespace LocalClip.Core.Diagnostics;
 
-public enum DiagnosticEventKind { Unknown, ApplicationStarted, EngineChanged, HostChanged, CaptureConfigured, SaveRequested, SaveAccepted, SaveValidated, SaveFailed, RecordingFailed, HotkeyChanged, DiagnosticTestCompleted }
+public enum DiagnosticEventKind { Unknown, ApplicationStarted, EngineChanged, HostChanged, CaptureConfigured, SaveRequested, SaveAccepted, SaveValidated, SaveFailed, RecordingFailed, HotkeyChanged, DiagnosticTestCompleted, ReplayControl }
 public enum DiagnosticErrorCode { None, Unknown, MissingSource, StartupFailed, StartupRefused, EngineFault, TargetLost, SaveTimedOut, HostUnresponsive, HostExited, StorageUnavailable, InvalidMedia, IndexWriteFailed, HotkeyConflict, NotReady, CommandRejected, ForcedStop, EncoderUnavailable, DependencyMissing }
 public enum DiagnosticSourceKind { Unknown, Monitor, Window }
 public enum DiagnosticEncoder { Unknown, NvidiaTexture, NvidiaCompatibility, IntelTexture, IntelCompatibility, IntelLegacy, IntelLegacyCompatibility, AmdTexture, AmdCompatibility, CpuX264, NvidiaFfmpeg, NvidiaLegacy }
 public enum DiagnosticHotkeyAction { Unknown, ToggleReplay, SaveReplay }
+// Store only closed categories, not key codes, titles, file paths or process identifiers.
+public enum DiagnosticControlOrigin { Unknown, GlobalHotkey, CaptureBar, SystemTray, Settings, Quit, AutomaticGame }
+public enum DiagnosticControlAction { Unknown, Start, Stop, Save, StopDeferred }
 public enum DiagnosticReleaseChannel { Release, Preview, Beta, ReleaseCandidate }
 public enum DiagnosticStorageState { Ready, Unavailable, Malformed, Disposed }
 public enum DiagnosticStorageIssue { None, AccessDenied, InvalidLocation, InvalidData, TooLarge, UnsupportedVersion, ExternalModification, WriteFailed, Disposed }
@@ -59,7 +62,8 @@ public sealed record DiagnosticObservation(DiagnosticEventKind Kind,
     long? BufferedMilliseconds = null, long? MaximumBufferMilliseconds = null,
     long? DurationMilliseconds = null, long? LatencyMilliseconds = null,
     long? MemoryBytes = null, bool? SoftwareFallback = null, bool? BufferEstimated = null,
-    bool? BufferTrackingLimited = null)
+    bool? BufferTrackingLimited = null, DiagnosticControlOrigin ControlOrigin = DiagnosticControlOrigin.Unknown,
+    DiagnosticControlAction ControlAction = DiagnosticControlAction.Unknown)
 {
     public static DiagnosticObservation FromHealth(DiagnosticEventKind kind,
         RecordingHealthSnapshot health, DiagnosticErrorCode error = DiagnosticErrorCode.None)
