@@ -310,6 +310,9 @@
                             <Setter TargetName="ToggleThumb" Property="Margin" Value="0,0,3,0"/>
                             <Setter TargetName="ToggleThumb" Property="Fill" Value="{DynamicResource Flick.Brush.TextPrimary}"/>
                         </Trigger>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="ToggleTrack" Property="BorderBrush" Value="{DynamicResource Flick.Brush.AccentHover}"/>
+                        </Trigger>
                         <Trigger Property="IsKeyboardFocused" Value="True">
                             <Setter TargetName="ToggleTrack" Property="BorderBrush" Value="{DynamicResource Flick.Brush.Focus}"/>
                             <Setter TargetName="ToggleTrack" Property="BorderThickness" Value="2"/>
