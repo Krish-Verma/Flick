@@ -58,7 +58,7 @@ public static class WindowsAudioEndpointEnumerator
         IMMDeviceCollection? devices = null;
         try
         {
-            enumerator = (IMMDeviceEnumerator)new MmDeviceEnumeratorClass();
+            enumerator = (IMMDeviceEnumerator)(object)new MmDeviceEnumeratorClass();
             int direction = flow == AudioEndpointFlow.Output ? 0 : 1;
             int role = flow == AudioEndpointFlow.Output ? 0 : 2; // OBS: eConsole output; eCommunications microphone.
             string? defaultId = GetDefaultId(enumerator, direction, role);
