@@ -185,7 +185,7 @@ public sealed class ClipStorage
 
     public async Task<ClipMetadata> RegisterNewOriginalAsync(string originalPath,
         string targetName = "", IReadOnlyList<string>? trackNames = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default, bool generateThumbnail = true)
     {
         cancellationToken.ThrowIfCancellationRequested();
         string normalized = ClipLibraryPaths.Normalize(originalPath);
@@ -195,7 +195,7 @@ public sealed class ClipStorage
             if (duplicate != null) return duplicate;
         }
         return await RegisterOriginalAsync(normalized, targetName, null, trackNames,
-            thumbnail: true, cancellationToken);
+            thumbnail: generateThumbnail, cancellationToken);
     }
 
     private async Task<ClipMetadata> RegisterOriginalAsync(
