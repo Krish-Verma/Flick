@@ -46,6 +46,7 @@ public partial class SettingsStagingTests
                         Source = new Uri($"/Flick;component/Resources/Theme/Flick.{dictionary}.xaml", UriKind.Relative)
                     });
                 ResourceUsageSettingsAssertions.Run();
+                SettingsPersistenceAssertions.Run();
                 var settings = AppSettings.CreateDefault();
                 var page = new SettingsWindow(settings, () => false);
                 T Find<T>(string name) => (T)page.FindName(name);
