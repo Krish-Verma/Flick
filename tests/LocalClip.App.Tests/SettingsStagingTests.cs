@@ -11,6 +11,7 @@ using LocalClip.App.Services;
 using LocalClip.App.ViewModels;
 using LocalClip.App.Views;
 using LocalClip.Core.Diagnostics;
+using LocalClip.Core.Audio;
 using LocalClip.Core.Ipc;
 using LocalClip.Core.Models;
 using Xunit;
@@ -69,6 +70,34 @@ public partial class SettingsStagingTests
                 Assert.False(audioStaged.EnableMicrophone);
                 Assert.Null(settings.GameAudioSource);
                 typeof(SettingsWindow).GetMethod("PopulateAudio", BindingFlags.NonPublic | BindingFlags.Instance)!.Invoke(page, new object[] { settings });
+
+                // The actual WPF playback/microphone selectors stage exact
+                // Windows endpoint IDs without changing user settings or
+                // turning on a microphone before an explicit saved opt-in.
+                var outputPicker = Find<ComboBox>("CmbSystemAudioDevice");
+                var inputPicker = Find<ComboBox>("CmbMicrophoneDevice");
+                Assert.Equal("default", Assert.IsType<AudioEndpointChoice>(outputPicker.SelectedItem).Id);
+                Assert.Equal("default", Assert.IsType<AudioEndpointChoice>(inputPicker.SelectedItem).Id);
+                var outputChoices = AudioEndpointChoices.ForSelection(AudioEndpointFlow.Output, "test-output",
+                    new[] { new AudioEndpoint("test-output", "Test USB headphones", false) });
+                var inputChoices = AudioEndpointChoices.ForSelection(AudioEndpointFlow.Input, "test-input",
+                    new[] { new AudioEndpoint("test-input", "Test USB microphone", false) });
+                outputPicker.ItemsSource = outputChoices;
+                inputPicker.ItemsSource = inputChoices;
+                outputPicker.SelectedItem = outputChoices.First(x => x.Id == "test-output");
+                inputPicker.SelectedItem = inputChoices.First(x => x.Id == "test-input");
+                Find<CheckBox>("ChkMicrophone").IsChecked = true;
+                var endpointsStaged = AppSettings.CreateDefault();
+                typeof(SettingsWindow).GetMethod("StageAudio", BindingFlags.NonPublic | BindingFlags.Instance)!
+                    .Invoke(page, new object[] { endpointsStaged });
+                Assert.Equal("test-output", endpointsStaged.SystemAudioDeviceId);
+                Assert.Equal("test-input", endpointsStaged.MicrophoneDeviceId);
+                Assert.Equal("default", settings.SystemAudioDeviceId);
+                Assert.Equal("default", settings.MicrophoneDeviceId);
+                Assert.False(settings.EnableMicrophone);
+                Find<CheckBox>("ChkMicrophone").IsChecked = false;
+                typeof(SettingsWindow).GetMethod("PopulateAudio", BindingFlags.NonPublic | BindingFlags.Instance)!
+                    .Invoke(page, new object[] { settings });
                 // Exercise the actual disclosure template: its keyboard-focusable
                 // toggle must update the Expander and reveal/hide its content.
                 var disclosure = Find<Expander>("WebhookExpander");
