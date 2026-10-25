@@ -47,6 +47,7 @@ public partial class SettingsStagingTests
                     });
                 ResourceUsageSettingsAssertions.Run();
                 SettingsPersistenceAssertions.Run();
+                FlickHoverStyleAssertions.Run();
                 var settings = AppSettings.CreateDefault();
                 var page = new SettingsWindow(settings, () => false);
                 T Find<T>(string name) => (T)page.FindName(name);
