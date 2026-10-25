@@ -111,6 +111,7 @@ public partial class SettingsStagingTests
                 header.IsChecked = true;
                 DrainBindings();
                 Assert.True(disclosure.IsExpanded);
+                Assert.True(LocalClip.App.Services.FlickHoverFeedback.GetEnabled(header));
                 Assert.Equal(Visibility.Visible, disclosureContent.Visibility);
                 header.IsChecked = false;
                 DrainBindings();
