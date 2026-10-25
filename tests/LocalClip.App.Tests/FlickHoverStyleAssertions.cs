@@ -25,7 +25,8 @@ internal static class FlickHoverStyleAssertions
             "Flick.Input.CheckBox",
             "Flick.Input.Slider",
             "Flick.Library.FilterChip",
-            "Flick.Library.Item"
+            "Flick.Library.Item",
+            "Flick.Scrollbar.Thumb"
         ];
         foreach (var key in directStyles)
         {
@@ -34,6 +35,11 @@ internal static class FlickHoverStyleAssertions
                 setter => setter.Property == FlickHoverFeedback.EnabledProperty &&
                     setter.Value is bool enabled && enabled);
         }
+
+        var menuStyle = Assert.IsType<Style>(app.FindResource(typeof(System.Windows.Controls.MenuItem)));
+        Assert.Contains(menuStyle.Setters.OfType<Setter>(),
+            setter => setter.Property == FlickHoverFeedback.EnabledProperty &&
+                setter.Value is bool enabled && enabled);
 
         var primary = new Button { Style = Assert.IsType<Style>(app.FindResource("Flick.Button.Primary")) };
         primary.ApplyTemplate();
