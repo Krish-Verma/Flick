@@ -29,6 +29,7 @@ public static class DiagnosticPolicy
         Enum.IsDefined(item.Kind) && item.Kind != DiagnosticEventKind.Unknown &&
         Defined(item.EngineState) && Defined(item.SaveState) && Defined(item.HostHealth) &&
         Enum.IsDefined(item.SourceKind) && Enum.IsDefined(item.Encoder) && Enum.IsDefined(item.Error) && Enum.IsDefined(item.HotkeyAction) &&
+        Enum.IsDefined(item.ControlOrigin) && Enum.IsDefined(item.ControlAction) &&
         Range(item.NativeError, 0, int.MaxValue) && Range(item.Width, 1, 16384) && Range(item.Height, 1, 16384) &&
         Range(item.Fps, 1, 1000) && Range(item.BufferedMilliseconds, 0, 600000) &&
         Range(item.MaximumBufferMilliseconds, 0, 600000) && Range(item.DurationMilliseconds, 0, 600000) &&

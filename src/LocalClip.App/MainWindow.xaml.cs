@@ -17,6 +17,7 @@ using LocalClip.App.Services;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using LocalClip.Core.Models;
+using LocalClip.Core.Diagnostics;
 using LocalClip.Core.Rules;
 using LocalClip.Core.Media;
 using LocalClip.Core.Updates;
@@ -86,9 +87,9 @@ public partial class MainWindow : Window
 
         _hotkeyManager = new HotkeyManager();
         _hotkeyManager.OnCaptureToggleHotkeyPressed += async () =>
-        { if (!_updateInstallInProgress && !_quitInProgress) await _vm.ToggleCaptureAsync(); };
+        { if (!_updateInstallInProgress && !_quitInProgress) await _vm.ToggleCaptureAsync(DiagnosticControlOrigin.GlobalHotkey); };
         _hotkeyManager.OnSaveReplayHotkeyPressed += async () =>
-        { if (!_updateInstallInProgress && !_quitInProgress) await _vm.SaveReplayAsync(); };
+        { if (!_updateInstallInProgress && !_quitInProgress) await _vm.SaveReplayAsync(DiagnosticControlOrigin.GlobalHotkey); };
 
         _playerTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(200) };
         _playerTimer.Tick += PlayerTimer_Tick;
@@ -305,7 +306,7 @@ public partial class MainWindow : Window
 
         _trayReplayItem = new System.Windows.Forms.ToolStripMenuItem("Start Replay");
         _trayReplayItem.Click += (sender, args) =>
-            _ = Dispatcher.BeginInvoke(new Action(async () => { if (!_updateInstallInProgress && !_quitInProgress) await _vm.ToggleCaptureAsync(); }));
+            _ = Dispatcher.BeginInvoke(new Action(async () => { if (!_updateInstallInProgress && !_quitInProgress) await _vm.ToggleCaptureAsync(DiagnosticControlOrigin.SystemTray); }));
         menu.Items.Add(_trayReplayItem);
 
         _traySaveItem = new System.Windows.Forms.ToolStripMenuItem("Save Last 30 Seconds")
@@ -313,7 +314,7 @@ public partial class MainWindow : Window
             Enabled = false
         };
         _traySaveItem.Click += (sender, args) =>
-            _ = Dispatcher.BeginInvoke(new Action(async () => { if (!_updateInstallInProgress && !_quitInProgress) await _vm.SaveReplayAsync(); }));
+            _ = Dispatcher.BeginInvoke(new Action(async () => { if (!_updateInstallInProgress && !_quitInProgress) await _vm.SaveReplayAsync(DiagnosticControlOrigin.SystemTray); }));
         menu.Items.Add(_traySaveItem);
         menu.Items.Add(new System.Windows.Forms.ToolStripSeparator());
 
@@ -709,13 +710,13 @@ public partial class MainWindow : Window
     private async void BtnToggleCapture_Click(object sender, RoutedEventArgs e)
     {
         if (_updateInstallInProgress || _quitInProgress) return;
-        await _vm.ToggleCaptureAsync();
+        await _vm.ToggleCaptureAsync(DiagnosticControlOrigin.CaptureBar);
     }
 
     private async void BtnSaveReplay_Click(object sender, RoutedEventArgs e)
     {
         if (_updateInstallInProgress || _quitInProgress) return;
-        await _vm.SaveReplayAsync();
+        await _vm.SaveReplayAsync(DiagnosticControlOrigin.CaptureBar);
     }
 
     private async void BtnRefreshTargets_Click(object sender, RoutedEventArgs e)
@@ -875,7 +876,7 @@ public partial class MainWindow : Window
                     : "Microphone preference is off, but test helper exit was not confirmed. Quit Flick to release its recording resources.";
                 return;
             }
-            await _vm.StopCaptureAsync();
+            await _vm.StopCaptureAsync(DiagnosticControlOrigin.Settings);
             _vm.StatusDetails = "Audio preferences saved and capture stopped. Manually start replay when ready.";
         }
         catch (Exception ex)

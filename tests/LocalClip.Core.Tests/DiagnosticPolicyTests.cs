@@ -69,6 +69,21 @@ public sealed class DiagnosticPolicyTests
         }
     }
 
+    [Fact]
+    public void ReplayControlDiagnosticsRecordOnlyClosedActionAndOriginCategories()
+    {
+        var observed = new DiagnosticObservation(DiagnosticEventKind.ReplayControl,
+            ControlOrigin: DiagnosticControlOrigin.GlobalHotkey,
+            ControlAction: DiagnosticControlAction.StopDeferred);
+        Assert.True(DiagnosticPolicy.IsValid(observed));
+        Assert.False(DiagnosticPolicy.IsValid(observed with
+            { ControlOrigin = (DiagnosticControlOrigin)1000 }));
+        Assert.False(DiagnosticPolicy.IsValid(observed with
+            { ControlAction = (DiagnosticControlAction)1000 }));
+        Assert.DoesNotContain(typeof(DiagnosticObservation).GetProperties(),
+            property => property.Name.Contains("KeyCode", StringComparison.OrdinalIgnoreCase));
+    }
+
     [Theory]
     [InlineData("ffmpeg_nvenc", DiagnosticEncoder.NvidiaFfmpeg)]
     [InlineData("jim_nvenc", DiagnosticEncoder.NvidiaLegacy)]
