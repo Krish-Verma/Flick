@@ -12,7 +12,7 @@ param(
 )
 $ErrorActionPreference = "Stop"
 $root = (Get-Item $PSScriptRoot).Parent.FullName
-$portable = Join-Path $root "dist\Flick-v1.0.7-win-x64"
+$portable = Join-Path $root "dist\Flick-v1.0.8-win-x64"
 $icon = Join-Path $root "dist\Flick.ico"
 $setup = Join-Path $root "installer\Flick.iss"
 

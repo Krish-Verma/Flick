@@ -1,6 +1,6 @@
 # Flick — User Guide (Development Build)
 
-> Flick v1.0.6-preview.1 is a publicly downloadable, **unsigned** developer preview. GitHub Latest identifies the newest preview, not trusted publisher status or completed physical Windows/GPU qualification. Source CI does not replace the owner's hardware acceptance.
+> Flick v1.0.7-preview.1 is a publicly downloadable, **unsigned** developer preview. GitHub Latest identifies the newest preview, not trusted publisher status or completed physical Windows/GPU qualification. Source CI does not replace the owner's hardware acceptance.
 
 Flick is a small, free, offline-first **Windows 11 x64** gameplay clipper. Save recent action, organize and trim clips, adjust the audio in a share copy, and prepare an MP4 without a watermark. Recording stays manual unless you deliberately enable automatic replay for approved games.
 
@@ -8,7 +8,7 @@ This guide includes the current development workflows. Your installed preview ma
 
 ## 1. Install or run
 
-Two preview formats are available after a verified Windows build: extract `Flick-v1.0.6-win-x64.zip` and launch **Flick.exe**, or run the unsigned `Flick-Setup.exe` wizard for a normal **Start Menu** entry, optional desktop shortcut and Windows **Installed Apps** uninstall registration. The Inno Setup build is publicly available as an unsigned preview, with full physical hardware and Smart App Control qualification still outstanding. **Do not run the previous `LocalClip` `uninstall.ps1`**, which could erase the directory containing user metadata. New program files install in `%LOCALAPPDATA%\Programs\Flick`, separately from settings and clips.
+Two preview formats are available after a verified Windows build: extract `Flick-v1.0.7-win-x64.zip` and launch **Flick.exe**, or run the unsigned `Flick-Setup.exe` wizard for a normal **Start Menu** entry, optional desktop shortcut and Windows **Installed Apps** uninstall registration. The Inno Setup build is publicly available as an unsigned preview, with full physical hardware and Smart App Control qualification still outstanding. **Do not run the previous `LocalClip` `uninstall.ps1`**, which could erase the directory containing user metadata. New program files install in `%LOCALAPPDATA%\Programs\Flick`, separately from settings and clips.
 
 Flick stores settings and metadata under `%LOCALAPPDATA%\LocalClip`; originals are saved by default to `%USERPROFILE%\Videos\LocalClip\Originals`. You may change the originals folder in Settings.
 
@@ -16,7 +16,7 @@ Flick stores settings and metadata under `%LOCALAPPDATA%\LocalClip`; originals a
 
 Choose **Settings > General > Uninstall Flick**, or open **Windows Settings > Apps > Installed Apps > Flick > Uninstall**. The installed Windows uninstaller optionally removes local settings and cache only after a separate confirmation; original recordings, exports and imported sources are never deleted. Portable ZIP copies should be closed and the extracted folder deleted manually. The downloaded Setup EXE remains in Downloads until you delete it.
 
-Compatibility: Windows 11 x64 with working D3D11 graphics is the target. NVIDIA NVENC, AMD AMF, Intel Quick Sync and optional x264 CPU fallback are implemented but require physical exact-machine testing in v1.0.6. Windows ARM, 32-bit Windows and Windows 10 are not qualified.
+Compatibility: Windows 11 x64 with working D3D11 graphics is the target. NVIDIA NVENC, AMD AMF, Intel Quick Sync and optional x264 CPU fallback are implemented but require physical exact-machine testing in v1.0.7. Windows ARM, 32-bit Windows and Windows 10 are not qualified.
 
 ## 2. The everyday clipping workflow
 
