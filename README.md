@@ -18,9 +18,11 @@ Flick is a Windows-native game clipper for capturing the last 15–120 seconds, 
 - Native Windows application, optically aligned Flick logo and purple interface, refined toolbar icons and subtle logo gradients.
 - In-app update checks, verified downloads and confirmed install/restart for installed copies.
 
-## Development: approved game replay
+## Current product and pending reliability update
 
-The development branch adds **Settings → Games**: explicit running-window approval by full local executable path, per-game quality/duration and microphone consent, and optional automatic replay. Ambiguous windows and unknown identities fail closed. Stop Replay pauses the game process across Flick restarts; manual source/preferences stay separate. This work is awaiting integrated Windows UI/recording acceptance and is **not in the published 1.0.6 download**. See [implementation and qualification boundaries](docs/product-phase/B-GAME-AUTOMATION.md).
+The public **v1.0.7-preview.1** includes Recording Health, optional approved-game replay, selected Game/Voice process audio, clip organization, nondestructive editor tools and the updated Share interface. These features are implemented and CI-tested; physical gameplay, audio device and Discord acceptance remains pending.
+
+The development **v1.0.8-preview.1 candidate** builds on v1.0.7 with fixes for unintended replay stop commands during an in-flight save, truthful save acknowledgment feedback, earlier success notifications after durable indexing, private recording-command origin diagnostics and direct Windows playback/microphone device selectors. These changes are not yet in the published v1.0.7 installer. See [release readiness](docs/RELEASE-READINESS-1.0.8.md) and [game behavior](docs/product-phase/B-GAME-AUTOMATION.md).
 
 ## What the current Windows build supports
 
