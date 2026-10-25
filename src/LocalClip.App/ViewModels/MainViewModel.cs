@@ -325,6 +325,19 @@ public partial class MainViewModel : INotifyPropertyChanged, IDisposable
         if (journal.TryRecord(observation)) _lastDiagnosticObservation = observation;
     }
 
+    // Correlate an action with recording state without logging any raw keystroke,
+    // window title, executable path or identifying process details.
+    private void RecordReplayControl(DiagnosticControlOrigin origin, DiagnosticControlAction action)
+    {
+        if (origin == DiagnosticControlOrigin.Unknown || _diagnosticsDisposed) return;
+        _diagnosticJournal?.TryRecord(DiagnosticObservation.FromHealth(
+            DiagnosticEventKind.ReplayControl, _health.Snapshot) with
+        {
+            ControlOrigin = origin,
+            ControlAction = action
+        });
+    }
+
     private static DiagnosticErrorCode DiagnosticFailure(string code, string message = "")
     {
         if (message.Contains("runtime", StringComparison.OrdinalIgnoreCase) ||
@@ -964,18 +977,23 @@ public partial class MainViewModel : INotifyPropertyChanged, IDisposable
         }
     }
 
-    public async Task ToggleCaptureAsync()
+    public async Task ToggleCaptureAsync(DiagnosticControlOrigin origin = DiagnosticControlOrigin.Unknown)
     {
-        if (_automaticGame != null) { await StopCaptureAsync(); return; }
-        if (CaptureStatus == "Starting" || CaptureStatus == "Stopping") return;
-        if (CaptureStatus == "Off" || CaptureStatus == "Faulted" || CaptureStatus == "Paused")
+        if (CaptureStatus is "Starting" or "Stopping") return;
+        bool stopping = _automaticGame != null ||
+            CaptureStatus is not ("Off" or "Faulted" or "Paused");
+        if (stopping && origin == DiagnosticControlOrigin.GlobalHotkey && IsReplaySavePending)
         {
-            await StartCaptureAsync();
+            // A save key event must never incidentally stop the buffer while
+            // the last MKV is still being completed or indexed. Explicit UI/tray
+            // Stop remains available; it settles the pending save normally.
+            RecordReplayControl(origin, DiagnosticControlAction.StopDeferred);
+            StatusDetails = "The previous clip is still saving. Replay remains active; use Stop Replay after it finishes.";
+            return;
         }
-        else
-        {
-            await StopCaptureAsync();
-        }
+        RecordReplayControl(origin, stopping ? DiagnosticControlAction.Stop : DiagnosticControlAction.Start);
+        if (stopping) await StopCaptureAsync();
+        else await StartCaptureAsync();
     }
 
     public async Task StartCaptureAsync()
@@ -1044,8 +1062,10 @@ public partial class MainViewModel : INotifyPropertyChanged, IDisposable
         }
     }
 
-    public async Task StopCaptureAsync()
+    public async Task StopCaptureAsync(DiagnosticControlOrigin origin = DiagnosticControlOrigin.Unknown)
     {
+        if (origin != DiagnosticControlOrigin.Unknown)
+            RecordReplayControl(origin, DiagnosticControlAction.Stop);
         if (_manualStopOperation is { } stopping) { await stopping; return; }
         var completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         _manualStopOperation = completion.Task;
@@ -1152,7 +1172,7 @@ public partial class MainViewModel : INotifyPropertyChanged, IDisposable
                 try { await export.Task.WaitAsync(TimeSpan.FromSeconds(3)); }
                 catch (TimeoutException) { return false; }
             }
-            await StopCaptureAsync();
+            await StopCaptureAsync(DiagnosticControlOrigin.Quit);
             var deadline = Stopwatch.StartNew();
             while (IsReplaySavePending && deadline.Elapsed < TimeSpan.FromSeconds(30))
                 await Task.Delay(100);
@@ -1174,9 +1194,17 @@ public partial class MainViewModel : INotifyPropertyChanged, IDisposable
         }
     }
 
-    public async Task SaveReplayAsync()
+    public async Task SaveReplayAsync(DiagnosticControlOrigin origin = DiagnosticControlOrigin.Unknown)
     {
         if (_isRecordingDiagnosticRunning || _isPreparingToQuit) return;
+        RecordReplayControl(origin, DiagnosticControlAction.Save);
+        if (_captureHost.HasPendingReplaySaves || _saveRequestOperations > 0)
+        {
+            // Native replay writes are single-flight. A request already
+            // being accepted must not produce a misleading second red toast.
+            StatusDetails = "A clip is already saving. Flick is awaiting its result; the replay buffer remains active.";
+            return;
+        }
         if (CaptureStatus != "Armed" || !IsArmed || _health.Snapshot.EngineState != RecordingEngineState.Ready)
         {
             StatusDetails = CaptureStatus switch
@@ -1242,11 +1270,14 @@ public partial class MainViewModel : INotifyPropertyChanged, IDisposable
                     RecordSaveFailure(saveId, StatusDetails, DiagnosticErrorCode.HostExited);
                 else
                 {
-                    _health.RecordSaveIssue("save-unconfirmed", StatusDetails);
+                    // An IPC ACK timeout does not prove the save failed. Keep
+                    // the request registered until a correlated terminal event
+                    // or confirmed capture-host exit settles its outcome.
                     RecordDiagnostic(DiagnosticEventKind.HostChanged, DiagnosticErrorCode.HostUnresponsive);
                     PublishHealth();
                 }
-                ReplaySaveFailed?.Invoke(StatusDetails);
+                if (!_captureHost.HasPendingReplaySaves)
+                    ReplaySaveFailed?.Invoke(StatusDetails);
             }
         }
         finally
@@ -1327,7 +1358,10 @@ public partial class MainViewModel : INotifyPropertyChanged, IDisposable
                 {
                     try
                     {
-                        var clip = await _storage.RegisterNewOriginalAsync(filePath, context.Target, trackNames);
+                        // A thumbnail is optional work (up to 15s). Confirm the
+                        // playable, indexed MKV and notify before creating it.
+                        var clip = await _storage.RegisterNewOriginalAsync(
+                            filePath, context.Target, trackNames, generateThumbnail: false);
                         // Reloading an ObservableCollection can temporarily clear the
                         // ListBox selection through its TwoWay binding. Snapshot the
                         // edit context BEFORE rebuilding the gallery.
