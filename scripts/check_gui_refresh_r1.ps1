@@ -43,7 +43,12 @@ Require $mainCode 'CancelRecordingDiagnosticAndWaitAsync\(\)' "Microphone opt-ou
 Require $settingsCode '_settings.ExportsFolder = staged.ExportsFolder' "Existing export preference must persist"
 Require $foldersCode 'CloseRequested\?\.Invoke\(\)' "Folder close must return to parent page"
 Require $foldersCode '_vm.CancelImport\(\)' "Leaving folder page must cancel active import"
-Require $folders 'VirtualizingStackPanel.IsVirtualizing="True"' "Connected folders list remains virtualized"
+Require $folders 'Style="\{StaticResource Flick.Library.List\}"' "Connected folders must use the shared list behavior"
+$libraryStyle = [regex]::Match((Read "src/LocalClip.App/Resources/Theme/Flick.Controls.xaml"),
+    '(?s)<Style x:Key="Flick.Library.List"[^>]*>.*?</Style>').Value
+Require $libraryStyle 'VirtualizingStackPanel.IsVirtualizing" Value="True"' "Connected folders list remains virtualized"
+Require $libraryStyle 'VirtualizingStackPanel.VirtualizationMode" Value="Recycling"' "Folder containers must remain bounded and recycled"
+Require $libraryStyle 'ScrollViewer.HorizontalScrollBarVisibility" Value="Disabled"' "Long folder paths must truncate rather than create a second scroll direction"
 # R1 specifically removes the two management windows. Other existing
 # Flick-owned confirmations (e.g., Rename Clip) are redesigned in R7.
 if ($mainCode -match '(?i)(settings|folders|dialog)\.ShowDialog\(\)' -or

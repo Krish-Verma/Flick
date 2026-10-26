@@ -42,18 +42,18 @@ public sealed record RecordingHealthSnapshot(
     SavedClipSummary? LastValidatedClip,
     IReadOnlyList<RecordingHotkeyHealth> Hotkeys)
 {
-    public string StatusText => EngineState == RecordingEngineState.Faulted ? "Recording Faulted"
-        : PendingSaveCount > 0 ? "Saving Clip"
-        : HostHealth == CaptureHostHealth.Unresponsive ? "Recording Status Unavailable"
-        : SaveState == ReplaySaveState.Succeeded ? "Save Successful"
-        : SaveState == ReplaySaveState.Failed ? "Save Failed"
+    public string StatusText => EngineState == RecordingEngineState.Faulted ? "Recording faulted"
+        : PendingSaveCount > 0 ? "Saving clip"
+        : HostHealth == CaptureHostHealth.Unresponsive ? "Recording status unavailable"
+        : SaveState == ReplaySaveState.Succeeded ? "Save successful"
+        : SaveState == ReplaySaveState.Failed ? "Save failed"
         : EngineState switch
         {
             RecordingEngineState.Starting => "Starting",
             RecordingEngineState.Buffering => "Buffering",
-            RecordingEngineState.Ready => "Replay Ready",
-            RecordingEngineState.Stopping => "Recording Stopping",
-            RecordingEngineState.Stopped => "Recording Stopped",
-            _ => "Replay Off"
+            RecordingEngineState.Ready => "Replay ready",
+            RecordingEngineState.Stopping => "Recording stopping",
+            RecordingEngineState.Stopped => "Recording stopped",
+            _ => "Replay off"
         };
 }

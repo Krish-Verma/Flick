@@ -221,7 +221,7 @@ public partial class MainWindow : Window
     {
         if (!_vm.CanExportDiagnostics) return;
         var dialog = new Microsoft.Win32.SaveFileDialog {
-            Title = "Export Flick Diagnostics", Filter = "ZIP archive (*.zip)|*.zip",
+            Title = "Export Flick diagnostics", Filter = "ZIP archive (*.zip)|*.zip",
             DefaultExt = ".zip", AddExtension = true, OverwritePrompt = true,
             FileName = "Flick-diagnostics-" + DateTime.Now.ToString("yyyy-MM-dd-HHmmss") + ".zip"
         };
@@ -234,7 +234,7 @@ public partial class MainWindow : Window
         if (_vm.IsRecordingDiagnosticRunning) { _vm.CancelRecordingDiagnostic(); return; }
         var plan = _vm.CreateRecordingDiagnosticPlan(ChkDiagnosticAudio.IsChecked == true);
         if (plan == null) return;
-        if (FlickDialog.Show(plan.ConsentSummary, "Run Recording Test?", MessageBoxButton.YesNo,
+        if (FlickDialog.Show(plan.ConsentSummary, "Run recording test?", MessageBoxButton.YesNo,
             MessageBoxImage.Question) != MessageBoxResult.Yes) return;
         await _vm.RunRecordingDiagnosticAsync(plan, plan.PlanId);
     }
@@ -307,12 +307,12 @@ public partial class MainWindow : Window
             _ = Dispatcher.BeginInvoke(new Action(ShowAndRestoreWindow)));
         menu.Items.Add(new System.Windows.Forms.ToolStripSeparator());
 
-        _trayReplayItem = new System.Windows.Forms.ToolStripMenuItem("Start Replay");
+        _trayReplayItem = new System.Windows.Forms.ToolStripMenuItem("Start replay");
         _trayReplayItem.Click += (sender, args) =>
             _ = Dispatcher.BeginInvoke(new Action(async () => { if (!_updateInstallInProgress && !_quitInProgress) await _vm.ToggleCaptureAsync(DiagnosticControlOrigin.SystemTray); }));
         menu.Items.Add(_trayReplayItem);
 
-        _traySaveItem = new System.Windows.Forms.ToolStripMenuItem("Save Last 30 Seconds")
+        _traySaveItem = new System.Windows.Forms.ToolStripMenuItem("Save last 30 seconds")
         {
             Enabled = false
         };
@@ -377,16 +377,16 @@ public partial class MainWindow : Window
         bool testing = _vm.IsRecordingDiagnosticRunning;
 
         bool compact = _layoutMode == WorkspaceLayoutMode.Compact;
-        TxtCaptureStatus.Text = testing ? "Testing Recording" : _vm.RecordingHealth.SessionId != Guid.Empty || _vm.RecordingHealth.LastSaveIssue != null
+        TxtCaptureStatus.Text = testing ? "Testing recording" : _vm.RecordingHealth.SessionId != Guid.Empty || _vm.RecordingHealth.LastSaveIssue != null
             ? _vm.HealthStatusText : status switch
         {
-            "Armed" => compact ? "Ready" : "Replay Ready",
-            "Buffering" => compact ? "Buffering" : "Buffering Replay",
-            "Starting" => compact ? "Starting" : "Starting Replay",
-            "Stopping" => compact ? "Stopping" : "Stopping Replay",
-            "Faulted" => compact ? "Error" : "Capture Error",
-            "Paused" => compact ? "Paused" : "Replay Paused",
-            _ => compact ? "Off" : "Replay Off"
+            "Armed" => compact ? "Ready" : "Replay ready",
+            "Buffering" => compact ? "Buffering" : "Buffering replay",
+            "Starting" => compact ? "Starting" : "Starting replay",
+            "Stopping" => compact ? "Stopping" : "Stopping replay",
+            "Faulted" => compact ? "Error" : "Capture error",
+            "Paused" => compact ? "Paused" : "Replay paused",
+            _ => compact ? "Off" : "Replay off"
         };
 
         var neutral = (System.Windows.Media.Brush)FindResource("Flick.Brush.TextMuted");
@@ -398,7 +398,7 @@ public partial class MainWindow : Window
         // Badge surface is a DynamicResource so a Windows high-contrast
         // theme can override it without stale fixed-color rendering.
 
-        BtnToggleCapture.Content = active || transitional ? "Stop Replay" : "Start Replay";
+        BtnToggleCapture.Content = active || transitional ? "Stop replay" : "Start replay";
         BtnToggleCapture.Style = (Style)FindResource(
             active || transitional ? "Flick.Button.Secondary" : "Flick.Button.Primary");
         BtnToggleCapture.IsEnabled = (_vm.IsAutomaticGameCapture && _vm.CaptureStatus == "Starting") || (!transitional && _vm.CanControlReplay);
@@ -416,7 +416,7 @@ public partial class MainWindow : Window
 
         if (_trayReplayItem != null)
         {
-            _trayReplayItem.Text = active || transitional ? "Stop Replay" : "Start Replay";
+            _trayReplayItem.Text = active || transitional ? "Stop replay" : "Start replay";
             _trayReplayItem.Enabled = BtnToggleCapture.IsEnabled;
         }
         if (_traySaveItem != null)
@@ -519,7 +519,7 @@ public partial class MainWindow : Window
     {
         return LocalClip.App.Services.FlickDialog.Show(
             "Changing the capture source will stop replay and clear the current unsaved buffer. Continue?",
-            "Change Capture Source", MessageBoxButton.YesNo, MessageBoxImage.Warning)
+            "Change capture source", MessageBoxButton.YesNo, MessageBoxImage.Warning)
             == MessageBoxResult.Yes;
     }
 
@@ -552,6 +552,7 @@ public partial class MainWindow : Window
 
     private void ShowWorkspacePage(UserControl page)
     {
+        CloseLibraryPanels();
         // The editor may be hidden, but the independent capture host continues.
         // Abandon a pending FFmpeg local preview before leaving the editor.
         CancelPendingPreview();
@@ -662,6 +663,7 @@ public partial class MainWindow : Window
     private void ShowCompactEditor()
     {
         if (_layoutMode != WorkspaceLayoutMode.Compact) return;
+        CloseLibraryPanels();
         _compactShowingEditor = true;
         ApplyWorkspaceLayout();
     }
@@ -789,7 +791,7 @@ public partial class MainWindow : Window
             string warning = prepared.IsUnsignedPreview
                 ? $"Install Flick {download.Release.Version}? This preview installer is unsigned. Its download checksum matches this GitHub release, but Windows has not verified its publisher. Smart App Control may block it. Continue only if you trust this release; Flick will not disable or bypass Windows protections. Flick will close and restart after installation. Pending Settings edits are not saved."
                 : $"Install Flick {download.Release.Version} and restart? Windows verified the installer's signature. Flick will close while the update is installed. Saved clips and preferences are kept; pending Settings edits are not saved.";
-            if (FlickDialog.Show(warning, prepared.IsUnsignedPreview ? "Install Unsigned Preview" : "Install Flick Update",
+            if (FlickDialog.Show(warning, prepared.IsUnsignedPreview ? "Install unsigned preview" : "Install Flick update",
                 MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No) != MessageBoxResult.Yes)
                 return "Installation cancelled. The downloaded update is ready when you are.";
 
@@ -837,7 +839,7 @@ public partial class MainWindow : Window
             if (FlickUninstallLauncher.TryLaunch(out string error))
                 RealQuit();
             else
-                LocalClip.App.Services.FlickDialog.Show(this, error, "Flick Uninstall",
+                LocalClip.App.Services.FlickDialog.Show(this, error, "Uninstall Flick",
                     MessageBoxButton.OK, MessageBoxImage.Error);
             return;
         }
@@ -906,7 +908,7 @@ public partial class MainWindow : Window
     {
         if (_vm.SelectedClip == null) return;
         string current = _vm.SelectedClip.Title;
-        string? title = FlickDialog.Prompt("Rename Clip", "Enter a clip title:", current);
+        string? title = FlickDialog.Prompt("Rename clip", "Enter a clip title:", current);
         if (title != null) _vm.RenameSelectedClip(title);
     }
 
@@ -925,6 +927,13 @@ public partial class MainWindow : Window
             return;
         }
         if (WorkspacePageLayer.Visibility == Visibility.Visible) return;
+        if (e.Key == Key.Escape &&
+            (LibraryFiltersPanel.Visibility == Visibility.Visible || LibraryDetailsPanel.Visibility == Visibility.Visible))
+        {
+            CloseLibraryPanels();
+            e.Handled = true;
+            return;
+        }
         if (HandleEditorShortcut(e)) { e.Handled = true; return; }
         if (e.Key == Key.Escape && EditorContextLayer.Visibility == Visibility.Visible)
         {
@@ -1010,7 +1019,7 @@ public partial class MainWindow : Window
         }
         if (BtnBuildPreview != null)
         {
-            BtnBuildPreview.Content = "Create Local Preview";
+            BtnBuildPreview.Content = "Create preview";
             BtnBuildPreview.IsEnabled = _vm.SelectedClip?.IsAvailable == true;
         }
     }
@@ -1046,7 +1055,7 @@ public partial class MainWindow : Window
             PreviewFallbackPanel.Visibility = Visibility.Visible;
             TxtPreviewIssue.Text = clip is null
                 ? "Select a Clip to Preview"
-                : "Original Video Is Offline";
+                : "Original video is offline";
             BtnBuildPreview.Visibility = Visibility.Collapsed;
             return;
         }
@@ -1063,7 +1072,7 @@ public partial class MainWindow : Window
     {
         if (!File.Exists(path))
         {
-            _vm.StatusDetails = "Preview File Unavailable · Reconnect the Original";
+            _vm.StatusDetails = "Preview unavailable · reconnect the original";
             return;
         }
         _playerTimer.Stop();
@@ -1076,9 +1085,9 @@ public partial class MainWindow : Window
         _playerView = mode;
         BtnPreviewMode.Content = mode switch
         {
-            PlayerView.Exported => "Export Preview",
-            PlayerView.LocalCopy => "Local Preview",
-            PlayerView.AudioMix => "Mix Preview",
+            PlayerView.Exported => "Export preview",
+            PlayerView.LocalCopy => "Local preview",
+            PlayerView.AudioMix => "Mix preview",
             _ => "Original"
         };
         BtnPlayPause.Content = "Play";
@@ -1097,7 +1106,7 @@ public partial class MainWindow : Window
         var clip = _vm.SelectedClip;
         if (clip is null || !File.Exists(clip.OriginalFilePath))
         {
-            _vm.StatusDetails = "Original Video Offline · Reconnect Its Folder";
+            _vm.StatusDetails = "Original video offline · reconnect its folder";
             return;
         }
         if (startPlaying)
@@ -1158,6 +1167,7 @@ public partial class MainWindow : Window
         _vm.ClearFilmstrip();
         EditorContextLayer.Visibility = Visibility.Collapsed;
         TrimPanel.Visibility = AudioPanel.Visibility = SharePanel.Visibility = Visibility.Collapsed;
+        UpdateEditorContextHeight();
         AudioExpander.IsExpanded = false;
         if (_activeEditorTool != null)
         {
@@ -1280,11 +1290,11 @@ public partial class MainWindow : Window
             _playerView == PlayerView.LocalCopy && !_previewWasReencoded
             ? Visibility.Visible : Visibility.Collapsed;
         BtnBuildPreview.Content = _playerView == PlayerView.LocalCopy
-            ? "Try Compatible Preview" : "Create Local Preview";
+            ? "Try compatible preview" : "Create preview";
         TxtPreviewIssue.Text = _playerView switch {
-            PlayerView.Exported => "Windows Couldn't Preview the Exported MP4",
-            PlayerView.AudioMix => "Windows Couldn't Play the Audio Mix Preview",
-            _ => "Windows Couldn't Play This Original" };
+            PlayerView.Exported => "Windows couldn't preview the MP4",
+            PlayerView.AudioMix => "Windows couldn't play the audio mix",
+            _ => "Windows couldn't play this video" };
         _vm.StatusDetails = _playerView switch {
             PlayerView.Exported => "Export preview unavailable. Open the validated MP4 externally.",
             PlayerView.AudioMix => "Mix playback unavailable. The original remains unchanged; export the mix to hear it in another player.",
@@ -1332,7 +1342,7 @@ public partial class MainWindow : Window
             {
                 _previewCancellation = null;
                 BtnBuildPreview.IsEnabled = true;
-                BtnBuildPreview.Content = "Create Local Preview";
+                BtnBuildPreview.Content = "Create preview";
             }
             cancellation.Dispose();
         }
@@ -1345,7 +1355,7 @@ public partial class MainWindow : Window
             ? _vm.ReadyExportFilePath : _vm.SelectedClip?.OriginalFilePath;
         if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
         {
-            _vm.StatusDetails = "Original Video Offline · Reconnect Its Folder";
+            _vm.StatusDetails = "Original video offline · reconnect its folder";
             return;
         }
         try { Process.Start(new ProcessStartInfo(path) { UseShellExecute = true }); }
@@ -1515,7 +1525,7 @@ public partial class MainWindow : Window
         _shareDragStart = null;
         if (!_vm.TryGetReadyShareFile(out var path))
         {
-            _vm.ExportStatusMessage = "Share File No Longer Valid · Export This Clip Again";
+            _vm.ExportStatusMessage = "Share file changed · export again";
             return;
         }
         try

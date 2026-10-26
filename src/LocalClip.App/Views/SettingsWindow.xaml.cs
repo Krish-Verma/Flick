@@ -19,7 +19,7 @@ using LocalClip.Core.Updates;
 namespace LocalClip.App.Views;
 
 /// <summary>
-/// One compact, six-category settings surface. All changes are staged until
+/// One organized settings surface. All changes are staged until
 /// Save; Preview Notification and Manage Folders are explicit separate actions.
 /// Recording stays armed while simply browsing Settings.
 /// </summary>
@@ -71,11 +71,14 @@ public partial class SettingsWindow : UserControl
         _applyWindowsStartup = applyWindowsStartup ?? WindowsStartupRegistration.Apply;
         Populate(settings);
         SelectCategory("Recording");
-        TxtCurrentVersion.Text = "Current version: " + FlickUpdateService.CurrentVersion;
+        TxtCurrentVersion.Text = "Version " + FlickUpdateService.CurrentVersion;
         ChkPreviewUpdates.IsChecked = settings.IncludePreviewUpdates;
         TxtUpdateMode.Text = FlickUninstallLauncher.IsInstalled
-            ? "Updates keep your clips and saved preferences. Save settings before installing; pending changes on this page are not applied by an update."
-            : "Portable copy: open the release page for a new ZIP, then quit Flick and replace the extracted application folder. Your clips and preferences live separately.";
+            ? "Updates keep your clips and preferences."
+            : "Portable copy · download a new ZIP to update.";
+        TxtUpdateMode.ToolTip = FlickUninstallLauncher.IsInstalled
+            ? "Save pending settings before installing an update."
+            : "Quit Flick before replacing the extracted application folder. Clips and preferences live separately.";
         Unloaded += (_, _) => LeavePage();
     }
 
@@ -150,13 +153,13 @@ public partial class SettingsWindow : UserControl
             _availableUpdate = release;
             TxtUpdateStatus.Text = release == null ? "You're up to date on this release channel."
                 : $"Flick {release.Version} is available." + (FlickUninstallLauncher.IsInstalled
-                    ? " Review the release notes, then download when you're ready."
-                    : " Open Release Notes to download the portable ZIP.");
+                    ? " Ready to download."
+                    : " Open Release Notes for the ZIP.");
         }
         catch (OperationCanceledException)
         { if (ReferenceEquals(_updateCancellation, cancellation)) TxtUpdateStatus.Text = "Update check cancelled."; }
         catch (Exception)
-        { if (ReferenceEquals(_updateCancellation, cancellation)) TxtUpdateStatus.Text = "Couldn't check for updates. Check your connection and try again, or open Release Notes."; }
+        { if (ReferenceEquals(_updateCancellation, cancellation)) TxtUpdateStatus.Text = "Couldn't check for updates. Try again or open Release Notes."; }
         finally
         {
             if (ReferenceEquals(_updateCancellation, cancellation))
@@ -188,7 +191,8 @@ public partial class SettingsWindow : UserControl
             if (!ReferenceEquals(_updateCancellation, cancellation))
             { FlickUpdateService.DiscardDownload(download); return; }
             _downloadedUpdate = download;
-            TxtUpdateStatus.Text = $"Flick {download.Release.Version} downloaded and checksum verified. Save settings, then choose Install and Restart when replay is off and other work has finished.";
+            TxtUpdateStatus.Text = $"Flick {download.Release.Version} verified. Ready to install.";
+            TxtUpdateStatus.ToolTip = "Save pending settings and stop replay before installing.";
         }
         catch (OperationCanceledException)
         { if (ReferenceEquals(_updateCancellation, cancellation)) TxtUpdateStatus.Text = "Download cancelled. Your installed version is unchanged."; }
@@ -316,7 +320,7 @@ public partial class SettingsWindow : UserControl
         }
         finally { _loading = false; }
         UpdateBufferWarning();
-        SaveShortcutLabel.Text = $"Save Last {settings.ReplayDurationSeconds}s";
+        SaveShortcutLabel.Text = $"Save last {settings.ReplayDurationSeconds}s";
     }
 
     private string Preset() => CmbQuality.SelectedIndex switch
@@ -335,7 +339,7 @@ public partial class SettingsWindow : UserControl
         {
             UpdateBufferWarning();
             if (SaveShortcutLabel != null && int.TryParse(TxtDuration.Text, out int seconds))
-                SaveShortcutLabel.Text = $"Save Last {seconds}s";
+                SaveShortcutLabel.Text = $"Save last {seconds}s";
         }
     }
 
@@ -351,7 +355,7 @@ public partial class SettingsWindow : UserControl
         if (!int.TryParse(TxtDuration.Text, out int duration) ||
             duration < 15 || duration > 120)
         {
-            TxtBufferWarning.Text = "Choose a Replay Duration Between 15 and 120 Seconds.";
+            TxtBufferWarning.Text = "Choose 15–120 seconds.";
             return;
         }
         var target = AppSettings.CreateDefault();
@@ -359,8 +363,9 @@ public partial class SettingsWindow : UserControl
         double estimate = RecordingProfiles.EstimatedReplayBytes(
             duration, target.VideoBitrateKbps, ChkMicrophone?.IsChecked == true) / 1_048_576d;
         TxtBufferWarning.Text = estimate > target.BufferMemoryLimitMb
-            ? $"Estimated Replay: ~{estimate:F0} MiB exceeds {target.BufferMemoryLimitMb} MiB buffer. The retained clip may be shorter."
-            : $"Estimated Replay: ~{estimate:F0} MiB of {target.BufferMemoryLimitMb} MiB compressed packet budget.";
+            ? $"~{estimate:F0} MiB replay · may exceed the buffer limit"
+            : $"~{estimate:F0} MiB replay buffer";
+        TxtBufferWarning.ToolTip = $"Estimated compressed video/audio packets, not total app RAM. Limit: {target.BufferMemoryLimitMb} MiB. Clips may be shorter when the limit is reached.";
     }
 
     private void ShareCap_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -390,7 +395,7 @@ public partial class SettingsWindow : UserControl
         CancelShortcutEdit();
         _editingShortcut = sender is Button { Tag: "Toggle" } ? TxtToggleHotkey : TxtSaveHotkey;
         ShortcutEditor.Visibility = Visibility.Visible;
-        ShortcutHint.Text = "Select Record Shortcut, then press a combination with Ctrl or Alt.";
+        ShortcutHint.Text = "Choose Record shortcut, then press Ctrl or Alt with a key.";
         ShortcutEditingChanged?.Invoke(true);
     }
 
@@ -400,7 +405,7 @@ public partial class SettingsWindow : UserControl
         _recordingShortcut = true;
         _shortcutCandidate = "";
         SaveShortcutButton.IsEnabled = false;
-        ShortcutHint.Text = "Listening here… press a full shortcut. Escape cancels.";
+        ShortcutHint.Text = "Press your shortcut. Escape cancels.";
         _editingShortcut.Focus();
     }
 
@@ -446,8 +451,8 @@ public partial class SettingsWindow : UserControl
             !HotkeyManager.AreEquivalentHotkeys(proposal, other);
         _shortcutCandidate = valid ? proposal : "";
         SaveShortcutButton.IsEnabled = valid;
-        ShortcutHint.Text = valid ? proposal + " — select Save Shortcut to keep it."
-            : "Choose a different combination with Ctrl or Alt; reserved and duplicate shortcuts are unavailable.";
+        ShortcutHint.Text = valid ? proposal + " · choose Use shortcut to keep it."
+            : "Choose a different Ctrl or Alt shortcut.";
         _recordingShortcut = false;
     }
 
@@ -455,7 +460,7 @@ public partial class SettingsWindow : UserControl
     {
         using var dialog = new System.Windows.Forms.FolderBrowserDialog
         {
-            Description = "Select Where Flick Saves New Original Clips",
+            Description = "Choose a clips folder",
             UseDescriptionForTitle = true,
             SelectedPath = TxtOriginalsFolder.Text
         };
@@ -467,7 +472,7 @@ public partial class SettingsWindow : UserControl
     {
         using var dialog = new System.Windows.Forms.FolderBrowserDialog
         {
-            Description = "Select Where Flick Saves Share-Ready MP4s",
+            Description = "Choose an exports folder",
             UseDescriptionForTitle = true,
             SelectedPath = TxtExportsFolder.Text
         };
@@ -494,7 +499,7 @@ public partial class SettingsWindow : UserControl
             CustomSoundName.Text = Path.GetFileName(_customSoundPath);
             CmbNotificationTone.SelectedIndex = 2;
         }
-        catch (Exception ex) { FlickDialog.Show(ex.Message, "Choose a Short WAV Sound"); }
+        catch (Exception ex) { FlickDialog.Show(ex.Message, "Choose a short WAV sound"); }
     }
 
     private void ResetSound_Click(object sender, RoutedEventArgs e)
@@ -507,11 +512,12 @@ public partial class SettingsWindow : UserControl
     private void Save_Click(object sender, RoutedEventArgs e)
     {
         LastSaveWarning = "";
-        TxtSaveStatus.Text = "Checking and saving all preferences…";
+        TxtSaveStatus.Text = "Saving…";
+        TxtSaveStatus.ToolTip = null;
         if (_editingShortcut != null)
         {
-            ShortcutHint.Text = "Save or cancel the shortcut change before saving Settings.";
-            TxtSaveStatus.Text = "Finish recording your shortcut, or cancel that edit, then Save Settings.";
+            ShortcutHint.Text = "Choose Use shortcut, or cancel this edit.";
+            TxtSaveStatus.Text = "Finish or cancel the shortcut edit first.";
             // Do not navigate categories here: that path cancels the pending
             // shortcut recording and would silently lose the user's chord.
             return; // Never silently apply or discard an unfinished shortcut.
@@ -519,15 +525,13 @@ public partial class SettingsWindow : UserControl
         if (!int.TryParse(TxtDuration.Text, out int duration) ||
             duration < 15 || duration > 120)
         {
-            SelectCategory("Recording");
-            LocalClip.App.Services.FlickDialog.Show("Replay Duration Must Be Between 15 and 120 Seconds.", "Invalid Duration");
+            ShowSaveValidation("Recording", TxtDuration, "Choose 15–120 seconds.");
             return;
         }
         int cap = GetShareCap();
         if (!ShareExportTargets.IsValid(cap))
         {
-            SelectCategory("Sharing");
-            LocalClip.App.Services.FlickDialog.Show("Select a File Limit Between 1 and 250 MB.", "Invalid Export Limit");
+            ShowSaveValidation("Sharing", TxtShareCustomMb, "Choose a file limit from 1 to 250 MB.");
             return;
         }
         string toggle = TxtToggleHotkey.Text.Trim();
@@ -535,8 +539,7 @@ public partial class SettingsWindow : UserControl
         if (!HotkeyManager.IsValidHotkey(toggle) || !HotkeyManager.IsValidHotkey(save) ||
             HotkeyManager.AreEquivalentHotkeys(toggle, save))
         {
-            SelectCategory("Shortcuts");
-            LocalClip.App.Services.FlickDialog.Show("Choose Two Different Valid Hotkeys.", "Invalid Shortcuts");
+            ShowSaveValidation("Shortcuts", TxtToggleHotkey, "Choose two different valid shortcuts.");
             return;
         }
         string originals, exports;
@@ -555,8 +558,8 @@ public partial class SettingsWindow : UserControl
         }
         catch (Exception ex)
         {
-            SelectCategory("Storage");
-            LocalClip.App.Services.FlickDialog.Show("Invalid Storage Paths: " + ex.Message, "Storage Settings");
+            ShowSaveValidation("Storage", TxtOriginalsFolder, "Choose separate folders for clips and exports.");
+            TxtSaveStatus.ToolTip = ex.Message;
             return;
         }
 
@@ -565,15 +568,16 @@ public partial class SettingsWindow : UserControl
         if (enableWebhook && (string.IsNullOrWhiteSpace(webhook) ||
             !DiscordWebhookClient.ValidateWebhookUrl(webhook, out _)))
         {
-            SelectCategory("Sharing");
-            LocalClip.App.Services.FlickDialog.Show("A valid Discord webhook is required to enable optional direct posting.",
-                "Invalid Webhook");
+            ShowSaveValidation("Sharing", TxtWebhookUrl, "Enter a valid Discord webhook or turn off direct posting.");
             return;
         }
         if (_isCaptureActive() && AudioRoutingChanged() &&
             LocalClip.App.Services.FlickDialog.Show("Changing audio routing stops the current recording. Unsaved replay footage will be discarded. Continue?",
-                "Change Recording Audio", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes)
+                "Change recording audio", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes)
+        {
+            TxtSaveStatus.Text = "Changes not saved.";
             return;
+        }
 
         if (!ReviewGameSettingsBeforeSave()) return;
 
@@ -594,7 +598,12 @@ public partial class SettingsWindow : UserControl
             staged.OriginalsFolder = originals;
             staged.ExportsFolder = exports;
             staged.ReplayDurationSeconds = duration;
-            StageAudio(staged);
+            try { StageAudio(staged); }
+            catch (ArgumentException audioError)
+            {
+                ShowSaveValidation("Audio", CmbAudioMode, audioError.Message);
+                return;
+            }
             staged.EnableMicrophone = ChkMicrophone.IsChecked == true;
             staged.AllowSoftwareFallback = ChkSoftwareFallback.IsChecked == true;
             staged.StartWithWindows = ChkStartWithWindows.IsChecked == true;
@@ -677,8 +686,8 @@ public partial class SettingsWindow : UserControl
             _settings.MaskedWebhookUrl = staged.MaskedWebhookUrl;
             _settings.EnableDiscordWebhook = staged.EnableDiscordWebhook;
             TxtSaveStatus.Text = LastSaveWarning.Length > 0
-                ? "Preferences saved with a Windows startup warning."
-                : "All preferences saved and verified.";
+                ? "Saved. Windows startup couldn't be changed."
+                : "Settings saved.";
             CloseRequested?.Invoke(true);
         }
         catch (Exception ex)
@@ -688,9 +697,19 @@ public partial class SettingsWindow : UserControl
                 try { _applyWindowsStartup(originalStartup, originalMinimized); }
                 catch { /* Warn: the original registry entry may need manual review. */ }
             }
-            TxtSaveStatus.Text = "Save failed. No settings were applied: " + ex.Message;
-            LocalClip.App.Services.FlickDialog.Show("Settings Couldn't Be Saved: " + ex.Message, "Flick Settings");
+            TxtSaveStatus.Text = "Couldn't save settings. Your changes are still here.";
+            TxtSaveStatus.ToolTip = ex.Message;
+            LocalClip.App.Services.FlickDialog.Show("Settings couldn't be saved: " + ex.Message, "Save Settings");
         }
+    }
+
+    private void ShowSaveValidation(string category, FrameworkElement field, string message)
+    {
+        SelectCategory(category);
+        TxtSaveStatus.Text = message;
+        TxtSaveStatus.ToolTip = message;
+        field.Focus();
+        field.BringIntoView();
     }
 
     private void UninstallFlick_Click(object sender, RoutedEventArgs e)

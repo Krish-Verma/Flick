@@ -27,7 +27,10 @@ public partial class SettingsWindow
         if (AppAudioSourcesPanel != null)
             AppAudioSourcesPanel.Visibility = CmbAudioMode.SelectedIndex == 1 ? Visibility.Visible : Visibility.Collapsed;
         if (SystemAudioDevicePanel != null)
+        {
             SystemAudioDevicePanel.IsEnabled = CmbAudioMode.SelectedIndex != 1;
+            SystemAudioDevicePanel.Visibility = CmbAudioMode.SelectedIndex == 1 ? Visibility.Collapsed : Visibility.Visible;
+        }
     }
 
     private void PopulateAudio(AppSettings settings)
@@ -67,10 +70,8 @@ public partial class SettingsWindow
     {
         if (!BtnRefreshAudioDevices.IsEnabled) return;
         int epoch = ++_audioDevicesEpoch;
-        string selectedOutput = (CmbSystemAudioDevice.SelectedItem as AudioEndpointChoice)?.Id ?? _settings.SystemAudioDeviceId;
-        string selectedInput = (CmbMicrophoneDevice.SelectedItem as AudioEndpointChoice)?.Id ?? _settings.MicrophoneDeviceId;
         BtnRefreshAudioDevices.IsEnabled = false;
-        TxtAudioDeviceStatus.Text = "Looking for active Windows audio devices…";
+        TxtAudioDeviceStatus.Text = "Finding devices…";
         try
         {
             // COM enumeration is read-only, and runs off the WPF/gameplay UI
@@ -79,15 +80,24 @@ public partial class SettingsWindow
                 Outputs: _loadAudioEndpoints(AudioEndpointFlow.Output),
                 Inputs: _loadAudioEndpoints(AudioEndpointFlow.Input)));
             if (epoch != _audioDevicesEpoch) return; // Staged Settings page was closed/replaced.
+            // A user can change either picker while discovery is in flight.
+            // Read the current choices only after it settles so the refresh
+            // cannot restore an old selection over those staged edits.
+            string selectedOutput = (CmbSystemAudioDevice.SelectedItem as AudioEndpointChoice)?.Id ?? _settings.SystemAudioDeviceId;
+            string selectedInput = (CmbMicrophoneDevice.SelectedItem as AudioEndpointChoice)?.Id ?? _settings.MicrophoneDeviceId;
             _availableOutputs = found.Outputs;
             _availableInputs = found.Inputs;
             PopulateAudioEndpointChoices(selectedOutput, selectedInput);
-            TxtAudioDeviceStatus.Text = $"Found {_availableOutputs.Count} playback and {_availableInputs.Count} microphone device(s). Windows defaults follow system changes. An unavailable selection will not silently switch devices.";
+            TxtAudioDeviceStatus.Text = $"{_availableOutputs.Count} outputs · {_availableInputs.Count} microphones";
+            TxtAudioDeviceStatus.ToolTip = "Windows defaults follow system changes. Unavailable selections are kept and never silently replaced.";
         }
         catch (Exception)
         {
             if (epoch == _audioDevicesEpoch)
-                TxtAudioDeviceStatus.Text = "Could not enumerate audio devices. Your selected IDs were preserved. Refresh again, or choose the Windows defaults.";
+            {
+                TxtAudioDeviceStatus.Text = "Couldn't refresh devices. Your choices are kept.";
+                TxtAudioDeviceStatus.ToolTip = "Try Refresh again or explicitly choose a Windows default device.";
+            }
         }
         finally
         {
@@ -96,7 +106,10 @@ public partial class SettingsWindow
         }
     }
 
-    private async void RefreshAudioSources_Click(object sender, RoutedEventArgs e)
+    private async void RefreshAudioSources_Click(object sender, RoutedEventArgs e) =>
+        await RefreshAudioSourcesAsync();
+
+    private async Task RefreshAudioSourcesAsync()
     {
         if (_loadAudioSources == null || _isCaptureActive())
         {
@@ -105,16 +118,18 @@ public partial class SettingsWindow
         BtnRefreshAudioSources.IsEnabled = false;
         try
         {
+            var targets = await _loadAudioSources();
+            // Preserve selections made while the helper was discovering apps.
             var oldGame = (CmbGameAudio.SelectedItem as AudioChoice)?.Identity;
             var oldVoice = (CmbVoiceAudio.SelectedItem as AudioChoice)?.Identity;
-            var targets = await _loadAudioSources();
             var choices = new List<AudioChoice> { new(null) };
             choices.AddRange(targets.Windows.Where(window => AudioProcessIdentity.FromWindow(window).IsComplete)
                 .GroupBy(window => window.Pid).Select(group => new AudioChoice(AudioProcessIdentity.FromWindow(group.First()))));
             CmbGameAudio.ItemsSource = choices; CmbVoiceAudio.ItemsSource = choices;
             CmbGameAudio.SelectedItem = choices.FirstOrDefault(choice => Same(choice.Identity, oldGame)) ?? choices[0];
             CmbVoiceAudio.SelectedItem = choices.FirstOrDefault(choice => Same(choice.Identity, oldVoice)) ?? choices[0];
-            TxtAudioSources.Text = "Choose running apps. Capture includes each selected process tree; app restarts require a fresh selection. Sound observation appears in Recording Health.";
+            TxtAudioSources.Text = "Apps refreshed. Choose what to record.";
+            TxtAudioSources.ToolTip = "Capture includes each selected process tree. Select the app again after a restart; audio activity appears in Recording Health.";
         }
         catch (Exception) { TxtAudioSources.Text = "App sources could not be refreshed. Stop replay and try again."; }
         finally { BtnRefreshAudioSources.IsEnabled = true; }
@@ -140,11 +155,19 @@ public partial class SettingsWindow
         var output = CmbSystemAudioDevice.SelectedItem as AudioEndpointChoice;
         var input = CmbMicrophoneDevice.SelectedItem as AudioEndpointChoice;
         if (output == null || input == null)
-            throw new ArgumentException("Choose valid output and microphone preferences under Audio Settings.");
-        if (staged.AudioMode == "SystemFallback" && !output.IsAvailable)
-            throw new ArgumentException("The selected audio output is disconnected. Refresh devices or choose Windows default.");
-        if (ChkMicrophone.IsChecked == true && !input.IsAvailable)
-            throw new ArgumentException("The selected microphone is disconnected. Refresh devices or choose Windows default.");
+            throw new ArgumentException("Choose valid output and microphone preferences under Audio settings.");
+        // Discovery is asynchronous, and remembered USB/headset IDs may be
+        // disconnected. Keeping an unchanged preference must not block Save
+        // for unrelated settings, or silently replace it with Windows default.
+        // A newly selected/enabled source still needs an available device.
+        bool outputChanged = !string.Equals(output.Id, _settings.SystemAudioDeviceId, StringComparison.OrdinalIgnoreCase) ||
+            !string.Equals(_settings.AudioMode, "SystemFallback", StringComparison.OrdinalIgnoreCase);
+        bool microphoneChanged = !string.Equals(input.Id, _settings.MicrophoneDeviceId, StringComparison.OrdinalIgnoreCase) ||
+            !_settings.EnableMicrophone;
+        if (staged.AudioMode == "SystemFallback" && !output.IsAvailable && outputChanged)
+            throw new ArgumentException("Choose an available audio output in Audio settings.");
+        if (ChkMicrophone.IsChecked == true && !input.IsAvailable && microphoneChanged)
+            throw new ArgumentException("Choose an available microphone in Audio settings.");
         staged.SystemAudioDeviceId = output.Id;
         staged.MicrophoneDeviceId = input.Id;
         AudioCapturePolicy.Validate(staged);

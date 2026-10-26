@@ -9,7 +9,7 @@
         KeyDown="Settings_KeyDown">
     <Grid>
         <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="174"/>
+            <ColumnDefinition Width="160"/>
             <ColumnDefinition Width="*"/>
         </Grid.ColumnDefinitions>
         <Grid.RowDefinitions>
@@ -17,57 +17,35 @@
             <RowDefinition Height="60"/>
         </Grid.RowDefinitions>
 
-        <!-- One small, stable category rail; no nested wizard or extra windows. -->
+        <!-- Fixed category rail. Only the selected page scrolls. -->
         <Border Grid.Column="0" Grid.RowSpan="2"
                 Background="{DynamicResource Flick.Brush.Surface}"
                 BorderBrush="{DynamicResource Flick.Brush.Divider}"
-                BorderThickness="0,0,1,0" Padding="16,22">
-            <ScrollViewer x:Name="SettingsNavScroll" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" CanContentScroll="False" Focusable="False">
-            <DockPanel>
-                <StackPanel DockPanel.Dock="Top">
-                    <StackPanel Orientation="Horizontal" Margin="0,0,0,26">
-                        <Image Width="38" Height="38"
-                               Style="{StaticResource Flick.Image.BrandMark}"
-                               Margin="0,0,10,0"/>
-                        <StackPanel VerticalAlignment="Center">
-                            <TextBlock Text="Flick" Style="{StaticResource Flick.Text.Section}"/>
-                            <TextBlock Text="Settings" Style="{StaticResource Flick.Text.Caption}"/>
-                        </StackPanel>
-                    </StackPanel>
-                    <Button x:Name="NavRecording" Content="Recording" Tag="Recording"
-                            Click="SettingsCategory_Click"
-                            Style="{StaticResource Flick.Button.Ghost}"
-                            HorizontalContentAlignment="Left" MinHeight="34" Padding="10,6" Margin="0,0,0,2"/>
-                    <Button x:Name="NavGames" Content="Games" Tag="Games" Click="SettingsCategory_Click"
-                            Style="{StaticResource Flick.Button.Ghost}" HorizontalContentAlignment="Left"
-                            MinHeight="34" Padding="10,6" Margin="0,0,0,2"/>
-                    <Button x:Name="NavAudio" Content="Audio" Tag="Audio"
-                            Click="SettingsCategory_Click"
-                            Style="{StaticResource Flick.Button.Ghost}"
-                            HorizontalContentAlignment="Left" MinHeight="34" Padding="10,6" Margin="0,0,0,2"/>
-                    <Button x:Name="NavShortcuts" Content="Shortcuts" Tag="Shortcuts"
-                            Click="SettingsCategory_Click"
-                            Style="{StaticResource Flick.Button.Ghost}"
-                            HorizontalContentAlignment="Left" MinHeight="34" Padding="10,6" Margin="0,0,0,2"/>
-                    <Button x:Name="NavStorage" Content="Storage" Tag="Storage"
-                            Click="SettingsCategory_Click"
-                            Style="{StaticResource Flick.Button.Ghost}"
-                            HorizontalContentAlignment="Left" MinHeight="34" Padding="10,6" Margin="0,0,0,2"/>
-                    <Button x:Name="NavGeneral" Content="General" Tag="General"
-                            Click="SettingsCategory_Click"
-                            Style="{StaticResource Flick.Button.Ghost}"
-                            HorizontalContentAlignment="Left" MinHeight="34" Padding="10,6" Margin="0,0,0,2"/>
-                    <Button x:Name="NavSharing" Content="Sharing" Tag="Sharing"
-                            Click="SettingsCategory_Click"
-                            Style="{StaticResource Flick.Button.Ghost}"
-                            HorizontalContentAlignment="Left" MinHeight="34" Padding="10,6" Margin="0,0,0,2"/>
-                </StackPanel>
-                <TextBlock DockPanel.Dock="Bottom"
-                           Text="Flick · Settings"
-                           Style="{StaticResource Flick.Text.Muted}"
-                           TextWrapping="Wrap"/>
-            </DockPanel>
-            </ScrollViewer>
+                BorderThickness="0,0,1,0" Padding="12,20">
+            <StackPanel x:Name="SettingsNavigation" AutomationProperties.Name="Settings categories">
+                <TextBlock Text="Settings" Style="{StaticResource Flick.Text.Section}" Margin="10,0,0,20"/>
+                <Button x:Name="NavRecording" Content="Recording" Tag="Recording"
+                        Click="SettingsCategory_Click" Style="{StaticResource Flick.Button.Ghost}"
+                        HorizontalContentAlignment="Left" MinHeight="34" Padding="10,6"/>
+                <Button x:Name="NavGames" Content="Games" Tag="Games"
+                        Click="SettingsCategory_Click" Style="{StaticResource Flick.Button.Ghost}"
+                        HorizontalContentAlignment="Left" MinHeight="34" Padding="10,6"/>
+                <Button x:Name="NavAudio" Content="Audio" Tag="Audio"
+                        Click="SettingsCategory_Click" Style="{StaticResource Flick.Button.Ghost}"
+                        HorizontalContentAlignment="Left" MinHeight="34" Padding="10,6"/>
+                <Button x:Name="NavShortcuts" Content="Shortcuts" Tag="Shortcuts"
+                        Click="SettingsCategory_Click" Style="{StaticResource Flick.Button.Ghost}"
+                        HorizontalContentAlignment="Left" MinHeight="34" Padding="10,6"/>
+                <Button x:Name="NavStorage" Content="Storage" Tag="Storage"
+                        Click="SettingsCategory_Click" Style="{StaticResource Flick.Button.Ghost}"
+                        HorizontalContentAlignment="Left" MinHeight="34" Padding="10,6"/>
+                <Button x:Name="NavGeneral" Content="General" Tag="General"
+                        Click="SettingsCategory_Click" Style="{StaticResource Flick.Button.Ghost}"
+                        HorizontalContentAlignment="Left" MinHeight="34" Padding="10,6"/>
+                <Button x:Name="NavSharing" Content="Sharing" Tag="Sharing"
+                        Click="SettingsCategory_Click" Style="{StaticResource Flick.Button.Ghost}"
+                        HorizontalContentAlignment="Left" MinHeight="34" Padding="10,6"/>
+            </StackPanel>
         </Border>
 
         <ScrollViewer Grid.Column="1" Grid.Row="0"
@@ -75,28 +53,26 @@
                       VerticalScrollBarVisibility="Auto"
                       HorizontalScrollBarVisibility="Disabled"
                       Focusable="False">
-            <Grid Margin="32,28,36,24" MaxWidth="720" HorizontalAlignment="Left">
+            <Grid Margin="24,24,28,24" MaxWidth="720" HorizontalAlignment="Left">
                 <!-- Recording -->
                 <StackPanel x:Name="PanelRecording" Visibility="Visible">
-                    <TextBlock Text="Recording" Style="{StaticResource Flick.Text.PageTitle}"/>
-                    <TextBlock Text="Replay duration and quality, with sensible limits."
-                               Style="{StaticResource Flick.Text.Caption}" Margin="0,5,0,24"/>
-                    <TextBlock Text="Replay Duration" Style="{StaticResource Flick.Text.Control}"
+                    <TextBlock Text="Recording" Style="{StaticResource Flick.Text.PageTitle}" Margin="0,0,0,24"/>
+                    <TextBlock Text="Replay duration" Style="{StaticResource Flick.Text.Control}"
                                Margin="0,0,0,7"/>
                     <StackPanel Orientation="Horizontal" Margin="0,0,0,20">
                         <TextBox x:Name="TxtDuration" Width="74"
                                  Style="{StaticResource Flick.Input.Text}"
                                  TextChanged="CaptureProfile_Changed"
-                                 AutomationProperties.Name="Replay Duration in Seconds"/>
+                                 AutomationProperties.Name="Replay duration in seconds"/>
                         <TextBlock Text="seconds · 15–120" Style="{StaticResource Flick.Text.Caption}"
                                    VerticalAlignment="Center" Margin="10,0,0,0"/>
                     </StackPanel>
-                    <TextBlock Text="Recording Quality" Style="{StaticResource Flick.Text.Control}"
+                    <TextBlock Text="Recording quality" Style="{StaticResource Flick.Text.Control}"
                                Margin="0,0,0,7"/>
                     <ComboBox x:Name="CmbQuality" Width="280" HorizontalAlignment="Left"
                               Style="{StaticResource Flick.Input.Combo}"
                               SelectionChanged="CaptureProfile_Changed"
-                              AutomationProperties.Name="Recording Quality">
+                              AutomationProperties.Name="Recording quality">
                         <ComboBoxItem Content="Light · 720p / 30 FPS" Tag="Light"/>
                         <ComboBoxItem Content="Balanced · 1080p / 30 FPS" Tag="Balanced"/>
                         <ComboBoxItem Content="Smooth · 1080p / 60 FPS" Tag="Smooth"/>
@@ -106,138 +82,131 @@
                                    Style="{StaticResource Flick.Text.Caption}"
                                    TextWrapping="Wrap"/>
                     </Border>
-                    <CheckBox x:Name="ChkSoftwareFallback" Content="Allow CPU compatibility fallback"
+                    <CheckBox x:Name="ChkSoftwareFallback" Content="Allow CPU fallback"
                               Style="{StaticResource Flick.Toggle}" Margin="0,20,0,8"
+                              ToolTip="Uses CPU encoding only when hardware encoding is unavailable. Limited to 720p / 30 FPS; may reduce game performance. Turn this off to require hardware encoding."
                               AutomationProperties.Name="Allow CPU compatibility fallback"/>
-                    <TextBlock Text="Uses CPU encoding only if hardware encoding is unavailable. CPU mode is limited to 720p / 30 FPS and may reduce game performance. Turn this off to require hardware encoding."
-                               Style="{StaticResource Flick.Text.Muted}" TextWrapping="Wrap"/>
-                    <TextBlock Text="Manual replay starts Off. Optional approved-game automation is configured separately in Games. Recording changes take effect on the next replay start."
-                               Style="{StaticResource Flick.Text.Muted}"
-                               TextWrapping="Wrap" Margin="0,18,0,0"/>
+                    <TextBlock Text="Limited to 720p / 30 FPS."
+                               Style="{StaticResource Flick.Text.Muted}"/>
+                    <TextBlock Text="Recording changes apply when replay restarts."
+                               Style="{StaticResource Flick.Text.Muted}" TextWrapping="Wrap" Margin="0,18,0,0"/>
+
                 </StackPanel>
 
                 <!-- Approved game automation: all edits stay staged until Save. -->
                 <StackPanel x:Name="PanelGames" Visibility="Collapsed">
-                    <TextBlock Text="Games" Style="{StaticResource Flick.Text.PageTitle}"/>
-                    <TextBlock Text="Automatically record only the games you approve. No desktop fallback."
-                               Style="{StaticResource Flick.Text.Caption}" TextWrapping="Wrap" Margin="0,5,0,18"/>
-                    <CheckBox x:Name="ChkGameDetectionEnabled" Content="Enable Automatic Game Replay"
-                              Style="{StaticResource Flick.Toggle}" AutomationProperties.Name="Enable Automatic Game Replay"/>
-                    <TextBlock Text="Off by default. Enabled detection checks every three seconds. Stop Replay pauses that game session, including after Flick restarts; restart the game or start replay manually to record again."
+                    <TextBlock Text="Games" Style="{StaticResource Flick.Text.PageTitle}" Margin="0,0,0,24"/>
+                    <CheckBox x:Name="ChkGameDetectionEnabled" Content="Start replay for approved games"
+                              Style="{StaticResource Flick.Toggle}" AutomationProperties.Name="Enable automatic game replay"
+                              ToolTip="Only approved games can start replay automatically; desktop capture is never a fallback. Stop replay pauses the game session, including after restarting Flick."/>
+                    <TextBlock Text="Only approved games. Off by default."
                                Style="{StaticResource Flick.Text.Muted}" TextWrapping="Wrap" Margin="0,8,0,16"/>
                     <TextBlock Text="{Binding GameDetectionStatus, StringFormat='Current status: {0}'}" Style="{StaticResource Flick.Text.Caption}" TextWrapping="Wrap" Margin="0,0,0,16"/>
-                    <Button x:Name="BtnRefreshRunningGames" Content="Find Running Windows" HorizontalAlignment="Left"
+                    <Button x:Name="BtnRefreshRunningGames" Content="Find running games" HorizontalAlignment="Left"
                             Click="RefreshRunningGames_Click" Style="{StaticResource Flick.Button.Secondary}"/>
                     <ComboBox x:Name="CmbRunningGames" Style="{StaticResource Flick.Input.Combo}"
                               AutomationProperties.Name="Running window to approve" Margin="0,10,0,8"/>
-                    <Button Content="Approve Selected Game" HorizontalAlignment="Left" Click="ApproveRunningGame_Click"
+                    <Button Content="Approve selected game" HorizontalAlignment="Left" Click="ApproveRunningGame_Click"
                             Style="{StaticResource Flick.Button.Secondary}" Margin="0,0,0,16"/>
-                    <ListBox x:Name="LstApprovedGames" Height="112" SelectionChanged="ApprovedGame_SelectionChanged"
-                             Background="{DynamicResource Flick.Brush.Surface}" Foreground="{DynamicResource Flick.Brush.TextPrimary}"
-                             BorderBrush="{DynamicResource Flick.Brush.Divider}" AutomationProperties.Name="Approved Games"/>
+                    <TextBlock Text="Approved game" Style="{StaticResource Flick.Text.Control}" Margin="0,0,0,5"/>
+                    <ComboBox x:Name="LstApprovedGames" SelectionChanged="ApprovedGame_SelectionChanged"
+                              DisplayMemberPath="Name" Style="{StaticResource Flick.Input.Combo}"
+                              ToolTip="{Binding SelectedItem.ExecutablePath, RelativeSource={RelativeSource Self}}"
+                              AutomationProperties.Name="Approved games"/>
                     <StackPanel x:Name="GameProfileEditor" Visibility="Collapsed" Margin="0,12,0,0">
-                        <TextBlock Text="Game Name" Style="{StaticResource Flick.Text.Control}" Margin="0,0,0,5"/>
-                        <TextBox x:Name="TxtGameName" MaxLength="120" Style="{StaticResource Flick.Input.Text}" AutomationProperties.Name="Approved Game Name"/>
-                        <TextBlock x:Name="TxtGameExecutable" Style="{StaticResource Flick.Text.Muted}" TextWrapping="Wrap" Margin="0,6,0,12"/>
-                        <CheckBox x:Name="ChkGameProfileEnabled" Content="Use This Game Profile" Style="{StaticResource Flick.Toggle}" Margin="0,0,0,12"/>
-                        <TextBlock Text="Replay Quality" Style="{StaticResource Flick.Text.Control}" Margin="0,0,0,5"/>
-                        <ComboBox x:Name="CmbGameQuality" Style="{StaticResource Flick.Input.Combo}" HorizontalAlignment="Left" Width="240" AutomationProperties.Name="Game Replay Quality">
+                        <TextBlock Text="Game name" Style="{StaticResource Flick.Text.Control}" Margin="0,0,0,5"/>
+                        <TextBox x:Name="TxtGameName" MaxLength="120" Style="{StaticResource Flick.Input.Text}" AutomationProperties.Name="Approved game name"/>
+                        <TextBlock x:Name="TxtGameExecutable" Style="{StaticResource Flick.Text.Muted}" TextTrimming="CharacterEllipsis"
+                                   ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}" Margin="0,6,0,12"/>
+                        <CheckBox x:Name="ChkGameProfileEnabled" Content="Use this game profile" Style="{StaticResource Flick.Toggle}" Margin="0,0,0,12"/>
+                        <TextBlock Text="Replay quality" Style="{StaticResource Flick.Text.Control}" Margin="0,0,0,5"/>
+                        <ComboBox x:Name="CmbGameQuality" Style="{StaticResource Flick.Input.Combo}" HorizontalAlignment="Left" Width="240" AutomationProperties.Name="Game replay quality">
                             <ComboBoxItem Content="Light · 720p / 30 FPS" Tag="Light"/>
                             <ComboBoxItem Content="Balanced · 1080p / 30 FPS" Tag="Balanced"/>
                             <ComboBoxItem Content="Smooth · 1080p / 60 FPS" Tag="Smooth"/>
                         </ComboBox>
-                        <TextBlock Text="Replay Duration (15–120 seconds)" Style="{StaticResource Flick.Text.Control}" Margin="0,12,0,5"/>
-                        <TextBox x:Name="TxtGameDuration" Width="80" HorizontalAlignment="Left" Style="{StaticResource Flick.Input.Text}" AutomationProperties.Name="Game Replay Duration in Seconds"/>
-                        <CheckBox x:Name="ChkGameMicrophone" Content="Allow Microphone for This Game" Style="{StaticResource Flick.Toggle}" Margin="0,14,0,5"/>
-                        <TextBlock Text="Microphone stays off unless Record Microphone is also enabled in Audio. System audio follows your configured audio preferences. Automatic replay never changes your manual source or profile."
-                                   Style="{StaticResource Flick.Text.Muted}" TextWrapping="Wrap"/>
+                        <TextBlock Text="Replay duration (15–120 seconds)" Style="{StaticResource Flick.Text.Control}" Margin="0,12,0,5"/>
+                        <TextBox x:Name="TxtGameDuration" Width="80" HorizontalAlignment="Left" Style="{StaticResource Flick.Input.Text}" AutomationProperties.Name="Game replay duration in seconds"/>
+                        <CheckBox x:Name="ChkGameMicrophone" Content="Allow microphone for this game" Style="{StaticResource Flick.Toggle}" Margin="0,14,0,5"
+                                  ToolTip="Also enable Record microphone in Audio. Other audio follows your preferences; automatic replay does not change your manual capture source or profile."/>
                         <WrapPanel Margin="0,12,0,0">
-                            <Button Content="Apply Profile Edits" Click="ApplyGameProfile_Click" Style="{StaticResource Flick.Button.Secondary}" Margin="0,0,10,8"/>
-                            <Button Content="Remove Game" Click="RemoveGameProfile_Click" Style="{StaticResource Flick.Button.Ghost}" Margin="0,0,0,8"/>
+                            <Button Content="Apply profile edits" Click="ApplyGameProfile_Click" Style="{StaticResource Flick.Button.Secondary}" Margin="0,0,10,8"/>
+                            <Button Content="Remove game" Click="RemoveGameProfile_Click" Style="{StaticResource Flick.Button.Ghost}" Margin="0,0,0,8"/>
                         </WrapPanel>
                     </StackPanel>
-                    <TextBlock x:Name="TxtGameMessage" Text="Only local executable paths observed in eligible running windows can be approved. Elevated, hidden and ambiguous windows are not recorded automatically."
+                    <TextBlock x:Name="TxtGameMessage" Text=""
                                Style="{StaticResource Flick.Text.Caption}" TextWrapping="Wrap" Margin="0,12,0,0"/>
                 </StackPanel>
 
                 <!-- Audio -->
                 <StackPanel x:Name="PanelAudio" Visibility="Collapsed" Loaded="AudioPanel_Loaded">
-                    <TextBlock Text="Audio" Style="{StaticResource Flick.Text.PageTitle}"/>
-                    <TextBlock Text="Capture only what you choose."
-                               Style="{StaticResource Flick.Text.Caption}" Margin="0,5,0,24"/>
+                    <TextBlock Text="Audio" Style="{StaticResource Flick.Text.PageTitle}" Margin="0,0,0,24"/>
                     <ComboBox x:Name="CmbAudioMode" SelectionChanged="AudioMode_SelectionChanged" Style="{StaticResource Flick.Input.Combo}" SelectedIndex="0" Margin="0,0,0,16" AutomationProperties.Name="Audio capture mode">
-                        <ComboBoxItem Content="System Audio · whole output device"/>
-                        <ComboBoxItem Content="Separate App Audio · selected process trees"/>
+                        <ComboBoxItem Content="System audio" ToolTip="Records all sound from the selected playback device."/>
+                        <ComboBoxItem Content="Separate app audio" ToolTip="Records only the selected process trees. Requires Windows build 20348 or newer; unavailable app audio stops replay instead of switching sources."/>
                     </ComboBox>
                     <StackPanel x:Name="AppAudioSourcesPanel" Visibility="Collapsed">
                     <TextBlock Text="Game app" Style="{StaticResource Flick.Text.Control}"/>
                     <ComboBox x:Name="CmbGameAudio" DisplayMemberPath="Label" Style="{StaticResource Flick.Input.Combo}" Margin="0,5,0,12" AutomationProperties.Name="Game audio app"/>
                     <TextBlock Text="Voice app" Style="{StaticResource Flick.Text.Control}"/>
                     <ComboBox x:Name="CmbVoiceAudio" DisplayMemberPath="Label" Style="{StaticResource Flick.Input.Combo}" Margin="0,5,0,12" AutomationProperties.Name="Voice audio app"/>
-                    <Button x:Name="BtnRefreshAudioSources" Content="Refresh Running Apps" Click="RefreshAudioSources_Click" Style="{StaticResource Flick.Button.Secondary}" HorizontalAlignment="Left" Margin="0,0,0,8"/>
-                    <TextBlock x:Name="TxtAudioSources" Text="Separate App Audio requires Windows build 20348 or newer. Select current apps after a restart; unavailable app audio stops replay. System Audio is an explicit whole-device choice, never an automatic fallback."
+                    <Button x:Name="BtnRefreshAudioSources" Content="Refresh apps" Click="RefreshAudioSources_Click" Style="{StaticResource Flick.Button.Secondary}" HorizontalAlignment="Left" Margin="0,0,0,8"/>
+                    <TextBlock x:Name="TxtAudioSources" Text="Select running apps. Refresh after an app restarts."
                                Style="{StaticResource Flick.Text.Caption}" TextWrapping="Wrap" Margin="0,0,0,20"/>
                     </StackPanel>
-                    <TextBlock Text="System Audio records the selected playback device. Separate App Audio records only the chosen process trees; neither choice records your microphone unless enabled below." Style="{StaticResource Flick.Text.Caption}" TextWrapping="Wrap" Margin="0,0,0,16"/>
                     <StackPanel x:Name="SystemAudioDevicePanel" Margin="0,0,0,15">
-                        <TextBlock Text="Audio output · speakers or headphones" Style="{StaticResource Flick.Text.Control}" Margin="0,0,0,5"/>
+                        <TextBlock Text="Audio output" Style="{StaticResource Flick.Text.Control}" Margin="0,0,0,5"/>
                         <ComboBox x:Name="CmbSystemAudioDevice" DisplayMemberPath="Label" Style="{StaticResource Flick.Input.Combo}"
-                                  AutomationProperties.Name="Audio output capture device"/>
-                        <TextBlock Text="Records sound playing through this device. Choosing it does not switch your Windows playback output. Used only in System Audio mode."
-                                   Style="{StaticResource Flick.Text.Caption}" TextWrapping="Wrap" Margin="0,5,0,0"/>
+                                  AutomationProperties.Name="Audio output capture device"
+                                  ToolTip="Records this playback device in System audio mode. Choosing it does not change your Windows playback output."/>
                     </StackPanel>
                     <CheckBox x:Name="ChkMicrophone"
                               Style="{StaticResource Flick.Toggle}"
-                              Content="Record Microphone"
+                              Content="Record microphone"
+                              ToolTip="Off by default. Selecting a device does not enable recording; turn this on to include the microphone."
                               Checked="Microphone_Changed" Unchecked="Microphone_Changed"/>
-                    <TextBlock Text="Microphone input device" Style="{StaticResource Flick.Text.Control}" Margin="0,10,0,5"/>
+                    <TextBlock Text="Microphone input" Style="{StaticResource Flick.Text.Control}" Margin="0,10,0,5"/>
                     <ComboBox x:Name="CmbMicrophoneDevice" DisplayMemberPath="Label" Style="{StaticResource Flick.Input.Combo}"
                               IsEnabled="{Binding IsChecked, ElementName=ChkMicrophone}"
                               AutomationProperties.Name="Microphone input capture device" Margin="0,0,0,7"/>
-                    <TextBlock Text="Microphone capture is OFF by default. Choosing a device will not enable it; check Record Microphone to opt in."
-                               Style="{StaticResource Flick.Text.Caption}" TextWrapping="Wrap" Margin="0,0,0,13"/>
-                    <Button x:Name="BtnRefreshAudioDevices" Content="Refresh Audio Devices" Click="RefreshAudioDevices_Click"
+                    <Button x:Name="BtnRefreshAudioDevices" Content="Refresh devices" Click="RefreshAudioDevices_Click"
                             Style="{StaticResource Flick.Button.Secondary}" HorizontalAlignment="Left" Margin="0,0,0,8"/>
-                    <TextBlock x:Name="TxtAudioDeviceStatus" Text="Using Windows default devices. Refresh to find connected headsets and microphones."
+                    <TextBlock x:Name="TxtAudioDeviceStatus" Text="Using Windows default devices."
                                Style="{StaticResource Flick.Text.Caption}" TextWrapping="Wrap" Margin="0,0,0,13"/>
-                    <TextBlock Text="Microphone is independent and off by default. Changing audio routing stops active replay; manually restart after saving. App tracks include child processes and cannot separate voices within one app."
-                               Style="{StaticResource Flick.Text.Muted}"
-                               TextWrapping="Wrap"/>
+                    <TextBlock Text="Changing audio stops replay. Restart it after saving."
+                               Style="{StaticResource Flick.Text.Muted}" TextWrapping="Wrap"
+                               ToolTip="App audio includes child processes and cannot separate voices within one app. Microphone recording is independent and off by default."/>
                 </StackPanel>
 
                 <!-- Shortcuts -->
                 <StackPanel x:Name="PanelShortcuts" Visibility="Collapsed">
-                    <TextBlock Text="Shortcuts" Style="{StaticResource Flick.Text.PageTitle}"/>
-                    <TextBlock Text="Save moments without leaving your game."
-                               Style="{StaticResource Flick.Text.Caption}" Margin="0,5,0,24"/>
-                    <TextBlock Text="Start / Stop Replay" Style="{StaticResource Flick.Text.Control}" Margin="0,0,0,7"/>
+                    <TextBlock Text="Shortcuts" Style="{StaticResource Flick.Text.PageTitle}" Margin="0,0,0,24"/>
+                    <TextBlock Text="Start / stop replay" Style="{StaticResource Flick.Text.Control}" Margin="0,0,0,7"/>
                     <DockPanel Margin="0,0,0,20">
                         <Button DockPanel.Dock="Right" Content="Change" Tag="Toggle" Click="ChangeShortcut_Click" Style="{StaticResource Flick.Button.Secondary}" Margin="12,0,0,0"/>
-                        <TextBox x:Name="TxtToggleHotkey" IsReadOnly="True" Foreground="{DynamicResource Flick.Brush.TextMuted}" Style="{StaticResource Flick.Input.Text}" PreviewKeyDown="Shortcut_PreviewKeyDown" AutomationProperties.Name="Start or Stop Replay Shortcut"/>
+                        <TextBox x:Name="TxtToggleHotkey" IsReadOnly="True" Foreground="{DynamicResource Flick.Brush.TextMuted}" Style="{StaticResource Flick.Input.Text}" PreviewKeyDown="Shortcut_PreviewKeyDown" AutomationProperties.Name="Start or stop replay shortcut"/>
                     </DockPanel>
-                    <TextBlock x:Name="SaveShortcutLabel" Text="Save Last 30s" Style="{StaticResource Flick.Text.Control}" Margin="0,0,0,7"/>
+                    <TextBlock x:Name="SaveShortcutLabel" Text="Save last 30s" Style="{StaticResource Flick.Text.Control}" Margin="0,0,0,7"/>
                     <DockPanel Margin="0,0,0,20">
                         <Button DockPanel.Dock="Right" Content="Change" Tag="Save" Click="ChangeShortcut_Click" Style="{StaticResource Flick.Button.Secondary}" Margin="12,0,0,0"/>
-                        <TextBox x:Name="TxtSaveHotkey" IsReadOnly="True" Foreground="{DynamicResource Flick.Brush.TextMuted}" Style="{StaticResource Flick.Input.Text}" PreviewKeyDown="Shortcut_PreviewKeyDown" AutomationProperties.Name="Save Last Replay Shortcut"/>
+                        <TextBox x:Name="TxtSaveHotkey" IsReadOnly="True" Foreground="{DynamicResource Flick.Brush.TextMuted}" Style="{StaticResource Flick.Input.Text}" PreviewKeyDown="Shortcut_PreviewKeyDown" AutomationProperties.Name="Save last replay shortcut"/>
                     </DockPanel>
                     <StackPanel x:Name="ShortcutEditor" Visibility="Collapsed">
                         <TextBlock x:Name="ShortcutHint" TextWrapping="Wrap" Style="{StaticResource Flick.Text.Caption}" Margin="0,0,0,12"/>
                         <WrapPanel>
-                            <Button Content="Record Shortcut" Click="RecordShortcut_Click" Style="{StaticResource Flick.Button.Secondary}" Margin="0,0,12,8"/>
-                            <Button x:Name="SaveShortcutButton" Content="Save Shortcut" Click="SaveShortcut_Click" IsEnabled="False" Style="{StaticResource Flick.Button.Primary}" Margin="0,0,12,8"/>
+                            <Button Content="Record shortcut" Click="RecordShortcut_Click" Style="{StaticResource Flick.Button.Secondary}" Margin="0,0,12,8"/>
+                            <Button x:Name="SaveShortcutButton" Content="Use shortcut" Click="SaveShortcut_Click" IsEnabled="False" Style="{StaticResource Flick.Button.Primary}" Margin="0,0,12,8"/>
                             <Button Content="Cancel" Click="CancelShortcut_Click" Style="{StaticResource Flick.Button.Ghost}" Margin="0,0,0,8"/>
                         </WrapPanel>
                     </StackPanel>
-                    <TextBlock Text="Choose Change, then Record Shortcut. Save Shortcut stages the change; Save below applies your preferences. Cancel keeps your current shortcuts."
+                    <TextBlock Text="Choose Change to record a shortcut. Save applies your changes."
                                Style="{StaticResource Flick.Text.Muted}" TextWrapping="Wrap" Margin="0,20,0,0"/>
                 </StackPanel>
 
                 <!-- Storage -->
                 <StackPanel x:Name="PanelStorage" Visibility="Collapsed">
-                    <TextBlock Text="Storage" Style="{StaticResource Flick.Text.PageTitle}"/>
-                    <TextBlock Text="Keep clips locally, wherever you choose."
-                               Style="{StaticResource Flick.Text.Caption}" Margin="0,5,0,24"/>
-                    <TextBlock Text="Saved Clips Folder" Style="{StaticResource Flick.Text.Control}"
+                    <TextBlock Text="Storage" Style="{StaticResource Flick.Text.PageTitle}" Margin="0,0,0,24"/>
+                    <TextBlock Text="Saved clips folder" Style="{StaticResource Flick.Text.Control}"
                                Margin="0,0,0,7"/>
                     <Grid Margin="0,0,0,20">
                         <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
@@ -248,7 +217,7 @@
                                 Click="BrowseOriginals_Click"
                                 Style="{StaticResource Flick.Button.Secondary}"/>
                     </Grid>
-                    <TextBlock Text="Export Folder" Style="{StaticResource Flick.Text.Control}"
+                    <TextBlock Text="Export folder" Style="{StaticResource Flick.Text.Control}"
                                Margin="0,0,0,7"/>
                     <Grid Margin="0,0,0,20">
                         <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
@@ -262,124 +231,134 @@
                     <Grid>
                         <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                         <StackPanel Grid.Column="0" Margin="0,0,12,0">
-                            <TextBlock Text="Connected Clip Folders"
+                            <TextBlock Text="Connected clip folders"
                                        Style="{StaticResource Flick.Text.Section}"/>
-                            <TextBlock Text="Link existing recordings without copying, moving, or uploading them."
+                            <TextBlock Text="Use existing recordings in place."
                                        Style="{StaticResource Flick.Text.Caption}" TextWrapping="Wrap"
                                        Margin="0,5,0,0"/>
                         </StackPanel>
-                        <Button Grid.Column="1" Content="Manage Folders"
+                        <Button Grid.Column="1" Content="Manage folders"
                                 Click="ManageFolders_Click"
                                 Style="{StaticResource Flick.Button.Secondary}"
                                 VerticalAlignment="Center"/>
                     </Grid>
-                    <TextBlock Text="Changing a location only affects future clips. Flick won't silently move your originals."
+                    <TextBlock Text="New locations apply to future clips. Originals stay in place."
                                Style="{StaticResource Flick.Text.Muted}"
                                TextWrapping="Wrap" Margin="0,20,0,0"/>
                 </StackPanel>
 
                 <!-- General -->
                 <StackPanel x:Name="PanelGeneral" Visibility="Collapsed">
-                    <TextBlock Text="General" Style="{StaticResource Flick.Text.PageTitle}"/>
-                    <TextBlock Text="A quiet, lightweight presence while gaming."
-                               Style="{StaticResource Flick.Text.Caption}" Margin="0,5,0,24"/>
-                    <TextBlock Text="Startup &amp; Tray" Style="{StaticResource Flick.Text.Section}"
+                    <TextBlock Text="General" Style="{StaticResource Flick.Text.PageTitle}" Margin="0,0,0,24"/>
+                    <TextBlock Text="Startup" Style="{StaticResource Flick.Text.Section}"
                                Margin="0,0,0,12"/>
                     <CheckBox x:Name="ChkStartWithWindows"
                               Style="{StaticResource Flick.Toggle}"
-                              Content="Launch Flick With Windows"
+                              Content="Launch with Windows"
                               Margin="0,0,0,14"/>
                     <CheckBox x:Name="ChkStartMinimized"
                               Style="{StaticResource Flick.Toggle}"
-                              Content="Minimize to Tray (also start hidden)"
+                              Content="Minimize to tray and start hidden"
                               ToolTip="Minimizing hides Flick in the system tray; the next app launch also starts hidden. This does not start replay."
                               Margin="0,0,0,22"/>
-                    <Separator Background="{DynamicResource Flick.Brush.Divider}" Margin="0,0,0,21"/>
-                    <TextBlock Text="Display" Style="{StaticResource Flick.Text.Section}" Margin="0,0,0,12"/>
+                    <TextBlock Text="Display" Style="{StaticResource Flick.Text.Section}" Margin="0,8,0,12"/>
                     <CheckBox x:Name="ChkShowResourceUsage" Content="Show RAM and CPU"
                               AutomationProperties.Name="Show RAM and CPU"
-                              Style="{StaticResource Flick.Toggle}" Margin="0,0,0,8"/>
-                    <TextBlock Text="Live readings in the footer. Turning this off also stops sampling."
-                               Style="{StaticResource Flick.Text.Muted}" TextWrapping="Wrap" Margin="0,0,0,21"/>
-                    <Separator Background="{DynamicResource Flick.Brush.Divider}" Margin="0,0,0,21"/>
-                    <TextBlock Text="Clip Notifications"
+                              ToolTip="Show live usage in the footer. Turning this off stops optional sampling."
+                              Style="{StaticResource Flick.Toggle}" Margin="0,0,0,20"/>
+                    <TextBlock Text="Clip notifications"
                                Style="{StaticResource Flick.Text.Section}" Margin="0,0,0,12"/>
                     <CheckBox x:Name="ChkClipSavedOverlay"
                               Style="{StaticResource Flick.Toggle}"
-                              Content="Show Clip Saved Overlay"
+                              Content="Show Clip Saved"
                               Margin="0,0,0,14"/>
                     <CheckBox x:Name="ChkClipSavedSound"
                               Style="{StaticResource Flick.Toggle}"
-                              Content="Play Confirmation Sound"
+                              Content="Play a sound"
                               Margin="0,0,0,12"/>
-                    <ComboBox x:Name="CmbNotificationTone" Style="{StaticResource Flick.Input.Combo}" Width="280" HorizontalAlignment="Left" SelectedIndex="0" Margin="0,0,0,10" AutomationProperties.Name="Confirmation Sound">
-                        <ComboBoxItem Content="Minimal Chime"/><ComboBoxItem Content="Quiet Tone"/><ComboBoxItem Content="Local WAV File"/>
+                    <StackPanel>
+                        <StackPanel.Style>
+                            <Style TargetType="StackPanel">
+                                <Setter Property="Visibility" Value="Collapsed"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsChecked, ElementName=ChkClipSavedSound}" Value="True">
+                                        <Setter Property="Visibility" Value="Visible"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </StackPanel.Style>
+                    <ComboBox x:Name="CmbNotificationTone" Style="{StaticResource Flick.Input.Combo}" Width="280" HorizontalAlignment="Left" SelectedIndex="0" Margin="0,0,0,10" AutomationProperties.Name="Confirmation sound">
+                        <ComboBoxItem Content="Minimal chime"/><ComboBoxItem Content="Quiet tone"/><ComboBoxItem Content="Local WAV file"/>
                     </ComboBox>
+                        <StackPanel>
+                            <StackPanel.Style>
+                                <Style TargetType="StackPanel">
+                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding SelectedIndex, ElementName=CmbNotificationTone}" Value="2">
+                                            <Setter Property="Visibility" Value="Visible"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </StackPanel.Style>
                     <TextBlock x:Name="CustomSoundName" Text="No custom sound selected" TextTrimming="CharacterEllipsis" Style="{StaticResource Flick.Text.Muted}" Margin="0,0,0,8"/>
                     <WrapPanel Margin="0,0,0,12">
                         <Button Content="Choose WAV…" Click="ChooseSound_Click" Style="{StaticResource Flick.Button.Secondary}" Margin="0,0,12,0"/>
-                        <Button Content="Reset Sound" Click="ResetSound_Click" Style="{StaticResource Flick.Button.Ghost}"/>
+                        <Button Content="Reset sound" Click="ResetSound_Click" Style="{StaticResource Flick.Button.Ghost}"/>
                     </WrapPanel>
-                    <Button Content="Preview Notification"
+                        </StackPanel>
+                    </StackPanel>
+                    <Button Content="Preview notification"
                             Style="{StaticResource Flick.Button.Secondary}"
                             HorizontalAlignment="Left"
                             Click="PreviewNotification_Click"/>
-                    <TextBlock Text="The full-logo notification lasts about two seconds. Both options are independently toggleable and enabled by default. No permanent overlay runs in the background."
-                               Style="{StaticResource Flick.Text.Muted}"
-                               TextWrapping="Wrap" Margin="0,19,0,0"/>
-                    <Separator Background="{DynamicResource Flick.Brush.Divider}" Margin="0,23,0,21"/>
-                    <TextBlock Text="Software Updates" Style="{StaticResource Flick.Text.Section}" Margin="0,0,0,9"/>
+                    <TextBlock Text="Software updates" Style="{StaticResource Flick.Text.Section}" Margin="0,28,0,9"/>
                     <TextBlock x:Name="TxtCurrentVersion" Style="{StaticResource Flick.Text.Caption}" Margin="0,0,0,10"/>
                     <CheckBox x:Name="ChkPreviewUpdates" Content="Include preview releases"
                               Style="{StaticResource Flick.Toggle}" Margin="0,0,0,12"
                               Checked="PreviewUpdates_Changed" Unchecked="PreviewUpdates_Changed"/>
-                    <TextBlock x:Name="TxtUpdateStatus" Text="Check when you're ready. Flick never downloads or installs an update in the background."
+                    <TextBlock x:Name="TxtUpdateStatus" Text="Updates download only when you choose."
                                Style="{StaticResource Flick.Text.Muted}" TextWrapping="Wrap" Margin="0,0,0,12"
                                AutomationProperties.LiveSetting="Polite"/>
                     <ProgressBar x:Name="UpdateProgress" Minimum="0" Maximum="100" Height="5" Margin="0,0,0,12"
                                  Visibility="Collapsed" Foreground="{DynamicResource Flick.Brush.Accent}"
                                  AutomationProperties.Name="Update download progress"/>
                     <WrapPanel>
-                        <Button x:Name="BtnCheckUpdates" Content="Check for Updates" Click="CheckUpdates_Click"
+                        <Button x:Name="BtnCheckUpdates" Content="Check for updates" Click="CheckUpdates_Click"
                                 Style="{StaticResource Flick.Button.Secondary}" Margin="0,0,12,8"/>
-                        <Button x:Name="BtnDownloadUpdate" Content="Download Update" Click="DownloadUpdate_Click" Visibility="Collapsed"
+                        <Button x:Name="BtnDownloadUpdate" Content="Download update" Click="DownloadUpdate_Click" Visibility="Collapsed"
                                 Style="{StaticResource Flick.Button.Primary}" Margin="0,0,12,8"/>
-                        <Button x:Name="BtnInstallUpdate" Content="Install and Restart" Click="InstallUpdate_Click" Visibility="Collapsed"
+                        <Button x:Name="BtnInstallUpdate" Content="Install and restart" Click="InstallUpdate_Click" Visibility="Collapsed"
                                 Style="{StaticResource Flick.Button.Primary}" Margin="0,0,12,8"/>
                         <Button x:Name="BtnCancelUpdate" Content="Cancel" Click="CancelUpdate_Click" Visibility="Collapsed"
                                 Style="{StaticResource Flick.Button.Ghost}" Margin="0,0,12,8"/>
-                        <Button Content="Release Notes" Click="UpdateReleaseNotes_Click"
+                        <Button Content="Release notes" Click="UpdateReleaseNotes_Click"
                                 Style="{StaticResource Flick.Button.Ghost}" Margin="0,0,0,8"/>
                     </WrapPanel>
                     <TextBlock x:Name="TxtUpdateMode" Style="{StaticResource Flick.Text.Muted}" TextWrapping="Wrap" Margin="0,3,0,0"/>
-                    <Separator Background="{DynamicResource Flick.Brush.Divider}" Margin="0,23,0,21"/>
-                    <TextBlock Text="App Management" Style="{StaticResource Flick.Text.Section}"
-                               Margin="0,0,0,11"/>
-                    <TextBlock Text="Use Windows Uninstall to remove the program. You can separately choose whether to remove Flick settings and cache. Original videos and exports are always kept."
+                    <TextBlock Text="App management" Style="{StaticResource Flick.Text.Section}"
+                               Margin="0,28,0,11"/>
+                    <TextBlock Text="Uninstall keeps your videos and exports."
                                Style="{StaticResource Flick.Text.Muted}"
                                TextWrapping="Wrap" Margin="0,0,0,12"/>
                     <Button x:Name="BtnUninstallFlick" Content="Uninstall Flick…"
-                            Click="UninstallFlick_Click"
+                            Click="UninstallFlick_Click" ToolTip="Portable copy: quit Flick, then delete the app folder. Your videos and preferences live separately."
                             Style="{StaticResource Flick.Button.Secondary}"
                             HorizontalAlignment="Left" MinWidth="150"/>
-                    <TextBlock Text="Portable ZIP? Quit Flick and delete its extracted application folder instead."
-                               Style="{StaticResource Flick.Text.Muted}"
-                               TextWrapping="Wrap" Margin="0,11,0,0"/>
                 </StackPanel>
 
                 <!-- Sharing -->
                 <StackPanel x:Name="PanelSharing" Visibility="Collapsed">
-                    <TextBlock Text="Sharing" Style="{StaticResource Flick.Text.PageTitle}"/>
-                    <TextBlock Text="Export a real file you can drag into Discord."
-                               Style="{StaticResource Flick.Text.Caption}" Margin="0,5,0,24"/>
-                    <TextBlock Text="Default Export Limit"
+                    <TextBlock Text="Sharing" Style="{StaticResource Flick.Text.PageTitle}" Margin="0,0,0,24"/>
+                    <TextBlock Text="Default export limit"
                                Style="{StaticResource Flick.Text.Control}" Margin="0,0,0,7"/>
                     <StackPanel Orientation="Horizontal">
                         <ComboBox x:Name="CmbShareCap" Width="180"
                                   Style="{StaticResource Flick.Input.Combo}"
-                                  SelectionChanged="ShareCap_SelectionChanged">
+                                  SelectionChanged="ShareCap_SelectionChanged"
+                                  ToolTip="20 MB is the default. Limits use decimal bytes; your Discord channel or account may allow less.">
                             <ComboBoxItem Content="10 MB" Tag="10"/>
-                            <ComboBoxItem Content="20 MB · Recommended" Tag="20"/>
+                            <ComboBoxItem Content="20 MB · recommended" Tag="20"/>
                             <ComboBoxItem Content="50 MB" Tag="50"/>
                             <ComboBoxItem Content="100 MB" Tag="100"/>
                             <ComboBoxItem Content="Custom" Tag="Custom"/>
@@ -393,22 +372,18 @@
                                        Margin="7,0,0,0" VerticalAlignment="Center"/>
                         </StackPanel>
                     </StackPanel>
-                    <TextBlock Text="20 MB is the default. The exact file-size cap is enforced in decimal bytes; a Discord channel or account may have a lower limit."
+                    <TextBlock Text="Choose a limit your destination supports."
                                Style="{StaticResource Flick.Text.Muted}"
                                TextWrapping="Wrap" Margin="0,10,0,22"/>
-                    <Separator Background="{DynamicResource Flick.Brush.Divider}" Margin="0,0,0,15"/>
-                    <Expander x:Name="WebhookExpander" Header="Advanced · Discord Webhook"
+                    <Expander x:Name="WebhookExpander" Header="Discord posting"
                               Style="{StaticResource Flick.Expander.Disclosure}"
                               Foreground="{DynamicResource Flick.Brush.TextPrimary}"
                               Background="Transparent" IsExpanded="False">
                         <StackPanel Margin="10,12,4,4">
-                            <TextBlock Text="Optional Direct Posting"
-                                       Style="{StaticResource Flick.Text.Section}"
-                                       Margin="0,0,0,10"/>
                             <CheckBox x:Name="ChkEnableWebhook"
                                       Style="{StaticResource Flick.Toggle}"
-                                      Content="Enable Manual Webhook Posting" Margin="0,0,0,14"/>
-                            <TextBlock Text="Channel Label"
+                                      Content="Enable direct posting" Margin="0,0,0,14"/>
+                            <TextBlock Text="Channel label"
                                        Style="{StaticResource Flick.Text.Control}"
                                        Margin="0,0,0,6"/>
                             <TextBox x:Name="TxtWebhookChannel"
@@ -422,8 +397,8 @@
                                          Foreground="{DynamicResource Flick.Brush.TextPrimary}"
                                          BorderBrush="{DynamicResource Flick.Brush.Border}"
                                          BorderThickness="1" Padding="10,7"
-                                         FontSize="13" MinHeight="36"/>
-                            <TextBlock Text="Stored using Windows DPAPI. No upload happens without pressing Send to Channel and confirming each time."
+                                         FontSize="13" MinHeight="36" ToolTip="Stored securely for this Windows user with DPAPI. Uploads require Send to channel and confirmation each time."/>
+                            <TextBlock Text="Each upload asks for confirmation."
                                        Style="{StaticResource Flick.Text.Muted}"
                                        TextWrapping="Wrap" Margin="0,12,0,0"/>
                         </StackPanel>
@@ -434,7 +409,7 @@
 
         <Border Grid.Column="1" Grid.Row="1"
                 BorderBrush="{DynamicResource Flick.Brush.Divider}"
-                BorderThickness="0,1,0,0" Padding="32,9,32,9"
+                BorderThickness="0,1,0,0" Padding="24,9,28,9"
                 Background="{DynamicResource Flick.Brush.Canvas}">
             <Grid>
                 <Grid.ColumnDefinitions>
@@ -448,7 +423,7 @@
                         <ColumnDefinition Width="Auto"/>
                         <ColumnDefinition Width="*"/>
                     </Grid.ColumnDefinitions>
-                    <Button Content="Restore Defaults"
+                    <Button Content="Defaults"
                             Style="{StaticResource Flick.Button.Ghost}"
                             HorizontalAlignment="Left" Click="RestoreDefaults_Click"/>
                     <TextBlock x:Name="TxtSaveStatus" Grid.Column="1"
@@ -462,7 +437,7 @@
                 <Button x:Name="BtnCancelSettings" Grid.Column="1" Content="Cancel"
                         Style="{StaticResource Flick.Button.Secondary}"
                         Click="Cancel_Click" Margin="0,0,9,0"/>
-                <Button x:Name="BtnSaveSettings" Grid.Column="2" Content="Save Settings"
+                <Button x:Name="BtnSaveSettings" Grid.Column="2" Content="Save"
                         Style="{StaticResource Flick.Button.Primary}"
                         Click="Save_Click"/>
             </Grid>

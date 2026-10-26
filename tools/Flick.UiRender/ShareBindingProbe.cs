@@ -29,6 +29,7 @@ internal static partial class Program
         var export = (Button)window.FindName("BtnExport");
         var thumbnail = (Image)window.FindName("ShareThumbnail");
         var status = (TextBlock)window.FindName("TxtShareExportStatus");
+        var statusRow = (Grid)window.FindName("ShareStatusRow");
         var format = (TextBlock)window.FindName("ShareFormatHint");
         bool titleMatches = title.Text == vm.ShareClipTitle;
         bool detailsMatch = details.Text == vm.ShareClipDetails;
@@ -39,10 +40,13 @@ internal static partial class Program
         bool summaryMatches = status.Text == vm.ShareStatusSummary;
         bool fullMessagePreserved = Equals(status.ToolTip, vm.ExportStatusMessage);
         bool formatMatches = format.Text == vm.ShareFormatHint;
+        bool formatCollapsed = format.Visibility == Visibility.Collapsed;
+        bool statusExpected = !string.IsNullOrEmpty(vm.ShareStatusSummary);
+        bool statusVisibilityMatches = (statusRow.Visibility == Visibility.Visible) == statusExpected;
         bool readyValid = !requireReady || (vm.TryGetReadyShareFile(out _) && vm.ShareCanCopy &&
             vm.ShareTileStateText == "MP4 ready");
         bool bindingsMatch = titleMatches && detailsMatch && stateMatches && copyMatches && exportMatches && thumbnailMatches &&
-            summaryMatches && fullMessagePreserved && formatMatches;
+            summaryMatches && fullMessagePreserved && formatMatches && formatCollapsed && statusVisibilityMatches;
         object Binding(DependencyObject target, DependencyProperty property)
         {
             var expression = BindingOperations.GetBindingExpression(target, property);
@@ -86,6 +90,8 @@ internal static partial class Program
             ExpectedStatusSummary = vm.ShareStatusSummary, ActualStatusSummary = status.Text, summaryMatches,
             FullMessage = vm.ExportStatusMessage, fullMessagePreserved,
             ExpectedFormatHint = vm.ShareFormatHint, ActualFormatHint = format.Text, formatMatches,
+            formatCollapsed, ExpectedStatusVisible = statusExpected, ActualStatusRowVisibility = statusRow.Visibility.ToString(),
+            statusVisibilityMatches,
             bindingsMatch, readyValid,
             TitleBinding = Binding(title, TextBlock.TextProperty), DetailsBinding = Binding(details, TextBlock.TextProperty),
             StateBinding = Binding(state, TextBlock.TextProperty), CopyBinding = Binding(copy, UIElement.IsEnabledProperty), ExportBinding = Binding(export, UIElement.IsEnabledProperty),
@@ -148,6 +154,13 @@ internal static partial class Program
             failures.Add("Share content participates in scrolling.");
         if (Find<ScrollViewer>("EditorContextScroll").Visibility != Visibility.Collapsed)
             failures.Add("The separate Trim/Audio scroll host is not collapsed during Share.");
+        bool replacesEditor = Grid.GetRowSpan(context) > 1;
+        var backgroundVisibility = new[] { "EditorClipHeader", "PreviewSurface", "PlaybackControlsRow", "EditorToolBar" }
+            .Select(name => new { Name = name, Visibility = Find<FrameworkElement>(name).Visibility }).ToArray();
+        bool backgroundMatchesAllocation = backgroundVisibility.All(element =>
+            element.Visibility == (replacesEditor ? Visibility.Hidden : Visibility.Visible));
+        if (!backgroundMatchesAllocation)
+            failures.Add("Share background player/tools do not match the active card allocation.");
         if (!Contains(Bounds(Find<Grid>("ClipEditorPanel")), Bounds(context))) failures.Add("Share context exceeds the actual editor allocation.");
         void Check(string name, FrameworkElement container, bool required = true)
         {
@@ -160,8 +173,16 @@ internal static partial class Program
         }
         Check("SharePanel", context);
         Check("ShareActionFooter", context);
-        foreach (string name in new[] { "CloseEditorTool", "ShareMoreButton" }) Check(name, context);
-        foreach (string name in new[] { "DragHandle", "ShareExportOptions", "ShareFormatHint", "ShareStatusRow", "TxtShareExportStatus", "BtnShareDetails" }) Check(name, share);
+        foreach (string name in new[] { "CloseEditorTool", "ShareMoreButton", "BtnShareDetails" }) Check(name, context);
+        foreach (string name in new[] { "DragHandle", "ShareExportOptions" }) Check(name, share);
+        // Size/shape selectors carry the everyday choice. The exact format
+        // remains bound for Details, without requiring a redundant prose row.
+        Check("ShareFormatHint", share, required: false);
+        bool hasStatus = !string.IsNullOrEmpty(((MainViewModel)window.DataContext).ShareStatusSummary);
+        Check("ShareStatusRow", share, required: hasStatus);
+        Check("TxtShareExportStatus", share, required: hasStatus);
+        if (!hasStatus && (Visible(Find<FrameworkElement>("ShareStatusRow")) || Visible(Find<FrameworkElement>("TxtShareExportStatus"))))
+            failures.Add("The empty Share status row should collapse.");
         foreach (string name in new[] { "ShareTileTitle", "ShareTileDetails", "ShareTileHint", "ShareOriginalLabel", "TxtShareTileState" }) Check(name, Find<Border>("DragHandle"));
         var thumbnail = Find<Image>("ShareThumbnail");
         Border? thumbnailFrame = null;
@@ -224,6 +245,8 @@ internal static partial class Program
             ScrollableHeight = scrollHeight, ScrollableWidth = scrollWidth,
             NativeSingleLineEditingHosts = nativeEditors.Select(scroll => new { scroll.Name, scroll.ScrollableHeight, scroll.ScrollableWidth }),
             ShareContentScrollers = contentScrollers.Select(scroll => scroll.Name),
+            ReplacesEditorAllocation = replacesEditor, BackgroundMatchesAllocation = backgroundMatchesAllocation,
+            BackgroundVisibility = backgroundVisibility.Select(element => new { element.Name, Visibility = element.Visibility.ToString() }),
             ContextBounds = Coordinates(Bounds(context)), BodyBounds = Coordinates(Bounds(share)), FooterBounds = Coordinates(Bounds(footer)),
             Rows = rows, Text = textObservations, Failures = failures });
     }

@@ -26,6 +26,7 @@ internal static class SettingsPersistenceAssertions
         string file = Path.Combine(root, "reviewed.json");
         try
         {
+            SettingsAudioPersistenceAssertions.Run(root);
             var source = AppSettings.CreateDefault();
             source.OriginalsFolder = Path.Combine(root, "originals");
             source.ExportsFolder = Path.Combine(root, "exports");
@@ -47,7 +48,8 @@ internal static class SettingsPersistenceAssertions
             Checked("ChkPreviewUpdates").IsChecked = false;
             Checked("ChkClipSavedOverlay").IsChecked = false;
             Checked("ChkClipSavedSound").IsChecked = false;
-            Assert.Equal("Minimize to Tray (also start hidden)", Checked("ChkStartMinimized").Content);
+            Assert.Contains("tray", Checked("ChkStartMinimized").Content?.ToString() ?? "", StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("hidden", Checked("ChkStartMinimized").Content?.ToString() ?? "", StringComparison.OrdinalIgnoreCase);
             Assert.Contains("tray", Checked("ChkStartMinimized").ToolTip?.ToString() ?? "",
                 StringComparison.OrdinalIgnoreCase);
             Assert.IsType<TextBox>(page.FindName("TxtDuration")).Text = "60";

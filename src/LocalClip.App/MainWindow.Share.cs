@@ -50,7 +50,13 @@ public partial class MainWindow
         // Share owns a finite complete card outside the Trim/Audio scroll host.
         // Keep playback controls clear when the preview can fit the card; use
         // the full editor allocation only when a compact viewport needs it.
-        bool useEditorArea = share && PreviewSurface.ActualHeight < 360;
+        bool useEditorArea = EditorContextLayer.Visibility == Visibility.Visible &&
+            PreviewSurface.ActualHeight < (share ? 360 : 280);
+        // The compact card replaces this allocation. Keep its underlying
+        // player/tools measured, but don't leave half-visible controls around
+        // the card or keyboard stops behind it. Close restores the workspace.
+        EditorClipHeader.Visibility = PreviewSurface.Visibility = PlaybackControlsRow.Visibility = EditorToolBar.Visibility =
+            useEditorArea ? Visibility.Hidden : Visibility.Visible;
         Grid.SetRow(EditorContextLayer, useEditorArea ? 0 : 1);
         Grid.SetRowSpan(EditorContextLayer, useEditorArea ? 5 : 1);
         double available = useEditorArea ? ClipEditorPanel.ActualHeight : PreviewSurface.ActualHeight;
@@ -70,7 +76,7 @@ public partial class MainWindow
         string message = _vm.ExportStatusMessage;
         if (string.IsNullOrWhiteSpace(message)) message = _vm.ShareTileHint;
         Services.FlickDialog.Show(message + "\n\n" + _vm.ExportAspectDescription + "\n" + _vm.ShareSizeHint,
-            "Export Details", MessageBoxButton.OK, MessageBoxImage.Information);
+            "Export details", MessageBoxButton.OK, MessageBoxImage.Information);
     }
 
     private void ShareFooter_SizeChanged(object sender, SizeChangedEventArgs args) => UpdateEditorContextHeight();

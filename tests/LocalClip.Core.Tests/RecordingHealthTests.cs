@@ -23,7 +23,7 @@ public class RecordingHealthTests
     public void InitialSnapshotIsOffAndDoesNotInventASuccessOrError()
     {
         var snapshot = new RecordingHealthLedger().Snapshot;
-        Assert.Equal("Replay Off", snapshot.StatusText);
+        Assert.Equal("Replay off", snapshot.StatusText);
         Assert.Equal(RecordingEngineState.Off, snapshot.EngineState);
         Assert.Equal(CaptureHostHealth.Stopped, snapshot.HostHealth);
         Assert.Equal(ReplaySaveState.Idle, snapshot.SaveState);
@@ -42,19 +42,19 @@ public class RecordingHealthTests
         ledger.ObserveEngine(session, RecordingEngineState.Buffering);
         Assert.Equal("Buffering", ledger.Snapshot.StatusText);
         ledger.ObserveEngine(session, RecordingEngineState.Ready);
-        Assert.Equal("Replay Ready", ledger.Snapshot.StatusText);
+        Assert.Equal("Replay ready", ledger.Snapshot.StatusText);
         ledger.BeginSave(session, "save");
-        Assert.Equal("Saving Clip", ledger.Snapshot.StatusText);
+        Assert.Equal("Saving clip", ledger.Snapshot.StatusText);
         ledger.AcknowledgeSave(session, "save", accepted: true);
         ledger.MarkSaveValidating(session, "save");
         ledger.RecordValidatedClip(session, "save", "clip", 14.75);
-        Assert.Equal("Save Successful", ledger.Snapshot.StatusText);
+        Assert.Equal("Save successful", ledger.Snapshot.StatusText);
         ledger.RecordSaveIssue("off", "Start replay before saving.");
-        Assert.Equal("Save Failed", ledger.Snapshot.StatusText);
+        Assert.Equal("Save failed", ledger.Snapshot.StatusText);
         ledger.RecordRecordingIssue(session, "host_fault", "Capture stopped producing video.");
-        Assert.Equal("Recording Faulted", ledger.Snapshot.StatusText);
+        Assert.Equal("Recording faulted", ledger.Snapshot.StatusText);
         ledger.ObserveEngine(session, RecordingEngineState.Stopped);
-        Assert.Equal("Recording Stopped", ledger.Snapshot.StatusText);
+        Assert.Equal("Recording stopped", ledger.Snapshot.StatusText);
         Assert.Equal("host_fault", ledger.Snapshot.LastRecordingIssue!.Code);
     }
 
@@ -160,7 +160,7 @@ public class RecordingHealthTests
         Assert.False(ledger.ObserveEngine(session, RecordingEngineState.Ready));
         Assert.False(ledger.ObserveBuffer(session, 30, 30));
         Assert.False(ledger.ObserveProfile(session, Hardware));
-        Assert.Equal("Saving Clip", ledger.Snapshot.StatusText);
+        Assert.Equal("Saving clip", ledger.Snapshot.StatusText);
         Assert.Equal(1, ledger.Snapshot.PendingSaveCount);
         Assert.True(ledger.RecordSaveFailure(session, "pending", "host_exit", "The helper exited before completing the save."));
         Assert.Equal(0, ledger.Snapshot.PendingSaveCount);
@@ -177,9 +177,9 @@ public class RecordingHealthTests
         ledger.MarkSaveValidating(session, "one");
         ledger.RecordValidatedClip(session, "one", "first-clip", 5);
         Assert.Equal(1, ledger.Snapshot.PendingSaveCount);
-        Assert.Equal("Saving Clip", ledger.Snapshot.StatusText);
+        Assert.Equal("Saving clip", ledger.Snapshot.StatusText);
         ledger.RecordSaveFailure(session, "two", "storage", "Recording storage is unavailable.");
-        Assert.Equal("Save Failed", ledger.Snapshot.StatusText);
+        Assert.Equal("Save failed", ledger.Snapshot.StatusText);
         Assert.Equal("first-clip", ledger.Snapshot.LastValidatedClip!.ClipId);
     }
 
@@ -207,7 +207,7 @@ public class RecordingHealthTests
         ledger.RecordSaveIssue("replay_off", "Start replay before saving.");
         Assert.Equal(RecordingEngineState.Off, ledger.Snapshot.EngineState);
         Assert.Equal(0, ledger.Snapshot.PendingSaveCount);
-        Assert.Equal("Save Failed", ledger.Snapshot.StatusText);
+        Assert.Equal("Save failed", ledger.Snapshot.StatusText);
         Assert.Equal(Guid.Empty, ledger.Snapshot.LastSaveIssue!.SessionId);
         Assert.False(ledger.BeginSave(Guid.Empty, "not-started"));
     }
@@ -261,15 +261,15 @@ public class RecordingHealthTests
         ledger.ObserveHost(session, CaptureHostHealth.Unresponsive);
         ledger.RecordRecordingIssue(session, "status_timeout", "Recording status could not be confirmed.", faulted: false);
         Assert.Equal(RecordingEngineState.Ready, ledger.Snapshot.EngineState);
-        Assert.Equal("Recording Status Unavailable", ledger.Snapshot.StatusText);
+        Assert.Equal("Recording status unavailable", ledger.Snapshot.StatusText);
         Assert.NotNull(ledger.Snapshot.Profile);
         ledger.BeginSave(session, "already-accepted");
-        Assert.Equal("Saving Clip", ledger.Snapshot.StatusText);
+        Assert.Equal("Saving clip", ledger.Snapshot.StatusText);
         ledger.RecordSaveFailure(session, "already-accepted", "save_failed", "The saved recording could not be validated.");
-        Assert.Equal("Recording Status Unavailable", ledger.Snapshot.StatusText);
+        Assert.Equal("Recording status unavailable", ledger.Snapshot.StatusText);
         ledger.ObserveHost(session, CaptureHostHealth.Responsive);
         Assert.Equal(RecordingEngineState.Ready, ledger.Snapshot.EngineState);
-        Assert.Equal("Save Failed", ledger.Snapshot.StatusText);
+        Assert.Equal("Save failed", ledger.Snapshot.StatusText);
         Assert.Equal("status_timeout", ledger.Snapshot.LastRecordingIssue!.Code);
     }
 

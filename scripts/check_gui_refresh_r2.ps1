@@ -40,7 +40,8 @@ if ($main -match 'WindowStyle="None"' -or $main -match 'AllowsTransparency="True
 Require $typ 'Flick.Image.BrandMark' "Original logo token must persist"
 Require $typ '<EllipseGeometry\s+Center="19,19"\s+RadiusX="19"\s+RadiusY="19"' "Circular logo clip missing"
 Require $typ '<Setter Property="Stretch" Value="Uniform"' "Logo image must not distort"
-Require $settings 'Image Width="38" Height="38"' "Logo widths must align across app and settings"
+Require $main 'Flick.Image.BrandMark.*Width="38" Height="38"' "The global navigation brand must keep its aligned size"
+if ($settings -match 'Flick.Image.BrandMark') { throw 'Settings must not repeat the global navigation logo' }
 $preview = Read "src/LocalClip.App/Views/DesignSystemPreviewWindow.xaml"
 Require $preview 'Width="38" Height="38"' "Visual design preview must not use an out-of-bounds circle clip"
 Require $toast 'Flick.Image.BrandMark' "Toast original brand must remain"

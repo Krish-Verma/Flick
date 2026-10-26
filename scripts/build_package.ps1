@@ -6,7 +6,7 @@ $ErrorActionPreference = "Stop"
 
 $RootDir = (Get-Item $PSScriptRoot).Parent.FullName
 $DistDir = Join-Path $RootDir "dist"
-$PackageName = "Flick-v1.0.8-win-x64"
+$PackageName = "Flick-v1.0.9-win-x64"
 $PackageDir = Join-Path $DistDir $PackageName
 $ZipPath = Join-Path $DistDir "$PackageName.zip"
 
@@ -101,7 +101,7 @@ if (-not (Test-Path -LiteralPath (Join-Path $PackageDir "Flick.exe"))) {
 
 # Generate User Readme
 $Readme = @'
-# Flick 1.0.8 Preview 1 — UNRELEASED · UNSIGNED
+# Flick 1.0.9 Preview 1 — UNRELEASED · UNSIGNED
 
 This Windows x64 development candidate adds recording health, opt-in game replay, selected-app audio, nondestructive editing and a file-based Share surface. Its implementation and earlier focused checks do not qualify this exact package. Publication requires separate approval after the final source, Windows workflows and artifacts have been verified.
 
@@ -148,7 +148,7 @@ GPU/hybrid setups, hotkeys during games, actual audio isolation, Discord transfe
 
 This preview has no trusted publisher signature. Windows Smart App Control may block it. Checksums verify transfer consistency, not publisher trust; keep Windows security protections enabled. SignPath/trusted signing and Microsoft Store certification remain separate work.
 
-See docs/USER-GUIDE.md, docs/RELEASE-READINESS-1.0.8.md and docs/product-phase/MASTER-PLAN.md. Original Flick source remains GPL-2.0-or-later; bundled components retain their separate notices and obligations.
+See docs/USER-GUIDE.md, docs/SETTINGS-UI-FIX-20261026.md and docs/product-phase/MASTER-PLAN.md. Original Flick source remains GPL-2.0-or-later; bundled components retain their separate notices and obligations.
 '@
 $Readme | Set-Content (Join-Path $PackageDir "README.md") -Encoding utf8
 
@@ -162,8 +162,8 @@ $ExeHash = (Get-FileHash -Path (Join-Path $PackageDir "Flick.exe") -Algorithm SH
 $HostHash = (Get-FileHash -Path (Join-Path $PackageDir "tools\obs\runtime\bin\64bit\LocalClip.CaptureHost.exe") -Algorithm SHA256).Hash
 
 $ChecksumContent = @"
-# Flick v1.0.8 Preview (unreleased unsigned Windows x64 replay-and-audio-fix candidate) SHA-256 Checksums
-$ZipHash  Flick-v1.0.8-win-x64.zip
+# Flick v1.0.9 Preview (unreleased unsigned Windows x64 settings-and-ui-fix candidate) SHA-256 Checksums
+$ZipHash  Flick-v1.0.9-win-x64.zip
 $ExeHash  Flick.exe
 $HostHash  LocalClip.CaptureHost.exe
 "@

@@ -91,7 +91,7 @@ public partial class MainViewModel : INotifyPropertyChanged, IDisposable
     public bool CanInvokeRecordingDiagnostic => _isRecordingDiagnosticRunning
         ? !_recordingDiagnosticCancelling : CanRunRecordingDiagnostic;
     public string DiagnosticTestActionText => _isRecordingDiagnosticRunning
-        ? (_recordingDiagnosticCancelling ? "Finishing Test…" : "Cancel Test") : "Run Recording Test";
+        ? (_recordingDiagnosticCancelling ? "Finishing test…" : "Cancel test") : "Run recording test";
     public string DiagnosticTestStatusText => _diagnosticTestStatus;
     public string DiagnosticTestDetailsText => _diagnosticTestDetails;
 
@@ -506,7 +506,7 @@ public partial class MainViewModel : INotifyPropertyChanged, IDisposable
     private ClipMetadata? _selectedClip;
     private string _searchQuery = "";
     private string _clipSourceFilter = "All Clips";
-    private string _librarySummaryText = "0 Clips";
+    private string _librarySummaryText = "0 clips";
     private string _importStatusText = "";
     private bool _isImporting;
     private CancellationTokenSource? _importCancellation;
@@ -604,8 +604,8 @@ public partial class MainViewModel : INotifyPropertyChanged, IDisposable
     {
         int all = _storage.GetAllClips().Count;
         int folders = _connectedFolders.Count;
-        LibrarySummaryText = $"{all} {(all == 1 ? "Clip" : "Clips")} · " +
-                             $"{folders} {(folders == 1 ? "Folder" : "Folders")}";
+        LibrarySummaryText = $"{all} {(all == 1 ? "clip" : "clips")} · " +
+                             $"{folders} {(folders == 1 ? "folder" : "folders")}";
     }
 
     public string CaptureStatus
@@ -1537,7 +1537,7 @@ public partial class MainViewModel : INotifyPropertyChanged, IDisposable
         using var cancellation = new CancellationTokenSource();
         _importCancellation = cancellation;
         IsImporting = true;
-        ImportStatusText = "Finding Videos…";
+        ImportStatusText = "Finding videos…";
         var progress = new Progress<ClipImportProgress>(p =>
         {
             ImportStatusText = $"Checking {p.Examined:N0} of {p.TotalDiscovered:N0} Videos · " +
@@ -1548,7 +1548,7 @@ public partial class MainViewModel : INotifyPropertyChanged, IDisposable
             var result = await _storage.ScanConnectedFolderAsync(
                 folderId, progress, cancellation.Token);
             ImportStatusText = result.FolderUnavailable
-                ? "Folder Unavailable · Original videos and library entries were preserved."
+                ? "Folder unavailable · clips kept"
                 : $"Complete · {result.Imported:N0} Added, " +
                   $"{result.AlreadyIndexed:N0} Already Indexed, {result.Failed:N0} Unavailable" +
                   (result.ScanLimitReached ? " · 10,000-File Safety Limit Reached; Use Smaller Folders" : "");
@@ -1556,7 +1556,7 @@ public partial class MainViewModel : INotifyPropertyChanged, IDisposable
         }
         catch (OperationCanceledException)
         {
-            ImportStatusText = "Scan Cancelled · Already Indexed Clips Were Kept";
+            ImportStatusText = "Scan cancelled · indexed clips kept";
             throw;
         }
         finally
@@ -1578,7 +1578,7 @@ public partial class MainViewModel : INotifyPropertyChanged, IDisposable
         {
             ReloadClips();
             RefreshConnectedFolders();
-            ImportStatusText = "Folder Unlinked · Source Videos Were Not Deleted";
+            ImportStatusText = "Folder unlinked · videos kept";
         }
         return removed;
     }
@@ -1671,7 +1671,7 @@ public partial class MainViewModel : INotifyPropertyChanged, IDisposable
             SaveClipEdits();
             RememberTrim(oldStart, oldEnd);
             EditorSaveState = "Trim saved · original unchanged";
-            StatusDetails = "Trim Saved · The Original Video Is Unchanged";
+            StatusDetails = "Trim saved";
             return true;
         }
         catch (Exception ex)
@@ -1796,7 +1796,7 @@ public partial class MainViewModel : INotifyPropertyChanged, IDisposable
         if (!SelectedClip.IsAvailable)
         {
             InvalidateExportReady();
-            ExportStatusMessage = "Original Video Offline · Reconnect Its Folder";
+            ExportStatusMessage = "Original video offline · reconnect its folder";
             return;
         }
 
@@ -1810,7 +1810,7 @@ public partial class MainViewModel : INotifyPropertyChanged, IDisposable
         {
             IsExportReady = true;
             ReadyExportFilePath = ready;
-            ExportStatusMessage = $"Ready to Drag Into Discord · {SelectedClip.ExportedFileSizeBytes / 1_000_000.0:F2} MB";
+            ExportStatusMessage = $"Ready to share · {SelectedClip.ExportedFileSizeBytes / 1_000_000.0:F2} MB";
         }
         else
         {
@@ -1819,7 +1819,7 @@ public partial class MainViewModel : INotifyPropertyChanged, IDisposable
             // cap, the ready MP4 may be reused without wasting an encode.
             IsExportReady = false;
             ReadyExportFilePath = "";
-            ExportStatusMessage = "Select Export Clip to Make a Share-Ready MP4.";
+            ExportStatusMessage = "Export to prepare an MP4.";
         }
     }
 
@@ -1877,7 +1877,7 @@ public partial class MainViewModel : INotifyPropertyChanged, IDisposable
     {
         IsExportReady = false;
         ReadyExportFilePath = "";
-        ExportStatusMessage = "Clip edited: Click 'Export for Discord' to create share file.";
+        ExportStatusMessage = "Clip changed · export again.";
         if (SelectedClip != null)
         {
             bool hadReadyExport = SelectedClip.IsExportReady;
@@ -1905,7 +1905,7 @@ public partial class MainViewModel : INotifyPropertyChanged, IDisposable
         InvalidateExportReady();
         IsExporting = true;
         ExportProgress = 0;
-        ExportStatusMessage = "Preparing Local MP4…";
+        ExportStatusMessage = "Preparing MP4…";
         var progress = new Progress<ExportProgress>(item =>
         {
             if (IsExporting && generation == _exportGeneration)
@@ -1939,8 +1939,8 @@ public partial class MainViewModel : INotifyPropertyChanged, IDisposable
                     IsExportReady = ReadyShareFile.TryGet(clip, TargetSizeMb, out _, _settings.ExportsFolder);
                     ExportProgress = 100;
                     ExportStatusMessage = IsExportReady
-                        ? $"Ready to Drag Into Discord · {mb:F2} MB"
-                        : "Export Created But Readiness Verification Failed";
+                        ? $"Ready to share · {mb:F2} MB"
+                        : "Export verification failed";
                 }
                 else
                 {
@@ -1950,18 +1950,18 @@ public partial class MainViewModel : INotifyPropertyChanged, IDisposable
             }
             else
             {
-                ExportStatusMessage = "Export Failed: " + result.ErrorMessage;
+                ExportStatusMessage = "Export failed: " + result.ErrorMessage;
                 StatusDetails = ExportStatusMessage;
             }
         }
         catch (OperationCanceledException)
         {
-            ExportStatusMessage = "Export Cancelled · Original Clip Unchanged";
+            ExportStatusMessage = "Export cancelled · original unchanged";
             ExportProgress = 0;
         }
         catch (Exception ex)
         {
-            ExportStatusMessage = "Export Failed: " + ex.Message;
+            ExportStatusMessage = "Export failed: " + ex.Message;
             StatusDetails = ExportStatusMessage;
         }
         finally
@@ -1984,9 +1984,9 @@ public partial class MainViewModel : INotifyPropertyChanged, IDisposable
         {
             var files = new System.Collections.Specialized.StringCollection { path };
             Clipboard.SetFileDropList(files);
-            ExportStatusMessage = "MP4 File Copied · Paste It Into Discord";
+            ExportStatusMessage = "File copied · paste into Discord";
         }
-        catch (Exception ex) { ExportStatusMessage = "Couldn't Copy MP4: " + ex.Message; }
+        catch (Exception ex) { ExportStatusMessage = "Couldn't copy file: " + ex.Message; }
     }
 
     public void OpenExportFolder()
@@ -1995,7 +1995,7 @@ public partial class MainViewModel : INotifyPropertyChanged, IDisposable
             ? Path.GetDirectoryName(path) : _settings.ExportsFolder;
         if (string.IsNullOrWhiteSpace(directory) || !Directory.Exists(directory))
         {
-            StatusDetails = "Export Folder Isn't Available · Check Storage Settings";
+            StatusDetails = "Export folder unavailable · check Storage";
             return;
         }
         try
@@ -2014,7 +2014,7 @@ public partial class MainViewModel : INotifyPropertyChanged, IDisposable
             ? $"Remove '{SelectedClip.Title}' from Flick? The original video and any export will NOT be deleted. It will stay excluded from rescans until you unlink and reconnect its folder."
             : $"Delete '{SelectedClip.Title}'? The original video will be sent to the Recycle Bin. Any associated exported MP4 may be permanently deleted.";
         var answer = LocalClip.App.Services.FlickDialog.Show(question,
-            imported ? "Remove From Library" : "Delete Original Video",
+            imported ? "Remove from library" : "Delete original video",
             MessageBoxButton.YesNo, MessageBoxImage.Question);
         if (answer != MessageBoxResult.Yes) return;
         string id = SelectedClip.Id;
@@ -2062,7 +2062,7 @@ public partial class MainViewModel : INotifyPropertyChanged, IDisposable
     {
         if (!_settings.EnableDiscordWebhook)
         {
-            StatusDetails = "Direct Posting Is Disabled · Enable It in Sharing Settings";
+            StatusDetails = "Direct posting is off · enable it in Sharing";
             return;
         }
         if (!TryGetReadyShareFile(out var safeFile))
@@ -2074,11 +2074,11 @@ public partial class MainViewModel : INotifyPropertyChanged, IDisposable
         string secretUrl = DiscordWebhookClient.UnprotectSecret(_settings.MaskedWebhookUrl);
         if (string.IsNullOrEmpty(secretUrl))
         {
-            LocalClip.App.Services.FlickDialog.Show("No Discord Webhook URL is configured. Open Settings to set one up.", "Webhook Not Configured", MessageBoxButton.OK, MessageBoxImage.Information);
+            LocalClip.App.Services.FlickDialog.Show("No Discord Webhook URL is configured. Open Settings to set one up.", "Webhook not configured", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
 
-        var r = LocalClip.App.Services.FlickDialog.Show($"Send this clip ({Path.GetFileName(ReadyExportFilePath)}) to channel '{_settings.DiscordWebhookChannelName}'?", "Confirm Send to Discord", MessageBoxButton.YesNo, MessageBoxImage.Question);
+        var r = LocalClip.App.Services.FlickDialog.Show($"Send this clip ({Path.GetFileName(ReadyExportFilePath)}) to channel '{_settings.DiscordWebhookChannelName}'?", "Send to Discord?", MessageBoxButton.YesNo, MessageBoxImage.Question);
         if (r != MessageBoxResult.Yes) return;
 
         Interlocked.Increment(ref _discordUploadOperations);
@@ -2092,12 +2092,12 @@ public partial class MainViewModel : INotifyPropertyChanged, IDisposable
             if (res.Success)
             {
                 ExportStatusMessage = "Successfully posted to Discord!";
-                LocalClip.App.Services.FlickDialog.Show("Clip posted successfully!", "Discord Webhook", MessageBoxButton.OK, MessageBoxImage.Information);
+                LocalClip.App.Services.FlickDialog.Show("Clip posted successfully!", "Discord webhook", MessageBoxButton.OK, MessageBoxImage.Information);
             }
             else
             {
                 ExportStatusMessage = "Post failed: " + res.ErrorMessage;
-                LocalClip.App.Services.FlickDialog.Show(res.ErrorMessage, "Discord Webhook Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                LocalClip.App.Services.FlickDialog.Show(res.ErrorMessage, "Discord webhook error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
         finally

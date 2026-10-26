@@ -17,10 +17,10 @@
         </Grid.RowDefinitions>
 
         <StackPanel Grid.Row="0" Margin="0,0,0,24">
-            <TextBlock Text="Connected Clip Folders" Style="{StaticResource Flick.Text.PageTitle}"/>
+            <TextBlock Text="Clip folders" Style="{StaticResource Flick.Text.PageTitle}"/>
             <TextBlock Margin="0,6,0,0" TextWrapping="Wrap"
                        Style="{StaticResource Flick.Text.Caption}"
-                       Text="Link existing recordings from SteelSeries, OBS, NVIDIA or any local folder. Flick indexes MP4/MKV files in place, without moving or copying originals."/>
+                       Text="Link MP4 and MKV folders. Originals stay in place."/>
         </StackPanel>
 
         <Grid Grid.Row="1" Margin="0,0,0,18">
@@ -30,8 +30,8 @@
             </Grid.ColumnDefinitions>
             <CheckBox x:Name="ChkIncludeSubfolders"
                       Style="{StaticResource Flick.Toggle}" IsChecked="True"
-                      Content="Include Subfolders" VerticalAlignment="Center"/>
-            <Button Grid.Column="1" Content="+ Add Folder"
+                      Content="Include subfolders" VerticalAlignment="Center"/>
+            <Button Grid.Column="1" Content="Add folder"
                     Style="{StaticResource Flick.Button.Primary}"
                     Click="AddFolder_Click"/>
         </Grid>
@@ -39,12 +39,10 @@
         <Border Grid.Row="2" BorderBrush="{DynamicResource Flick.Brush.Divider}"
                 BorderThickness="0,1,0,1" Padding="0,4">
             <ListBox x:Name="FolderList" ItemsSource="{Binding ConnectedFolders}"
+                     Style="{StaticResource Flick.Library.List}"
                      ItemContainerStyle="{StaticResource Flick.Library.Item}"
-                     ToolTip="Select a folder to rescan or unlink. Hover and focus highlight each selectable row."
-                     BorderThickness="0" Background="Transparent"
-                     ScrollViewer.CanContentScroll="True"
-                     VirtualizingStackPanel.IsVirtualizing="True"
-                     VirtualizingStackPanel.VirtualizationMode="Recycling">
+                     ToolTip="Select a folder to rescan or unlink."
+                     HorizontalContentAlignment="Stretch">
                 <ListBox.ItemTemplate>
                     <DataTemplate>
                         <Grid Margin="10,10" MinHeight="52">
@@ -74,9 +72,7 @@
             <TextBlock Text="{Binding ImportStatusText}"
                        Style="{StaticResource Flick.Text.Caption}"
                        TextTrimming="CharacterEllipsis" TextWrapping="NoWrap"
-                       Margin="0,0,0,6"/>
-            <TextBlock Style="{StaticResource Flick.Text.Muted}" TextWrapping="Wrap"
-                       Text="Scanning is manually initiated, bounded and cancelable. New capture has priority; unavailable folders remain linked."/>
+                       ToolTip="{Binding ImportStatusText}"/>
         </StackPanel>
 
         <Grid Grid.Row="4">
@@ -87,13 +83,14 @@
                 <ColumnDefinition Width="Auto"/>
                 <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
-            <Button Grid.Column="0" Content="Rescan Selected"
+            <Button Grid.Column="0" Content="Rescan selected"
                     Style="{StaticResource Flick.Button.Secondary}"
-                    Click="RescanFolder_Click" Margin="0,0,8,0"/>
-            <Button Grid.Column="1" Content="Unlink Folder"
+                    Click="RescanFolder_Click" Margin="0,0,8,0"
+                    ToolTip="Scan this folder again. Scans are bounded and cancelable; recording takes priority. Unavailable folders stay linked."/>
+            <Button Grid.Column="1" Content="Unlink folder"
                     Style="{StaticResource Flick.Button.Ghost}"
                     Click="RemoveFolder_Click"/>
-            <Button Grid.Column="3" Content="Cancel Scan"
+            <Button Grid.Column="3" Content="Cancel scan"
                     Style="{StaticResource Flick.Button.Secondary}"
                     Click="CancelScan_Click" Margin="0,0,8,0"/>
             <Button Grid.Column="4" Content="Close"

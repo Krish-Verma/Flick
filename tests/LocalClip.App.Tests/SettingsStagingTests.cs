@@ -48,6 +48,7 @@ public partial class SettingsStagingTests
                 ResourceUsageSettingsAssertions.Run();
                 SettingsPersistenceAssertions.Run();
                 FlickHoverStyleAssertions.Run();
+                ScrollRoutingAssertions.Run();
                 var settings = AppSettings.CreateDefault();
                 var page = new SettingsWindow(settings, () => false);
                 T Find<T>(string name) => (T)page.FindName(name);
@@ -224,17 +225,17 @@ public partial class SettingsStagingTests
                     finally { saveRequestField.SetValue(vm, 0); }
 
                     var healthStatus = Assert.IsType<TextBlock>(window.FindName("TxtHealthStatus"));
-                    Assert.Equal("Saving Clip", healthStatus.Text);
+                    Assert.Equal("Saving clip", healthStatus.Text);
 
                     Assert.True(health.RecordValidatedClip(session, "synthetic-save", "synthetic-summary", 12.5));
                     PublishHealth();
-                    Assert.Equal("Save Successful", healthStatus.Text);
+                    Assert.Equal("Save successful", healthStatus.Text);
                     Assert.Contains("12.5", vm.HealthLastSavedText);
                     health.RecordRecordingIssue(session, "synthetic-fault", "Synthetic capture failure retained for review.");
                     vm.CaptureStatus = "Faulted";
                     PublishHealth();
                     Assert.False(saveButton.IsEnabled);
-                    Assert.Equal("Recording Faulted", healthStatus.Text);
+                    Assert.Equal("Recording faulted", healthStatus.Text);
                     Assert.Contains("Synthetic capture failure", vm.HealthLastFailureText);
                     Assert.DoesNotContain("29.5s / 30s", vm.HealthDetailsText);
 
@@ -450,14 +451,14 @@ public partial class SettingsStagingTests
                     }
                     runningTestField.SetValue(vm, true);
                     PublishRecordingTest();
-                    Assert.Equal("Cancel Test", runRecordingTest.Content);
+                    Assert.Equal("Cancel test", runRecordingTest.Content);
                     Assert.True(runRecordingTest.IsEnabled); // Running must not disable its own Cancel action.
                     Assert.False(includeTestAudio.IsEnabled);
                     vm.CancelRecordingDiagnostic();
                     DrainBindings();
                     Assert.True(vm.IsRecordingDiagnosticRunning); // Cleanup has not completed.
                     Assert.False(runRecordingTest.IsEnabled);
-                    Assert.Equal("Finishing Test…", runRecordingTest.Content);
+                    Assert.Equal("Finishing test…", runRecordingTest.Content);
                     runningTestField.SetValue(vm, false);
                     cancellingTestField.SetValue(vm, false);
                     PublishRecordingTest();

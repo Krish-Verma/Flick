@@ -197,6 +197,15 @@ internal static partial class Program
             throw new InvalidOperationException("A long failure must keep its full message and show a concise Details route.");
         if (Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(original))) != originalHash)
             throw new InvalidOperationException("Share fixtures changed the immutable original.");
+        // Close through the actual button. Compact Share temporarily replaces
+        // the player/tools; leaving it must restore their visibility and
+        // normal keyboard availability without discarding any feature.
+        Find<Button>("CloseEditorTool").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        bool editorRestoredAfterClose = new[] { "PreviewSurface", "PlaybackControlsRow", "EditorToolBar" }
+            .All(name => Find<FrameworkElement>(name).Visibility == Visibility.Visible) &&
+            Find<Border>("EditorContextLayer").Visibility == Visibility.Collapsed;
+        if (!editorRestoredAfterClose)
+            throw new InvalidOperationException("Closing compact Share did not restore the player and editor tools.");
         File.WriteAllText(Path.Combine(output, "share-fixture-evidence.json"), JsonSerializer.Serialize(new {
             Source = "Generated testsrc2 +440Hz tone, no real capture", result.Success, result.FileSizeBytes,
             result.DurationSeconds, OriginalSha256 = originalHash,
@@ -204,6 +213,7 @@ internal static partial class Program
             FullDecode = "Production exporter full decode passed; independent FFmpeg media workflow is separate",
             ClipboardOrExternalDragExecuted = false, ActualDiscordAcceptance = false,
             CompleteShareMustFitWithoutScrolling = true, InvalidCustomLimitsRefusedBeforeAnyWorker = true,
+            EditorRestoredAfterClose = editorRestoredAfterClose,
             StatesExportingCancellingFailedAreVisualFixtures = true, Scales = observations
         }, new JsonSerializerOptions { WriteIndented = true }));
         vm.PropertyChanged -= observeNotification;
