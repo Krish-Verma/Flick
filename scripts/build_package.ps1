@@ -6,7 +6,7 @@ $ErrorActionPreference = "Stop"
 
 $RootDir = (Get-Item $PSScriptRoot).Parent.FullName
 $DistDir = Join-Path $RootDir "dist"
-$PackageName = "Flick-v1.0.9-win-x64"
+$PackageName = "Flick-v1.0.10-win-x64"
 $PackageDir = Join-Path $DistDir $PackageName
 $ZipPath = Join-Path $DistDir "$PackageName.zip"
 
@@ -40,7 +40,7 @@ if (-not $SkipNativeBuild) {
     if ($LASTEXITCODE -ne 0) { throw "Failed to compile native capture product/version resources" }
     g++ -O2 -std=c++17 -static-libgcc -static-libstdc++ `
         -I "$ObsInc" -I "$HostInc" "$HostSrc" "$ResourceOut" `
-        -L "$ObsBin" "-Wl,-Bstatic" -lwinpthread "-Wl,-Bdynamic" -lobs -ldwmapi -lole32 `
+        -L "$ObsBin" "-Wl,-Bstatic,--whole-archive" -lwinpthread "-Wl,--no-whole-archive,-Bdynamic" -lobs -ldwmapi -lole32 `
         -o "$HostOut"
     if ($LASTEXITCODE -ne 0) { throw "Failed to compile LocalClip.CaptureHost.exe" }
     Write-Host "CaptureHost compiled successfully to: $HostOut" -ForegroundColor Green
@@ -79,6 +79,9 @@ Copy-Item (Join-Path $RootDir "tools\ffmpeg\UPSTREAM-README.txt") (Join-Path $To
 # Copy OBS runtime
 Copy-Item (Join-Path $RootDir "tools\obs\runtime") (Join-Path $ToolsDest "obs\") -Recurse -Force
 & (Join-Path $PSScriptRoot "check_obs_runtime.ps1") -RuntimeRoot (Join-Path $ToolsDest "obs\runtime")
+& (Join-Path $PSScriptRoot "check_capture_host_runtime.ps1") `
+    -HostPath (Join-Path $PackageDir "tools\obs\runtime\bin\64bit\LocalClip.CaptureHost.exe") `
+    -EvidencePath (Join-Path $DistDir "capture-runtime/portable.json")
 
 # Copy Licenses & Legal Notices
 Copy-Item (Join-Path $RootDir "LICENSE") $PackageDir -Force
@@ -101,9 +104,9 @@ if (-not (Test-Path -LiteralPath (Join-Path $PackageDir "Flick.exe"))) {
 
 # Generate User Readme
 $Readme = @'
-# Flick 1.0.9 Preview 1 — UNRELEASED · UNSIGNED
+# Flick 1.0.10 Preview 1 — UNSIGNED
 
-This Windows x64 development candidate adds recording health, opt-in game replay, selected-app audio, nondestructive editing and a file-based Share surface. Its implementation and earlier focused checks do not qualify this exact package. Publication requires separate approval after the final source, Windows workflows and artifacts have been verified.
+This Windows x64 preview fixes the capture helper's missing libwinpthread-1.dll error. Its threading runtime is included inside the helper. No separate DLL download or compiler installation is needed. Existing recording, editing, sharing and settings features are retained. Exact-source package and installer checks are required before publication; physical gameplay acceptance remains separate.
 
 ## Start and save a replay
 
@@ -136,7 +139,7 @@ Choose a size limit and Original, Portrait or Square framing, then export an H.2
 
 Settings, the library index and bounded local diagnostics live separately from installed binaries under LocalAppData/LocalClip. Original/imported videos and exports stay in their selected folders. Diagnostics are local, allowlisted events; export them only when requested. Local capture/edit/export requires no account, and there are no automatic uploads.
 
-Installed copies can check Settings > General > Software Updates; preview updates require the preview channel and an actually published matching release. Portable copies require quitting Flick before replacing the extracted app folder. This unreleased candidate is not yet offered as an update. Older versions may need a one-time manual installer upgrade.
+Installed copies can check Settings > General > Software Updates; preview updates require the preview channel and an actually published matching release. Portable copies require quitting Flick before replacing the extracted app folder. Updates are available only after a matching verified release is published. Older versions may need a one-time manual installer upgrade.
 
 Use Uninstall Flick or Windows Installed Apps to remove the program. Silent uninstall preserves user data. The interactive uninstaller separately asks whether to remove app-owned preferences/index/cache; recordings and exports are retained. Do not use historical LocalClip uninstall scripts.
 
@@ -148,7 +151,7 @@ GPU/hybrid setups, hotkeys during games, actual audio isolation, Discord transfe
 
 This preview has no trusted publisher signature. Windows Smart App Control may block it. Checksums verify transfer consistency, not publisher trust; keep Windows security protections enabled. SignPath/trusted signing and Microsoft Store certification remain separate work.
 
-See docs/USER-GUIDE.md, docs/SETTINGS-UI-FIX-20261026.md and docs/product-phase/MASTER-PLAN.md. Original Flick source remains GPL-2.0-or-later; bundled components retain their separate notices and obligations.
+See docs/USER-GUIDE.md, docs/CAPTURE-RUNTIME-FIX-20261026.md and docs/product-phase/MASTER-PLAN.md. Original Flick source remains GPL-2.0-or-later; bundled components retain their separate notices and obligations.
 '@
 $Readme | Set-Content (Join-Path $PackageDir "README.md") -Encoding utf8
 
@@ -162,8 +165,8 @@ $ExeHash = (Get-FileHash -Path (Join-Path $PackageDir "Flick.exe") -Algorithm SH
 $HostHash = (Get-FileHash -Path (Join-Path $PackageDir "tools\obs\runtime\bin\64bit\LocalClip.CaptureHost.exe") -Algorithm SHA256).Hash
 
 $ChecksumContent = @"
-# Flick v1.0.9 Preview (unreleased unsigned Windows x64 settings-and-ui-fix candidate) SHA-256 Checksums
-$ZipHash  Flick-v1.0.9-win-x64.zip
+# Flick v1.0.10 Preview (unsigned Windows x64 capture-runtime-fix candidate) SHA-256 Checksums
+$ZipHash  Flick-v1.0.10-win-x64.zip
 $ExeHash  Flick.exe
 $HostHash  LocalClip.CaptureHost.exe
 "@

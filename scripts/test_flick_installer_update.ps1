@@ -8,7 +8,7 @@ Does not exercise GPU capture, UI appearance, Smart App Control, or publisher tr
 #>
 param(
     [string]$SetupPath = "dist/Flick-Setup.exe",
-    [string]$PackagePath = "dist/Flick-v1.0.9-win-x64",
+    [string]$PackagePath = "dist/Flick-v1.0.10-win-x64",
     [string]$BaselineSetupPath = ""
 )
 
@@ -248,6 +248,16 @@ finally { $heldMutex.ReleaseMutex(); $heldMutex.Dispose() }
     if ($restartedFlick.Count -ne 1) { throw 'Update started more than one Flick process.' }
     Start-Sleep -Seconds 2
     if ($restartedFlick[0].HasExited) { throw 'Restarted Flick exited immediately.' }
+    $hostRelativePath = 'tools/obs/runtime/bin/64bit/LocalClip.CaptureHost.exe'
+    $installedHost = Join-Path $installDirectory $hostRelativePath
+    $packagedHost = Join-Path $packageDirectory $hostRelativePath
+    if (-not (Test-Path -LiteralPath $installedHost -PathType Leaf) -or
+        (Get-FileHash -LiteralPath $installedHost -Algorithm SHA256).Hash -cne
+        (Get-FileHash -LiteralPath $packagedHost -Algorithm SHA256).Hash) {
+        throw 'Installed capture helper does not match the reviewed portable package.'
+    }
+    & (Join-Path $PSScriptRoot 'check_capture_host_runtime.ps1') `
+        -HostPath $installedHost -EvidencePath (Join-Path $evidenceRoot 'installed-capture-runtime.json')
     Assert-DataPreserved
     $testPassed = $true
     Write-Host 'PASS: per-user install, exact-parent update wait, same AppId, package hash, data retention and Flick restart.'

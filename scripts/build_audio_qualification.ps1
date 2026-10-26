@@ -1,5 +1,5 @@
 <# Builds only a separate, generated-tone qualification payload. Never launches audio/capture. #>
-param([string]$PackageDirectory = 'dist/Flick-v1.0.9-win-x64')
+param([string]$PackageDirectory = 'dist/Flick-v1.0.10-win-x64')
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 if ($env:GITHUB_ACTIONS -ne 'true' -or $env:RUNNER_OS -ne 'Windows') { throw 'Build the qualification artifact in disposable Windows CI only.' }

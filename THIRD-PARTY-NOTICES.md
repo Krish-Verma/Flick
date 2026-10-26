@@ -27,6 +27,8 @@ These components are included or referenced by the public project. **This page i
 - Windows compiler: MinGW-w64 UCRT GCC build described in dependencies.lock.json, https://winlibs.com
 - GCC and runtime libraries have separate GPL, LGPL, runtime-library exceptions or public-domain terms. Record required notices for redistributed runtime pieces. Compiler use does not itself imply all compiled application code is GPL-licensed.
 
+- Flick's native capture helper statically includes the MinGW-w64 winpthreads runtime. Its complete upstream copyright, MIT permission and derived-code terms are included in [docs/licenses/WINPTHREADS-COPYING.txt](docs/licenses/WINPTHREADS-COPYING.txt), from [upstream revision 0ed7805292c3e7e8ee6342b08c115be4276f3ffa](https://github.com/mingw-w64/mingw-w64/blob/0ed7805292c3e7e8ee6342b08c115be4276f3ffa/mingw-w64-libraries/winpthreads/COPYING). Users do not need to install MinGW or obtain a separate pthread DLL.
+
 ## Installer compiler
 
 - Inno Setup 6 by Jordan Russell, https://jrsoftware.org/isinfo.php

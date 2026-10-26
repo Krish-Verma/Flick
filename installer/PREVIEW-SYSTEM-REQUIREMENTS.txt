@@ -1,4 +1,4 @@
-Flick 1.0.9-preview.1 — UNRELEASED UNSIGNED settings and UI candidate
+Flick 1.0.10-preview.1 — UNRELEASED UNSIGNED capture runtime fix
 
 THIS BUILD IS AN UNQUALIFIED DEVELOPMENT CANDIDATE:
 - Targets Windows 11 with a 64-bit x86-64 CPU and working Direct3D 11 graphics.
@@ -18,7 +18,7 @@ REQUIRED BEFORE RECORDING:
 
 NVIDIA, AMD, Intel, hybrid-GPU and CPU recording paths require physical
 Windows acceptance on this exact candidate. Historical RTX 5060 results
-and hosted CI for earlier versions are not qualification of this 1.0.9 build.
+and hosted CI for earlier versions are not qualification of this 1.0.10 build.
 
 NOT QUALIFIED:
 - Windows on ARM/Snapdragon, 32-bit Windows, macOS and Linux.
@@ -51,5 +51,5 @@ with NO selected by default. Clips and exports are not removed.
 This unreleased candidate is unsigned. Windows Smart App Control may block
 it. Checksums verify transfer consistency, not publisher trust; keep Windows
 security protections enabled. No public release, trusted signing, Microsoft
-Store certification or universal hardware qualification is claimed. A new
-publication requires separate explicit approval and exact-source evidence.
+Store certification or universal hardware qualification is claimed. Publication requires exact-source verification under the owner's standing
+Flick release authorization.
