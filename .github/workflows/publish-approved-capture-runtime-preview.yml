@@ -1,0 +1,427 @@
+# Reviewed publisher activated after explicit owner approval; immutable pins fail closed.
+# No checkout or candidate/PR code executes in this write job.
+# Opening the dedicated PR is the actual publication trigger: under the standing owner delivery authorization, after exact-source checks.
+# Opened/attempt1 plus existing tag/catalogue guards refuse automatic duplicate publication.
+name: Publish explicitly approved Flick 1.0.10 unsigned capture runtime preview
+
+on:
+  pull_request:
+    types: [opened]
+    paths:
+      - '.github/workflows/publish-approved-capture-runtime-preview.yml'
+      - 'release/PUBLISH-CAPTURE-RUNTIME-PREVIEW-20261026.md'
+      - 'release/NOTES-CAPTURE-RUNTIME-PREVIEW-20261026.md'
+      - 'release/PRESERVED-RELEASES-CAPTURE-RUNTIME-20261026.json'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: flick-approved-capture-runtime-preview-20261026
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: github.repository == 'Krish-Verma/Flick' && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'codex/publish-capture-runtime-preview-20261026' && github.event.pull_request.base.ref == 'main' && github.run_attempt == 1
+    runs-on: windows-latest
+    timeout-minutes: 40
+    permissions:
+      contents: write
+      actions: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_PROMPT_DISABLED: '1'
+      PUBLISH_APPROVED: 'true'
+      PUBLISHER_HEAD: ${{ github.event.pull_request.head.sha }}
+      APPROVED_MAIN: '444c90893a1d9eab22c644adbc1a18ef7af46e13'
+      CI_ATTEMPT: '1'
+      RENDER_ATTEMPT: '1'
+      PACKAGE_ATTEMPT: '1'
+      PORTABLE_SHA256: 'f57e223877102052ba0f9054f0394bb6687b685259ce84530871d10f7367b24e'
+      APPROVAL_RECORD_SHA256: '9225d748765b09878f84e7a611ae645b9c85478a2890707c9965800814f4bf9a'
+      NOTES_SHA256: '8a1b6194ffaf71ca08d1af08b3b1ec3957484ce9cbfb5ebc942dad13d7333f0a'
+      PRESERVED_CATALOGUE_SHA256: 'afb9ec00806937bbb1d4875dc89b4ca2f5a1b23a0a48b6a58273553b96031cea'
+      APPROVED_SOURCE: 'dff33ff0e5afcfda2eeea375187d356ab74c3598'
+      APPROVED_TREE: '1bc3148cd6874323ad4ce69888bb17f92d30587b'
+      CI_RUN: '40414558675'
+      RENDER_RUN: '40414558642'
+      PACKAGE_RUN: '40414558875'
+      ARTIFACT_ID: '12695945901'
+      ARTIFACT_DIGEST: 'sha256:ddf7a36c2ef94467c73b1a43e839dde52b77e75bf03ff3a2f89819d646fa6b24'
+      SETUP_SHA256: 'aae3ca8eba616fd4eb46ecf08c817cf4073d642735b8a7e9d9d755907c628ba2'
+    steps:
+      - name: Verify exact approved source and successful build evidence
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $true
+          $candidateReceipt = Join-Path $env:RUNNER_TEMP 'flick-publication-candidate.json'
+          [ordered]@{ phase = 'preflight'; source = $env:APPROVED_SOURCE; sourceTree = $env:APPROVED_TREE; completed = $false } |
+            ConvertTo-Json | Set-Content $candidateReceipt -Encoding utf8
+          if ($env:PUBLISH_APPROVED -cne 'true') { throw 'Owner publication approval is PENDING. No API mutation is authorized.' }
+          foreach ($name in @('APPROVED_MAIN','PUBLISHER_HEAD')) {
+            if ([Environment]::GetEnvironmentVariable($name) -cnotmatch '^[0-9a-f]{40}$') { throw 'Approved main/publisher identity missing.' }
+          }
+          foreach ($name in @('PORTABLE_SHA256','APPROVAL_RECORD_SHA256','NOTES_SHA256','PRESERVED_CATALOGUE_SHA256')) {
+            if ([Environment]::GetEnvironmentVariable($name) -cnotmatch '^[a-f0-9]{64}$') { throw "Reviewed data/asset pin missing: $name" }
+          }
+          function Read-PinnedText([string]$Path,[string]$Ref,[string]$ExpectedHash) {
+            $entry = gh api "repos/Krish-Verma/Flick/contents/$($Path)?ref=$Ref" | ConvertFrom-Json
+            if ($entry.type -cne 'file' -or $entry.encoding -cne 'base64' -or $entry.size -gt 65536) { throw 'Expected small UTF-8 approval data.' }
+            $bytes = [Convert]::FromBase64String(($entry.content -replace '\s',''))
+            $hash = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($bytes)).ToLowerInvariant()
+            if ($hash -cne $ExpectedHash) { throw 'Reviewed approval/notes/catalogue data changed.' }
+            return [Text.UTF8Encoding]::new($false,$true).GetString($bytes)
+          }
+          $approval = Read-PinnedText 'release/PUBLISH-CAPTURE-RUNTIME-PREVIEW-20261026.md' $env:PUBLISHER_HEAD $env:APPROVAL_RECORD_SHA256
+          if ($approval -cnotmatch '(?m)^Approval: APPROVED\r?$') { throw 'Human approval record is still pending.' }
+          foreach ($value in @($env:APPROVED_SOURCE,$env:APPROVED_MAIN,$env:APPROVED_TREE,$env:CI_RUN,$env:RENDER_RUN,$env:PACKAGE_RUN,
+              $env:ARTIFACT_ID,$env:ARTIFACT_DIGEST,$env:SETUP_SHA256,$env:PORTABLE_SHA256,$env:NOTES_SHA256,$env:PRESERVED_CATALOGUE_SHA256)) {
+            if (-not $approval.Contains('| '+$value+' |')) { throw 'Approval record does not name every exact publication pin.' }
+          }
+          $notes = Read-PinnedText 'release/NOTES-CAPTURE-RUNTIME-PREVIEW-20261026.md' $env:PUBLISHER_HEAD $env:NOTES_SHA256
+          if ($notes -match '__[A-Z0-9_]+__|UNRELEASED|Approval: PENDING') { throw 'Publication notes are incomplete or still unpublished.' }
+          $preserved = Read-PinnedText 'release/PRESERVED-RELEASES-CAPTURE-RUNTIME-20261026.json' $env:PUBLISHER_HEAD $env:PRESERVED_CATALOGUE_SHA256
+          $notes | Set-Content -LiteralPath (Join-Path $env:RUNNER_TEMP 'flick-approved-notes.md') -Encoding utf8
+          $preserved | Set-Content -LiteralPath (Join-Path $env:RUNNER_TEMP 'flick-preserved-releases.json') -Encoding utf8
+          if ($env:APPROVED_SOURCE -cnotmatch '^[0-9a-f]{40}$' -or $env:APPROVED_TREE -cnotmatch '^[0-9a-f]{40}$' -or
+              $env:ARTIFACT_DIGEST -cnotmatch '^sha256:[0-9a-f]{64}$' -or $env:SETUP_SHA256 -cnotmatch '^[A-Fa-f0-9]{64}$') {
+            throw 'Immutable publication pins are incomplete or malformed; no publication is authorized'
+          }
+          foreach ($value in @($env:CI_RUN, $env:RENDER_RUN, $env:PACKAGE_RUN, $env:ARTIFACT_ID)) {
+            if ($value -cnotmatch '^[1-9][0-9]*$') { throw 'A required immutable run/artifact ID is missing' }
+          }
+          if (@(@($env:CI_RUN, $env:RENDER_RUN, $env:PACKAGE_RUN) | Sort-Object -Unique).Count -ne 3) { throw 'Validation run IDs must be distinct' }
+          $repository = gh api repos/Krish-Verma/Flick | ConvertFrom-Json
+          if ($repository.private) { throw 'Approved public distribution requires the public Flick repository' }
+          $source = gh api "repos/Krish-Verma/Flick/git/commits/$env:APPROVED_SOURCE" | ConvertFrom-Json
+          if ($source.sha -cne $env:APPROVED_SOURCE -or $source.tree.sha -cne $env:APPROVED_TREE) { throw 'Approved source/tree mismatch' }
+          if ($repository.default_branch -cne 'main') { throw 'Unexpected default branch.' }
+          $main = gh api repos/Krish-Verma/Flick/git/ref/heads/main | ConvertFrom-Json
+          if ($main.object.type -cne 'commit' -or $main.object.sha -cne $env:APPROVED_MAIN) { throw 'Current main differs from approved exact release target.' }
+          $target = gh api "repos/Krish-Verma/Flick/git/commits/$env:APPROVED_MAIN" | ConvertFrom-Json
+          if ($target.tree.sha -cne $env:APPROVED_TREE) { throw 'Tested source and target main must have identical complete trees.' }
+          function Workflow-Tree([string]$Tree) {
+            $root = gh api "repos/Krish-Verma/Flick/git/trees/$Tree" | ConvertFrom-Json
+            $github = @($root.tree | Where-Object { $_.path -ceq '.github' -and $_.type -ceq 'tree' })
+            if ($github.Count -ne 1) { throw 'Missing .github tree.' }
+            $directory = gh api "repos/Krish-Verma/Flick/git/trees/$($github[0].sha)" | ConvertFrom-Json
+            $workflows = @($directory.tree | Where-Object { $_.path -ceq 'workflows' -and $_.type -ceq 'tree' })
+            if ($workflows.Count -ne 1) { throw 'Missing workflow tree.' }
+            return $workflows[0].sha
+          }
+          $sourceWorkflows = Workflow-Tree $source.tree.sha
+          $targetWorkflows = Workflow-Tree $target.tree.sha
+          if ($sourceWorkflows -cne $targetWorkflows) { throw 'Source/main workflow equality failed; GITHUB_TOKEN cannot authorize workflow differences.' }
+          $versionFile = gh api "repos/Krish-Verma/Flick/contents/release/preview-version.txt?ref=$env:APPROVED_SOURCE" | ConvertFrom-Json
+          if ($versionFile.encoding -cne 'base64' -or $versionFile.size -gt 128 -or
+              [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String(($versionFile.content -replace '\s',''))).Trim() -cne '1.0.10-preview.1') {
+            throw 'Canonical source version mismatch.'
+          }
+          $checks = @(
+            @{ id = $env:CI_RUN; attempt = $env:CI_ATTEMPT; path = '.github/workflows/ci.yml' },
+            @{ id = $env:RENDER_RUN; attempt = $env:RENDER_ATTEMPT; path = '.github/workflows/render-ui.yml' },
+            @{ id = $env:PACKAGE_RUN; attempt = $env:PACKAGE_ATTEMPT; path = '.github/workflows/preview-installer.yml' }
+          )
+          foreach ($check in $checks) {
+            $run = gh api "repos/Krish-Verma/Flick/actions/runs/$($check.id)" | ConvertFrom-Json
+            if ($run.status -cne 'completed' -or $run.conclusion -cne 'success' -or $run.head_sha -cne $env:APPROVED_SOURCE -or
+                $run.path -cne $check.path -or $check.attempt -cnotmatch '^[1-9][0-9]*$' -or $run.run_attempt -ne [long]$check.attempt -or $run.head_repository.full_name -cne 'Krish-Verma/Flick') {
+              throw 'Candidate source, workflow identity or successful validation mismatch'
+            }
+          }
+          $artifact = gh api "repos/Krish-Verma/Flick/actions/artifacts/$env:ARTIFACT_ID" | ConvertFrom-Json
+          if ($artifact.expired -or $artifact.workflow_run.id -ne [long]$env:PACKAGE_RUN -or
+              $artifact.workflow_run.repository_id -ne $repository.id -or $artifact.workflow_run.head_sha -cne $env:APPROVED_SOURCE -or
+              $artifact.size_in_bytes -le 0 -or $artifact.size_in_bytes -gt 1073741824 -or $artifact.digest -cne $env:ARTIFACT_DIGEST) {
+            throw 'Artifact provenance mismatch'
+          }
+          if ($artifact.name -cnotmatch '^flick-unsigned-preview-([0-9a-f]{40})$') { throw 'Unexpected artifact source name' }
+          $build = gh api "repos/Krish-Verma/Flick/git/commits/$($Matches[1])" | ConvertFrom-Json
+          if ($build.tree.sha -cne $env:APPROVED_TREE) { throw 'Artifact build tree differs from approved source tree' }
+          [ordered]@{
+            source = $source.sha; sourceTree = $source.tree.sha; build = $build.sha
+            runs = @($env:CI_RUN, $env:RENDER_RUN, $env:PACKAGE_RUN)
+            artifact = $artifact.id; artifactBytes = $artifact.size_in_bytes; artifactDigest = $artifact.digest; phase = 'evidence-verified'
+            approvedMain = $target.sha; workflowsTree = $sourceWorkflows; approvalRecordSha256 = $env:APPROVAL_RECORD_SHA256
+          } | ConvertTo-Json -Depth 8 | Set-Content $candidateReceipt -Encoding utf8
+      - name: Verify the complete pinned artifact archive
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          New-Item publication-receipt -ItemType Directory -Force | Out-Null
+          Copy-Item -LiteralPath (Join-Path $env:RUNNER_TEMP 'flick-publication-candidate.json') -Destination publication-receipt/candidate.json
+          $handler = [System.Net.Http.HttpClientHandler]::new()
+          $handler.AllowAutoRedirect = $false
+          $client = [System.Net.Http.HttpClient]::new($handler)
+          $client.Timeout = [TimeSpan]::FromSeconds(60)
+          try {
+            $client.DefaultRequestHeaders.Authorization = [System.Net.Http.Headers.AuthenticationHeaderValue]::new('Bearer', $env:GH_TOKEN)
+            $client.DefaultRequestHeaders.UserAgent.ParseAdd('Flick-release-verification')
+            $client.DefaultRequestHeaders.Add('X-GitHub-Api-Version', '2022-11-28')
+            $response = $client.GetAsync("https://api.github.com/repos/Krish-Verma/Flick/actions/artifacts/$env:ARTIFACT_ID/zip", [System.Net.Http.HttpCompletionOption]::ResponseHeadersRead).GetAwaiter().GetResult()
+            try {
+              if ([int]$response.StatusCode -notin @(302,307)) { throw 'Expected the authenticated artifact archive redirect' }
+              $location = $response.Headers.Location
+              if ($null -eq $location -or -not $location.IsAbsoluteUri -or $location.Scheme -cne 'https' -or
+                  $location.Port -ne 443 -or $location.UserInfo -or $location.Fragment -or
+                  $location.Host -notmatch '(^|\.)(actions\.githubusercontent\.com|blob\.core\.windows\.net|githubusercontent\.com|github\.com)$') {
+                throw 'Unexpected artifact download origin'
+              }
+            } finally { $response.Dispose() }
+          } finally { $client.Dispose(); $handler.Dispose() }
+          # The temporary archive URL receives no Authorization header.
+          try { Invoke-WebRequest -Uri $location.AbsoluteUri -OutFile candidate-artifact.zip -MaximumRedirection 6 -TimeoutSec 300 }
+          catch { throw 'Pinned archive transfer failed; temporary URL withheld.' }
+          $actual = (Get-FileHash candidate-artifact.zip -Algorithm SHA256).Hash
+          $candidate = Get-Content publication-receipt/candidate.json -Raw | ConvertFrom-Json
+          if ($actual -cne $env:ARTIFACT_DIGEST.Substring(7).ToUpperInvariant() -or (Get-Item candidate-artifact.zip).Length -ne $candidate.artifactBytes) {
+            throw 'Downloaded artifact archive digest/size mismatch.'
+          }
+          $zip = [IO.Compression.ZipFile]::OpenRead((Join-Path (Get-Location) 'candidate-artifact.zip'))
+          try {
+            $allowed = @('Flick-Setup.exe','Flick-v1.0.10-win-x64.zip','SHA256SUMS.txt')
+            $seen = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+            if ($zip.Entries.Count -ne 3) { throw 'Archive must contain exactly three root files.' }
+            foreach ($entry in $zip.Entries) {
+              if ($entry.FullName -cnotin $allowed -or -not $seen.Add($entry.FullName) -or $entry.Length -le 0 -or $entry.Length -gt 805306368 -or
+                  ($entry.FullName -ceq 'SHA256SUMS.txt' -and $entry.Length -gt 16384)) {
+                throw 'Unexpected, duplicate, path-traversing or oversized archive entry.'
+              }
+            }
+          } finally { $zip.Dispose() }
+          Expand-Archive -LiteralPath candidate-artifact.zip -DestinationPath release-files
+      - name: Publish and independently verify only the new approved download
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $true
+          $repo = 'Krish-Verma/Flick'
+          $tag = 'v1.0.10-preview.1'
+          $source = $env:APPROVED_MAIN
+          $names = @('Flick-Setup.exe', 'Flick-v1.0.10-win-x64.zip', 'SHA256SUMS.txt')
+          # These are hash-verified data files fetched in the approval step, never code.
+          $expectedPreserved = @(Get-Content -LiteralPath (Join-Path $env:RUNNER_TEMP 'flick-preserved-releases.json') -Raw | ConvertFrom-Json -Depth 32)
+          $approvedNotes = Get-Content -LiteralPath (Join-Path $env:RUNNER_TEMP 'flick-approved-notes.md') -Raw
+          $receipt = [ordered]@{
+            tag = $tag; source = $source; sourceTree = $env:APPROVED_TREE; phase = 'validating'
+            releaseId = $null; publicDownloadsVerified = @(); preservedReleaseIds = @($expectedPreserved | ForEach-Object { $_.id })
+            testedSource = $env:APPROVED_SOURCE; allOldReleasesPreserved = $false; allOldTagsPreserved = $false; completed = $false; failure = $null
+          }
+          function Assert-MainTarget {
+            $repository = gh api repos/Krish-Verma/Flick | ConvertFrom-Json
+            if ($repository.private -or $repository.default_branch -cne 'main') { throw 'Expected public Flick main.' }
+            $main = gh api repos/Krish-Verma/Flick/git/ref/heads/main | ConvertFrom-Json
+            if ($main.object.type -cne 'commit' -or $main.object.sha -cne $env:APPROVED_MAIN) { throw 'Main advanced or differs from the approved exact release target.' }
+            $target = gh api "repos/Krish-Verma/Flick/git/commits/$env:APPROVED_MAIN" | ConvertFrom-Json
+            if ($target.tree.sha -cne $env:APPROVED_TREE) { throw 'Main target tree differs from tested source.' }
+            return $target
+          }
+          function Get-AllReleases {
+            $pages = gh api --paginate --slurp "repos/$repo/releases?per_page=100" | ConvertFrom-Json -NoEnumerate
+            foreach ($page in $pages) { foreach ($release in $page) { $release } }
+          }
+          function Get-TagCommit([string] $name) {
+            $reference = gh api "repos/$repo/git/ref/tags/$name" | ConvertFrom-Json
+            $object = $reference.object
+            for ($depth = 0; $depth -lt 5; $depth++) {
+              if ($object.type -ceq 'commit') { return $object.sha }
+              if ($object.type -cne 'tag') { throw 'Unexpected release tag object' }
+              $object = (gh api "repos/$repo/git/tags/$($object.sha)" | ConvertFrom-Json).object
+            }
+            throw 'Release tag nesting is excessive'
+          }
+          function Assert-OldRelease($release, $expected, [bool] $expectedDraft) {
+            if ($release.id -ne $expected.id -or $release.tag_name -cne $expected.tag_name -or
+                $release.name -cne $expected.name -or $release.target_commitish -cne $expected.target_commitish -or
+                [bool]$release.draft -ne $expectedDraft -or $release.prerelease -or $release.immutable -or
+                @($release.assets).Count -ne 3) {
+              throw "Preserved release identity changed: $($expected.tag_name)"
+            }
+            foreach ($asset in $expected.assets) {
+              $found = @($release.assets | Where-Object { $_.id -eq $asset.id })
+              if ($found.Count -ne 1 -or $found[0].name -cne $asset.name -or $found[0].state -cne 'uploaded' -or
+                  $found[0].size -ne $asset.size -or $found[0].digest -cne $asset.digest) {
+                throw "Preserved release asset changed: $($expected.tag_name)/$($asset.name)"
+              }
+            }
+            if ((Get-TagCommit $expected.tag_name) -cne $expected.target_commitish) {
+              throw "Preserved release tag moved: $($expected.tag_name)"
+            }
+          }
+          function Snapshot-Release($release) {
+            [pscustomobject][ordered]@{
+              Id=$release.id; Tag=$release.tag_name; Target=$release.target_commitish; Name=$release.name; Body=$release.body
+              Draft=$release.draft; Prerelease=$release.prerelease; Immutable=$release.immutable; Created=$release.created_at; Published=$release.published_at
+              Assets=@($release.assets | Sort-Object id | ForEach-Object {
+                [pscustomobject][ordered]@{
+                  Id=$_.id; Name=$_.name; Label=$_.label; State=$_.state; Size=$_.size; Digest=$_.digest
+                  ContentType=$_.content_type; Created=$_.created_at; Updated=$_.updated_at; Url=$_.browser_download_url
+                }
+              })
+            }
+          }
+          function Snapshot-Tags {
+            $references = @(gh api "repos/$repo/git/matching-refs/tags/" | ConvertFrom-Json)
+            foreach ($reference in @($references | Sort-Object ref)) {
+              if ($reference.ref -cnotmatch '^refs/tags/') { throw 'Unexpected tag reference.' }
+              [pscustomobject][ordered]@{ Ref=$reference.ref; Type=$reference.object.type; Sha=$reference.object.sha }
+            }
+          }
+          function Assert-Preserved {
+            $catalogue = @(Get-AllReleases)
+            $expectedCount = $script:beforeReleases.Count + $(if ($null -eq $receipt.releaseId) { 0 } else { 1 })
+            if ($catalogue.Count -ne $expectedCount) { throw 'Unexpected release catalogue count.' }
+            $prior = @($catalogue | Where-Object { $_.id -in $receipt.preservedReleaseIds } | Sort-Object id | ForEach-Object { Snapshot-Release $_ })
+            if ((ConvertTo-Json -InputObject $prior -Depth 40 -Compress) -cne (ConvertTo-Json -InputObject $script:beforeReleases -Depth 40 -Compress)) {
+              throw 'Existing release metadata/assets changed; never modify them to recover.'
+            }
+            $extra = @($catalogue | Where-Object { $_.id -notin $receipt.preservedReleaseIds })
+            if ($null -ne $receipt.releaseId -and ($extra.Count -ne 1 -or $extra[0].id -ne $receipt.releaseId)) { throw 'Unexpected new release identity.' }
+            $priorTags = @(Snapshot-Tags | Where-Object { $_.Ref -cne "refs/tags/$tag" })
+            if ((ConvertTo-Json -InputObject $priorTags -Depth 10 -Compress) -cne (ConvertTo-Json -InputObject $script:beforeTags -Depth 10 -Compress)) { throw 'An existing Git tag changed.' }
+          }
+          function Assert-NewAssets($release, $paths, $hashes) {
+            if ($release.tag_name -cne $tag -or $release.target_commitish -cne $source -or @($release.assets).Count -ne 3 -or
+                $release.name -cne 'Flick 1.0.10 — UNSIGNED CAPTURE RUNTIME FIX') { throw 'Unexpected new release identity' }
+            foreach ($name in $names) {
+              $found = @($release.assets | Where-Object { $_.name -ceq $name })
+              if ($found.Count -ne 1 -or $found[0].state -cne 'uploaded' -or $found[0].size -ne (Get-Item -LiteralPath $paths[$name]).Length -or
+                  $found[0].digest -cne ('sha256:' + $hashes[$name].ToLowerInvariant())) { throw "Published asset mismatch: $name" }
+            }
+          }
+          function Get-VerifiedNewRelease([long] $id, $paths, $hashes) {
+            for ($attempt = 0; $attempt -lt 6; $attempt++) {
+              $release = gh api "repos/$repo/releases/$id" | ConvertFrom-Json
+              try { Assert-NewAssets $release $paths $hashes; return $release }
+              catch { if ($attempt -eq 5) { throw }; Start-Sleep -Seconds 5 }
+            }
+          }
+          function Assert-Current($release, $paths, $hashes) {
+            Assert-NewAssets $release $paths $hashes
+            $latest = gh api "repos/$repo/releases/latest" | ConvertFrom-Json
+            if ($release.id -ne $receipt.releaseId -or $release.draft -or $release.prerelease -or
+                $latest.id -ne $receipt.releaseId -or $latest.tag_name -cne $tag -or (Get-TagCommit $tag) -cne $source) {
+              throw 'New current release or Latest designation changed'
+            }
+          }
+          try {
+            $null = Assert-MainTarget
+            $existing = @(Get-AllReleases)
+            if ($existing.Count -ne $expectedPreserved.Count) { throw 'Unexpected existing release count.' }
+            foreach ($expected in $expectedPreserved) {
+              $matches = @($existing | Where-Object { $_.id -eq $expected.id })
+              if ($matches.Count -ne 1) { throw 'Reviewed preserved release missing.' }
+              Assert-OldRelease $matches[0] $expected ([bool]$expected.draft)
+            }
+            if ((gh api "repos/$repo/releases/latest" | ConvertFrom-Json).id -ne 424830445) { throw 'Current Latest differs from reviewed1.0.9.' }
+            $script:beforeReleases = @($existing | Sort-Object id | ForEach-Object { Snapshot-Release $_ })
+            $script:beforeTags = @(Snapshot-Tags)
+            ConvertTo-Json -InputObject $script:beforeReleases -Depth 40 | Set-Content publication-receipt/preserved-before.json -Encoding utf8
+            ConvertTo-Json -InputObject $script:beforeTags -Depth 10 | Set-Content publication-receipt/tags-before.json -Encoding utf8
+            $tagRefs = @(gh api "repos/$repo/git/matching-refs/tags/$tag" | ConvertFrom-Json)
+            if (@($tagRefs | Where-Object { $_.ref -ceq "refs/tags/$tag" }).Count) { throw 'Candidate tag already exists; inspect the previous outcome instead of overwriting or retrying' }
+            $files = @(Get-ChildItem release-files -Recurse -File)
+            if ($files.Count -ne 3) { throw 'Approved package artifact must contain exactly the three release files' }
+            $paths = @{}; $hashes = @{}
+            foreach ($name in $names) {
+              $found = @($files | Where-Object { $_.Name -ceq $name })
+              if ($found.Count -ne 1) { throw "Missing or ambiguous asset: $name" }
+              $paths[$name] = $found[0].FullName
+              $hashes[$name] = (Get-FileHash -LiteralPath $paths[$name] -Algorithm SHA256).Hash
+            }
+            $manifest = Get-Content -LiteralPath $paths['SHA256SUMS.txt'] -Raw
+            foreach ($name in @('Flick-Setup.exe', 'Flick-v1.0.10-win-x64.zip')) {
+              $entries = [regex]::Matches($manifest, '(?m)^([A-Fa-f0-9]{64}) [ *]' + [regex]::Escape($name) + '\r?$')
+              if ($entries.Count -ne 1 -or $entries[0].Groups[1].Value.ToUpperInvariant() -cne $hashes[$name]) { throw "Checksum mismatch: $name" }
+            }
+            if ($hashes['Flick-Setup.exe'] -cne $env:SETUP_SHA256.ToUpperInvariant() -or
+                $hashes['Flick-v1.0.10-win-x64.zip'] -cne $env:PORTABLE_SHA256.ToUpperInvariant()) { throw 'Reviewed installer/portable digest mismatch' }
+            # SHA256SUMS.txt is already pinned by the verified complete archive.
+            # Its individual digest is recorded below and matched on GitHub and public downloads.
+            $receipt.hashes = $hashes
+            $receipt.phase = 'creating-draft'
+            $notes = $approvedNotes + [Environment]::NewLine + @"
+
+          ## Publication evidence
+
+          Tested source: https://github.com/$repo/commit/$env:APPROVED_SOURCE
+          Release/tag target on exact main: [$source](https://github.com/$repo/commit/$source)
+          Source tree: $env:APPROVED_TREE
+          Windows CI: https://github.com/$repo/actions/runs/$env:CI_RUN
+          WPF rendering: https://github.com/$repo/actions/runs/$env:RENDER_RUN
+          Package and installer lifecycle: https://github.com/$repo/actions/runs/$env:PACKAGE_RUN
+          Artifact: $env:ARTIFACT_ID
+          Complete artifact archive digest: $env:ARTIFACT_DIGEST
+          Setup SHA-256: $env:SETUP_SHA256
+
+          This remains an UNSIGNED preview. Hosted CI does not qualify physical NVIDIA, AMD, Intel, hybrid or CPU recording, and checksums do not confer publisher trust. Trusted signing and on-device security qualification remain separate.
+          [Code signing policy](https://github.com/$repo/blob/$source/CODE_SIGNING_POLICY.md)
+          "@
+            $notes | Set-Content publication-receipt/release-notes.md -Encoding utf8
+            Assert-Preserved
+            $null = Assert-MainTarget
+            $tagRefs = @(gh api "repos/$repo/git/matching-refs/tags/$tag" | ConvertFrom-Json)
+            if (@($tagRefs | Where-Object { $_.ref -ceq "refs/tags/$tag" }).Count) { throw 'Candidate tag appeared before creation; stop without reusing it.' }
+            gh release create $tag $paths['Flick-Setup.exe'] $paths['Flick-v1.0.10-win-x64.zip'] $paths['SHA256SUMS.txt'] --repo $repo --target $source --draft --prerelease --title 'Flick 1.0.10 — UNSIGNED CAPTURE RUNTIME FIX' --notes-file publication-receipt/release-notes.md
+            $draftMatches = @(Get-AllReleases | Where-Object { $_.tag_name -ceq $tag })
+            if ($draftMatches.Count -ne 1) { throw 'Unique new draft not found; inspect before retrying' }
+            $receipt.releaseId = $draftMatches[0].id
+            $draft = Get-VerifiedNewRelease $receipt.releaseId $paths $hashes
+            if (-not $draft.draft -or -not $draft.prerelease) { throw 'Expected an unpublished draft preview' }
+            # GitHub disallows Latest on a catalogue prerelease. The semantic
+            # preview version, UNSIGNED title and explicit app consent remain.
+            @{ draft = $false; prerelease = $false; make_latest = 'true' } |
+              ConvertTo-Json | Set-Content publication-receipt/publish-request.json -Encoding utf8
+            Assert-Preserved
+            $null = Assert-MainTarget
+            $receipt.phase = 'publishing-current-download'
+            gh api --method PATCH "repos/$repo/releases/$($receipt.releaseId)" --input publication-receipt/publish-request.json | Out-Null
+            $published = Get-VerifiedNewRelease $receipt.releaseId $paths $hashes
+            Assert-Current $published $paths $hashes
+            $receipt.url = $published.html_url
+            New-Item public-downloads -ItemType Directory -Force | Out-Null
+            $receipt.phase = 'verifying-all-unauthenticated-public-downloads'
+            foreach ($name in $names) {
+              $asset = @($published.assets | Where-Object { $_.name -ceq $name })[0]
+              $url = "https://github.com/$repo/releases/download/$tag/$name"
+              if ($asset.browser_download_url -cne $url) { throw 'Unexpected public asset URL' }
+              $destination = Join-Path public-downloads $name
+              Invoke-WebRequest -Uri $url -OutFile $destination -MaximumRedirection 6 -TimeoutSec 300
+              if ((Get-Item -LiteralPath $destination).Length -ne $asset.size -or
+                  (Get-FileHash -LiteralPath $destination -Algorithm SHA256).Hash -cne $hashes[$name]) { throw "Public download mismatch: $name" }
+              $receipt.publicDownloadsVerified += $name
+            }
+            $receipt.phase = 'verifying-all-preserved-releases-and-tags'
+            Assert-Preserved
+            $receipt.allOldReleasesPreserved = $true
+            $receipt.allOldTagsPreserved = $true
+            $current = gh api "repos/$repo/releases/$($receipt.releaseId)" | ConvertFrom-Json
+            Assert-Current $current $paths $hashes
+            $publicLatest = Invoke-RestMethod -Uri "https://api.github.com/repos/$repo/releases/latest" -TimeoutSec 60
+            if ($publicLatest.id -ne $receipt.releaseId -or $publicLatest.tag_name -cne $tag) { throw 'Unauthenticated Latest mismatch.' }
+            $publicJson = (Invoke-WebRequest -Uri "https://api.github.com/repos/$repo/releases?per_page=100" -TimeoutSec 60).Content
+            $public = ConvertFrom-Json -InputObject $publicJson -NoEnumerate
+            if ($public -isnot [array]) { throw 'Expected a public release catalogue array.' }
+            $expectedPublicIds = @($existing | Where-Object { -not $_.draft } | ForEach-Object { $_.id }) + @($receipt.releaseId)
+            if ($public.Count -ne $expectedPublicIds.Count -or @($public | Where-Object { $_.id -notin $expectedPublicIds }).Count) {
+              throw 'Public catalogue differs; old releases must retain their visibility.'
+            }
+            $receipt.phase = 'complete'; $receipt.completed = $true
+            Write-Host "Published and independently verified $($current.html_url); ALL older release entries/statuses/assets/tags are unchanged."
+          }
+          catch { $receipt.failure = $_.Exception.Message; throw }
+          finally {
+            $receipt | ConvertTo-Json -Depth 15 | Set-Content publication-receipt/publication.json -Encoding utf8
+          }
+      - name: Preserve publication receipts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: flick-capture-runtime-preview-publication-${{ github.run_id }}
+          path: |
+            publication-receipt/*
+            ${{ runner.temp }}/flick-publication-candidate.json
+          if-no-files-found: warn
+          retention-days: 90
+
