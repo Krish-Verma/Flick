@@ -155,7 +155,7 @@ internal static partial class Program
         if (Find<ScrollViewer>("EditorContextScroll").Visibility != Visibility.Collapsed)
             failures.Add("The separate Trim/Audio scroll host is not collapsed during Share.");
         bool replacesEditor = Grid.GetRowSpan(context) > 1;
-        var backgroundVisibility = new[] { "PreviewSurface", "PlaybackControlsRow", "EditorToolBar" }
+        var backgroundVisibility = new[] { "EditorClipHeader", "PreviewSurface", "PlaybackControlsRow", "EditorToolBar" }
             .Select(name => new { Name = name, Visibility = Find<FrameworkElement>(name).Visibility }).ToArray();
         bool backgroundMatchesAllocation = backgroundVisibility.All(element =>
             element.Visibility == (replacesEditor ? Visibility.Hidden : Visibility.Visible));

@@ -55,7 +55,7 @@ public partial class MainWindow
         // The compact card replaces this allocation. Keep its underlying
         // player/tools measured, but don't leave half-visible controls around
         // the card or keyboard stops behind it. Close restores the workspace.
-        PreviewSurface.Visibility = PlaybackControlsRow.Visibility = EditorToolBar.Visibility =
+        EditorClipHeader.Visibility = PreviewSurface.Visibility = PlaybackControlsRow.Visibility = EditorToolBar.Visibility =
             useEditorArea ? Visibility.Hidden : Visibility.Visible;
         Grid.SetRow(EditorContextLayer, useEditorArea ? 0 : 1);
         Grid.SetRowSpan(EditorContextLayer, useEditorArea ? 5 : 1);

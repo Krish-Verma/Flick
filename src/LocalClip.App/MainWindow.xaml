@@ -287,7 +287,7 @@
             </GridSplitter>
 
             <!-- Scrollable editor and sticky share dock; compact mode fills entire workspace. -->
-            <Grid x:Name="ClipEditorPanel" Grid.Column="2" Margin="12,10,12,12" Background="{DynamicResource Flick.Brush.Canvas}"><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*" MinHeight="80"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions><Grid Grid.Row="0" Margin="0,0,0,10">
+            <Grid x:Name="ClipEditorPanel" Grid.Column="2" Margin="12,10,12,12" Background="{DynamicResource Flick.Brush.Canvas}"><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*" MinHeight="80"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions><Grid x:Name="EditorClipHeader" Grid.Row="0" Margin="0,0,0,10">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="Auto"/>
