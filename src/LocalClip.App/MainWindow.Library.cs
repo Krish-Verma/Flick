@@ -1,27 +1,35 @@
-using System;
 using System.Windows;
+using System.Windows.Controls;
 
 namespace LocalClip.App;
 
 public partial class MainWindow
 {
-    private void LibraryLayout_SizeChanged(object sender, SizeChangedEventArgs e) => UpdateLibraryScrollBounds();
-    private void LibraryDetails_ExpandedChanged(object sender, RoutedEventArgs e) => UpdateLibraryScrollBounds();
+    private Button? _libraryPanelOrigin;
 
-    private void UpdateLibraryScrollBounds()
+    private void LibraryPanel_Click(object sender, RoutedEventArgs e)
     {
-        if (LibraryLayoutRoot == null || LibraryHeaderScroll == null || LibraryDetailsScroll == null || ClipDetailsExpander == null) return;
-        double available = LibraryLayoutRoot.ActualHeight;
-        if (!double.IsFinite(available) || available <= 0) return;
+        if (sender is not Button { Tag: string kind } button) return;
+        var panel = kind == "Filters" ? LibraryFiltersPanel : LibraryDetailsPanel;
+        bool open = panel.Visibility != Visibility.Visible;
+        CloseLibraryPanels();
+        if (!open) return;
+        _libraryPanelOrigin = button;
+        panel.Visibility = Visibility.Visible;
+        System.Windows.Automation.AutomationProperties.SetHelpText(button, "Open");
+        (kind == "Filters" ? BtnCloseLibraryFiltersPanel : BtnCloseLibraryDetailsPanel).Focus();
+    }
 
-        // Both scroll regions are siblings of the virtualized list. A tall
-        // form or filter group must not consume the list's complete viewport.
-        double listReserve = Math.Min(160, Math.Max(96, available * .30));
-        double controls = Math.Max(0, available - listReserve);
-        double details = ClipDetailsExpander.IsExpanded
-            ? Math.Min(300, controls * .62)
-            : Math.Min(112, controls * .45);
-        LibraryDetailsScroll.MaxHeight = details;
-        LibraryHeaderScroll.MaxHeight = Math.Max(0, controls - details);
+    private void CloseLibraryPanel_Click(object sender, RoutedEventArgs e) => CloseLibraryPanels();
+
+    private void CloseLibraryPanels()
+    {
+        LibraryFiltersPanel.Visibility = LibraryDetailsPanel.Visibility = Visibility.Collapsed;
+        if (_libraryPanelOrigin != null)
+        {
+            System.Windows.Automation.AutomationProperties.SetHelpText(_libraryPanelOrigin, "Closed");
+            _libraryPanelOrigin.Focus();
+        }
+        _libraryPanelOrigin = null;
     }
 }

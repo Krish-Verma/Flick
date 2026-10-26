@@ -15,7 +15,7 @@
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
-            <TextBlock Text="Trim Clip" Style="{StaticResource Flick.Text.Section}"/>
+            <TextBlock Text="Trim clip" Style="{StaticResource Flick.Text.Section}"/>
             <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
                 <TextBlock x:Name="SelectedDurationText" Text="Selected: 0:00.00"
                            Style="{StaticResource Flick.Text.Caption}" Margin="0,0,10,0"/>

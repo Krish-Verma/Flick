@@ -390,6 +390,8 @@ internal static partial class Program
         Render("36-recording-test-failure-minimum.png", 720, 480);
         RenderShareFixtures(main, vm, settings, storage, fixtures, output, Render);
         RenderProductPhaseFixtures(main, vm, settings, storage, fixtures, output, Render);
+        RenderCleanSettingsFixtures(main, vm, settings, fixtures, output, Render);
+        RenderCleanDialogFixtures(main, vm, output, Render);
         if (shareLayoutFailures.Count != 0 || resourceLayoutFailures.Count != 0)
             throw new InvalidOperationException("Layout regression(s). Share: " + string.Join(", ", shareLayoutFailures) +
                 "; resources: " + string.Join(", ", resourceLayoutFailures));
@@ -411,6 +413,8 @@ internal static partial class Program
             "Brand samples: actual shared Image style rasterized by WPF at 96/120/144/192 DPI; not a physical per-monitor DPI session.\n" +
             "Share views37-48 additionally generate real synthetic H.264/AAC media, register it, use the production MP4 exporter/full decode and verify original immutability. Ready is backed by actual bytes/fingerprint; exporting/cancelling/failure are labelled visual fixtures. See share-fixture-evidence.json for exact scope. Share scaling images are raster tests; accessible palette is forced through the real local palette path without changing Windows settings. No external drag, clipboard or Discord operation is performed by the renderer.\n" +
             "Share views68-75 verify minimum-size More availability, applied/restored Custom250 limits, invalid0/251 rejection before workers, long failure summary/full-message preservation, and recent-export/custom/long-title/busy combinations. Share must have no ScrollViewer ancestor or visible nested scroller, zero scroll range, contained readable body/header/footer controls and complete action labels. Title ellipsis retains the full title tooltip; Details retains full status. No hidden overflow or disabled-scrollbar shortcut is accepted.\n" +
+            "Clean Settings views96 onward exercise all seven production categories at standard and minimum sizes, fixed category navigation and Save/Cancel, one page scroll surface, every rendered input/action reachable through that surface, advanced sharing, separate/system audio choices and populated connected-folder list containment. They use cloned preferences and synthetic paths/identities; no Save, scans, endpoint access, startup registration or network action. See clean-settings-fixture-evidence.json.\n" +
+            "Dialog views131-134 exercise the actual Rename prompt (Cancel), actual Share Export Details (OK), and one explicitly synthetic long retained-detail message. The shared modal has one finite body scroller with fixed actions; no nested scroll surface, native picker, rename, save or external operation is performed. See clean-dialog-fixture-evidence.json.\n" +
             "No gameplay, live MediaElement playback, OS titlebar, real recording, updater network request, or full physical UI acceptance claimed.\n");
         vm.Dispose();
         app.Shutdown();

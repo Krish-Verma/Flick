@@ -70,7 +70,7 @@ public partial class MainWindow
         string message = _vm.ExportStatusMessage;
         if (string.IsNullOrWhiteSpace(message)) message = _vm.ShareTileHint;
         Services.FlickDialog.Show(message + "\n\n" + _vm.ExportAspectDescription + "\n" + _vm.ShareSizeHint,
-            "Export Details", MessageBoxButton.OK, MessageBoxImage.Information);
+            "Export details", MessageBoxButton.OK, MessageBoxImage.Information);
     }
 
     private void ShareFooter_SizeChanged(object sender, SizeChangedEventArgs args) => UpdateEditorContextHeight();

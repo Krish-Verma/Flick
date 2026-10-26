@@ -29,33 +29,33 @@ public partial class MainViewModel
     public string ShareTileStateText => SelectedClip == null ? "No clip selected"
         : IsExporting ? (_shareCancellationRequested ? "Finishing cancellation…" : "Preparing MP4…")
         : IsExportReady ? "MP4 ready"
-        : ExportStatusMessage.StartsWith("Original Video Offline", StringComparison.Ordinal) ? "Original offline"
+        : ExportStatusMessage.StartsWith("Original Video Offline", StringComparison.OrdinalIgnoreCase) ? "Original offline"
         : ExportStatusMessage.StartsWith("Export Failed", StringComparison.OrdinalIgnoreCase) ? "Export failed"
         : ExportStatusMessage.StartsWith("Export Cancelled", StringComparison.OrdinalIgnoreCase) ? "Export cancelled"
         : !string.IsNullOrEmpty(SelectedClip.ExportedFilePath) ? "A new export is needed" : "Prepare your MP4";
-    public string ShareTileHint => SelectedClip == null ? "Select a clip from Your Clips."
-        : IsExporting ? (_shareCancellationRequested ? "Releasing the export worker. Your original is safe." : "Keep editing after the local file is ready.")
-        : IsExportReady ? "Drag this clip into Discord, or use Copy File."
+    public string ShareTileHint => SelectedClip == null ? "Select a clip from Your clips."
+        : IsExporting ? (_shareCancellationRequested ? "Cancelling export…" : "Preparing on this PC.")
+        : IsExportReady ? "Drag into Discord or use Copy file."
         : ShareTileStateText == "Original offline" ? "Reconnect its folder before exporting."
-        : "Choose a size limit, then export. Nothing is uploaded.";
+        : "Choose a size, then export.";
     public string ShareFormatHint => (ExportAspectPreset switch
     {
         "Vertical9x16" => "Fit 9:16 · no crop · ",
         "Square1x1" => "Fit 1:1 · no crop · ",
         _ => "Original shape · "
-    }) + $"up to {TargetSizeMb.ToString(CultureInfo.CurrentCulture)} MB · destination limits may vary";
+    }) + $"up to {TargetSizeMb.ToString(CultureInfo.CurrentCulture)} MB";
     public string ShareStatusSummary
     {
         get
         {
             string status = ExportStatusMessage;
-            if (status.Length <= 130) return status;
+            if (status.Length <= 72) return status;
             if (IsExporting) return ShareCanCancel ? "Preparing your local MP4…" : "Finishing cancellation…";
             if (status.StartsWith("Export Failed", StringComparison.OrdinalIgnoreCase))
-                return "Export failed. Open Details for the reason. Your original is unchanged.";
+                return "Export failed. Open Details.";
             if (status.StartsWith("Post failed", StringComparison.OrdinalIgnoreCase))
-                return "Posting failed. Open Details for the reason.";
-            return "Open Details for the full export message.";
+                return "Posting failed. Open Details.";
+            return "Open Details for more.";
         }
     }
 
@@ -89,7 +89,7 @@ public partial class MainViewModel
         if (!ShareCanCancel) return;
         _shareCancellationRequested = true;
         CancelExport();
-        ExportStatusMessage = "Cancelling Local Export…";
+        ExportStatusMessage = "Cancelling export…";
         NotifySharePresentation();
     }
 

@@ -22,7 +22,7 @@ public partial class SettingsStagingTests
         var approved = new ApprovedGameProfile { Id = Guid.NewGuid(), Enabled = true, Name = "Synthetic approved game", ExecutablePath = @"C:\Synthetic\Game.exe" };
         var settings = AppSettings.CreateDefault(); settings.ApprovedGameProfiles = [approved];
         var page = new SettingsWindow(settings, () => false);
-        var list = Assert.IsType<ListBox>(page.FindName("LstApprovedGames"));
+        var list = Assert.IsType<ComboBox>(page.FindName("LstApprovedGames"));
         var staged = Assert.IsType<ObservableCollection<ApprovedGameProfile>>(list.ItemsSource);
         Assert.False(Assert.IsType<CheckBox>(page.FindName("ChkGameDetectionEnabled")).IsChecked);
         Assert.NotSame(approved, Assert.Single(staged));

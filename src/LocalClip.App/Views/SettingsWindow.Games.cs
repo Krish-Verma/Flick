@@ -44,7 +44,7 @@ public partial class SettingsWindow
         _gameApprovalCancellation = cancellation;
         BtnRefreshRunningGames.IsEnabled = false;
         CmbRunningGames.ItemsSource = null;
-        TxtGameMessage.Text = "Checking eligible running windows…";
+        TxtGameMessage.Text = "Finding games…";
         try
         {
             var snapshot = await Task.Run(() => _gameWindowEnumerator.Scan(cancellation.Token), cancellation.Token);
@@ -54,8 +54,9 @@ public partial class SettingsWindow
                 .OrderBy(window => window.Title, StringComparer.OrdinalIgnoreCase).Select(window => new RunningGameChoice(window)).ToArray();
             CmbRunningGames.ItemsSource = choices;
             CmbRunningGames.SelectedIndex = choices.Length > 0 ? 0 : -1;
-            TxtGameMessage.Text = choices.Length == 0 ? "No eligible running windows found. Open a game without elevation, then try again."
-                : "Select a game window, then approve its full executable path. This does not start recording.";
+            TxtGameMessage.Text = choices.Length == 0 ? "No games found. Open a game and refresh."
+                : "Choose a game, then approve it.";
+            TxtGameMessage.ToolTip = "Only eligible, unelevated game windows are listed. Approving a path stages it without starting recording.";
         }
         catch (OperationCanceledException) { TxtGameMessage.Text = "Window discovery cancelled. No game was approved."; }
         catch { TxtGameMessage.Text = "Running windows could not be verified. No game was approved."; }
@@ -80,7 +81,7 @@ public partial class SettingsWindow
         var profile = new ApprovedGameProfile { Id = Guid.NewGuid(), Enabled = true, Name = name, ExecutablePath = current.Process.ExecutablePath };
         _stagedGameProfiles.Add(profile);
         LstApprovedGames.SelectedItem = profile;
-        TxtGameMessage.Text = "Game approval is staged. Review its replay and audio choices, then Save settings.";
+        TxtGameMessage.Text = "Game added. Save to apply.";
     }
 
     private void ApprovedGame_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -142,7 +143,7 @@ public partial class SettingsWindow
     private void ApplyGameProfile_Click(object sender, RoutedEventArgs e)
     {
         TxtGameMessage.Text = TryStageGameEditor(out string error)
-            ? "Profile edits are staged. Save settings to apply them." : error;
+            ? "Profile updated. Save to apply." : error;
     }
 
     private void RemoveGameProfile_Click(object sender, RoutedEventArgs e)
@@ -151,7 +152,7 @@ public partial class SettingsWindow
         _editingGameProfileId = null;
         if (profile != null) _stagedGameProfiles.Remove(profile);
         ShowGameEditor(null);
-        TxtGameMessage.Text = "Removal is staged. Save settings to apply it.";
+        TxtGameMessage.Text = "Game removed. Save to apply.";
     }
 
     private bool ReviewGameSettingsBeforeSave()
@@ -159,8 +160,8 @@ public partial class SettingsWindow
         if (!TryStageGameEditor(out string error) || !GameDetectionPolicy.ValidateProfiles(_stagedGameProfiles.ToArray(), out error) ||
             (ChkGameDetectionEnabled.IsChecked == true && !_stagedGameProfiles.Any(profile => profile.Enabled)))
         {
-            SelectCategory("Games");
-            TxtGameMessage.Text = string.IsNullOrWhiteSpace(error) ? "Approve and enable at least one game before enabling automatic replay." : error;
+            ShowSaveValidation("Games", ChkGameDetectionEnabled, "Review your game settings.");
+            TxtGameMessage.Text = string.IsNullOrWhiteSpace(error) ? "Approve and enable at least one game first." : error;
             return false;
         }
         bool enabled = ChkGameDetectionEnabled.IsChecked == true;
@@ -175,7 +176,9 @@ public partial class SettingsWindow
                   game.Name + "\n" + game.ExecutablePath + "\n" + game.QualityPreset + " · " + game.ReplayDurationSeconds +
                   "s · microphone " + (game.AllowMicrophone ? "only if Audio also enables it" : "off")))
             : "Disable automatic game replay? Active automatic recording will stop and its unsaved buffer will be discarded. Saved clips and manual replay preferences are retained.";
-        return FlickDialog.Show(summary, enabled ? "Approve Automatic Game Replay" : "Disable Automatic Game Replay",
+        bool approved = FlickDialog.Show(summary, enabled ? "Approve Automatic Game Replay" : "Disable Automatic Game Replay",
             MessageBoxButton.YesNo, MessageBoxImage.Warning) == MessageBoxResult.Yes;
+        if (!approved) TxtSaveStatus.Text = "Changes not saved.";
+        return approved;
     }
 }

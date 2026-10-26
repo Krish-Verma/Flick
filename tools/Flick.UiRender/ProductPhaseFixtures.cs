@@ -74,7 +74,7 @@ internal static partial class Program
         }
         Category("Games");
         Page<CheckBox>("ChkGameDetectionEnabled").IsChecked = true;
-        Page<ListBox>("LstApprovedGames").SelectedIndex = 0;
+        Page<System.Windows.Controls.Primitives.Selector>("LstApprovedGames").SelectedIndex = 0;
         Page<TextBlock>("TxtGameMessage").Text = "Synthetic staged preferences only · no window scan, approval or recording performed.";
         SettingsFrame("49-games-staged-720.png", 1280, 720, "Games overview");
         scroll.ScrollToBottom();
@@ -93,28 +93,22 @@ internal static partial class Program
         SettingsFrame("55-separate-app-audio-microphone-minimum.png", 720, 480, "Independent microphone choice");
         if (settings.GameDetectionEnabled || typeof(MainViewModel).GetField("_gameTimer", Private)!.GetValue(vm) != null)
             throw new InvalidOperationException("Staged Games rendering must not enable live detection.");
-        // At minimum height every category remains reachable by the real
-        // ScrollViewer BringIntoView path; no control coordinates are changed.
-        var navigation = Page<ScrollViewer>("SettingsNavScroll");
+        // Every category is reachable without scrolling the category rail.
+        // SettingsScroll is the single page scroll surface; the rail and footer
+        // remain outside it so their controls cannot become wheel traps.
         var navigationChecks = new List<object>();
         foreach (string name in new[] { "NavRecording", "NavGames", "NavAudio", "NavShortcuts", "NavStorage", "NavGeneral", "NavSharing" })
         {
             var button = Page<Button>(name);
-            button.BringIntoView();
-            for (int pass = 0; pass < 3; pass++)
-            {
-                DrainDispatcherThroughContextIdle(page.Dispatcher);
-                page.UpdateLayout();
-            }
-            Rect location = button.TransformToAncestor(navigation).TransformBounds(new Rect(button.RenderSize));
-            bool reachable = ProductContains(new Rect(navigation.RenderSize), location);
-            navigationChecks.Add(new { Name = name, Reachable = reachable, navigation.VerticalOffset,
-                navigation.ViewportHeight, navigation.ScrollableHeight });
-            if (!reachable || !double.IsFinite(navigation.ViewportHeight) || navigation.ViewportHeight <= 0)
-                throw new InvalidOperationException("Settings category is unreachable at minimum height: " + name);
+            Rect location = button.TransformToAncestor(page).TransformBounds(new Rect(button.RenderSize));
+            bool reachable = ProductContains(new Rect(page.RenderSize), location);
+            bool outsidePageScroller = !HasVisualAncestor(button, scroll, page);
+            navigationChecks.Add(new { Name = name, Reachable = reachable, OutsidePageScroller = outsidePageScroller });
+            if (!reachable || !outsidePageScroller)
+                throw new InvalidOperationException("Settings category is unreachable or inside the page scroller: " + name);
         }
         Category("Sharing");
-        SettingsFrame("67-settings-navigation-minimum.png", 720, 480, "Last category reached through actual navigation scrolling");
+        SettingsFrame("67-settings-navigation-minimum.png", 720, 480, "All categories remain fixed and reachable at minimum height");
         observations.Add(new { SettingsCategoryNavigation = navigationChecks });
         Invoke("ReturnToClipWorkspace"); // Discard the actual staged page without Save.
 
@@ -195,7 +189,26 @@ internal static partial class Program
                 var list = Find<ListBox>("ClipList");
                 listHeight = list.ActualHeight;
                 Rect listBounds = list.TransformToAncestor(library).TransformBounds(new Rect(list.RenderSize));
-                libraryFits = list.ActualHeight >= 96 && ProductContains(new Rect(library.RenderSize), listBounds);
+                var scrollSurfaces = ProductVisuals(library).OfType<ScrollViewer>()
+                    .Where(surface => IsInRenderedPath(surface, library)).ToArray();
+                bool oneListScroller = scrollSurfaces.Length == 1 && HasVisualAncestor(scrollSurfaces[0], list, library);
+                bool panelsFit = true;
+                foreach (string kind in new[] { "Filters", "Details" })
+                {
+                    var panel = Find<Border>("Library" + kind + "Panel");
+                    if (panel.Visibility != Visibility.Visible) continue;
+                    Rect panelBounds = RelativeBounds(panel, library);
+                    var close = Find<Button>("BtnCloseLibrary" + kind + "Panel");
+                    panelsFit &= ProductContains(new Rect(library.RenderSize), panelBounds) &&
+                        ProductContains(panelBounds, RelativeBounds(close, library)) &&
+                        !ProductVisuals(panel).OfType<ScrollViewer>().Any() &&
+                        ProductVisuals(panel).OfType<Control>()
+                            .Where(control => control is Button or CheckBox or ComboBox or TextBox)
+                            .Where(control => IsInRenderedPath(control, library))
+                            .All(control => ProductContains(panelBounds, RelativeBounds(control, library)));
+                }
+                libraryFits = list.ActualHeight >= 96 && ProductContains(new Rect(library.RenderSize), listBounds) &&
+                    oneListScroller && panelsFit;
             }
             observations.Add(new { Image = file, State = state, Width = width, Height = height,
                 FilteredClips = vm.FilteredClips.Count, RecentExports = vm.RecentExports.Count,
@@ -215,30 +228,27 @@ internal static partial class Program
         ProductFrame("57-favorite-library-minimum.png", 720, 480, "Favorites filtered library");
         vm.FavoritesOnly = false;
         Split();
-        var details = ProductVisuals(Find<FrameworkElement>("WorkspaceContentGrid")).OfType<Expander>()
-            .Single(expander => Equals(expander.Header, "Clip details"));
-        details.IsExpanded = true;
+        Find<Button>("BtnLibraryDetails").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         vm.TagsDraft = "clutch, overtime, review";
-        ProductFrame("58-clip-details-staged-720.png", 1280, 720, "Unsaved tag edit, actual save-state binding");
+        ProductFrame("58-clip-details-staged-720.png", 1280, 720, "Unsaved tag edit in the on-demand details panel");
         Compact(library: true);
-        ProductFrame("65-clip-details-minimum-top.png", 720, 480, "Expanded clip details preserve the virtualized library at minimum size");
-        var detailsScroll = Find<ScrollViewer>("LibraryDetailsScroll");
-        var headerScroll = Find<ScrollViewer>("LibraryHeaderScroll");
-        detailsScroll.ScrollToBottom();
+        ProductFrame("65-clip-details-minimum-top.png", 720, 480, "Complete details panel without an inner scroller");
+        var detailsPanel = Find<Border>("LibraryDetailsPanel");
         var saveDetails = Find<Button>("BtnSaveClipDetails");
-        saveDetails.BringIntoView();
-        ProductFrame("66-clip-details-minimum-save.png", 720, 480, "Expanded details scroll to actual Save action at minimum size");
-        Rect saveBounds = saveDetails.TransformToAncestor(detailsScroll).TransformBounds(new Rect(saveDetails.RenderSize));
-        bool saveReachable = ProductContains(new Rect(detailsScroll.RenderSize), saveBounds);
-        observations.Add(new { ExpandedLibraryDetails = true, SaveReachable = saveReachable,
-            DetailsViewportHeight = detailsScroll.ViewportHeight, DetailsScrollHeight = detailsScroll.ScrollableHeight,
-            HeaderViewportHeight = headerScroll.ViewportHeight, HeaderScrollHeight = headerScroll.ScrollableHeight });
-        if (!saveReachable || detailsScroll.ViewportHeight <= 0 || !double.IsFinite(detailsScroll.ViewportHeight) ||
-            headerScroll.ViewportHeight <= 0 || !double.IsFinite(headerScroll.ViewportHeight))
-            throw new InvalidOperationException("Expanded library controls are not reachable in finite scroll viewports.");
+        bool saveReachable = ProductContains(RelativeBounds(detailsPanel, Find<Border>("ClipLibraryPanel")),
+            RelativeBounds(saveDetails, Find<Border>("ClipLibraryPanel")));
+        bool detailsHaveNoScroller = !ProductVisuals(detailsPanel).OfType<ScrollViewer>().Any();
+        ProductFrame("66-clip-details-minimum-save.png", 720, 480, "Save details remains visible without scrolling");
+        observations.Add(new { LibraryDetails = true, SaveReachable = saveReachable, NoNestedScroller = detailsHaveNoScroller });
+        if (!saveReachable || !detailsHaveNoScroller)
+            throw new InvalidOperationException("Clip details or Save require nested scrolling.");
+        Find<Button>("BtnCloseLibraryDetailsPanel").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Find<Button>("BtnLibraryFilters").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        ProductFrame("129-library-filters-minimum.png", 720, 480, "On-demand filter controls preserve the single list scroller");
         Split();
+        ProductFrame("130-library-filters-wide.png", 1280, 720, "Filter controls at the split library width");
+        Find<Button>("BtnCloseLibraryFiltersPanel").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         vm.TagsDraft = vm.SelectedClip!.TagsText; // Discard the draft before later navigation.
-        details.IsExpanded = false;
         Invoke("EditorTool_Click", Find<Button>("ToolTrim"), new RoutedEventArgs());
         ProductFrame("59-editor-markers-720.png", 1280, 720, "Trim and synthetic retained markers");
         Compact(library: false);

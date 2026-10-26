@@ -187,6 +187,7 @@
         </Setter>
     </Style>
     <Style x:Key="Flick.Input.Combo" TargetType="{x:Type ComboBox}">
+        <Setter Property="services:FlickScrollRouting.PreserveSelectionOnWheel" Value="True"/>
         <Setter Property="Cursor" Value="Hand"/>
         <Setter Property="services:FlickHoverFeedback.Enabled" Value="True"/>
         <Setter Property="MinHeight" Value="{StaticResource Flick.Size.Control}"/>

@@ -14,7 +14,7 @@ namespace LocalClip.App;
 public partial class MainWindow
 {
     private bool ConfirmDiscardOrganization() => !_vm.HasUnsavedOrganization || FlickDialog.Show(
-        "Clip details have not been saved. Discard those changes?", "Unsaved Clip Details",
+        "Clip details have not been saved. Discard those changes?", "Unsaved clip details",
         MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No) == MessageBoxResult.Yes;
     private void SaveOrganization_Click(object sender, RoutedEventArgs e) => _vm.SaveOrganization();
     private void ToggleFavorite_Click(object sender, RoutedEventArgs e) => _vm.ToggleFavorite();
