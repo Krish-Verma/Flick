@@ -27,7 +27,10 @@ public partial class SettingsWindow
         if (AppAudioSourcesPanel != null)
             AppAudioSourcesPanel.Visibility = CmbAudioMode.SelectedIndex == 1 ? Visibility.Visible : Visibility.Collapsed;
         if (SystemAudioDevicePanel != null)
+        {
             SystemAudioDevicePanel.IsEnabled = CmbAudioMode.SelectedIndex != 1;
+            SystemAudioDevicePanel.Visibility = CmbAudioMode.SelectedIndex == 1 ? Visibility.Collapsed : Visibility.Visible;
+        }
     }
 
     private void PopulateAudio(AppSettings settings)

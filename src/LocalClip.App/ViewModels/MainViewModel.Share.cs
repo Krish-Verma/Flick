@@ -49,6 +49,8 @@ public partial class MainViewModel
         get
         {
             string status = ExportStatusMessage;
+            if (IsExportReady && status.StartsWith("Ready to share", StringComparison.OrdinalIgnoreCase))
+                return ""; // The tile already shows readiness and actual size.
             if (status.Length <= 72) return status;
             if (IsExporting) return ShareCanCancel ? "Preparing your local MP4…" : "Finishing cancellation…";
             if (status.StartsWith("Export Failed", StringComparison.OrdinalIgnoreCase))

@@ -28,8 +28,8 @@ public class WorkspaceLayoutRulesTests
     [Fact]
     public void CompactActionPreservesRealSaveHotkeyMeaning()
     {
-        Assert.Equal("Save Clip", WorkspaceLayoutRules.SaveActionLabel(120, true));
-        Assert.Equal("Save Last 30 Seconds", WorkspaceLayoutRules.SaveActionLabel(30, false));
+        Assert.Equal("Save clip", WorkspaceLayoutRules.SaveActionLabel(120, true));
+        Assert.Equal("Save last 30 seconds", WorkspaceLayoutRules.SaveActionLabel(30, false));
         Assert.Throws<ArgumentOutOfRangeException>(() =>
             WorkspaceLayoutRules.SaveActionLabel(0, true));
     }

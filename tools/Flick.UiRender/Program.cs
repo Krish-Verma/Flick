@@ -84,7 +84,7 @@ internal static partial class Program
         Invoke("ResetPlayerForSelection");
         // Keep an honest empty preview instead of substituting fabricated gameplay.
         Find<Image>("PlayerPoster").Visibility = Visibility.Collapsed;
-        Find<TextBlock>("PlayerPosterHint").Text = "Press Play to Preview";
+        Find<TextBlock>("PlayerPosterHint").Text = "Press Play to preview";
         // Populate the real bound collection/selection together. A local
         // ComboBox selection is overwritten by the VM's null selected target.
         vm.Targets.Add(new TargetItem { DisplayName = "Sample monitor (synthetic)", Type = "Monitor" });

@@ -225,17 +225,17 @@ public partial class SettingsStagingTests
                     finally { saveRequestField.SetValue(vm, 0); }
 
                     var healthStatus = Assert.IsType<TextBlock>(window.FindName("TxtHealthStatus"));
-                    Assert.Equal("Saving Clip", healthStatus.Text);
+                    Assert.Equal("Saving clip", healthStatus.Text);
 
                     Assert.True(health.RecordValidatedClip(session, "synthetic-save", "synthetic-summary", 12.5));
                     PublishHealth();
-                    Assert.Equal("Save Successful", healthStatus.Text);
+                    Assert.Equal("Save successful", healthStatus.Text);
                     Assert.Contains("12.5", vm.HealthLastSavedText);
                     health.RecordRecordingIssue(session, "synthetic-fault", "Synthetic capture failure retained for review.");
                     vm.CaptureStatus = "Faulted";
                     PublishHealth();
                     Assert.False(saveButton.IsEnabled);
-                    Assert.Equal("Recording Faulted", healthStatus.Text);
+                    Assert.Equal("Recording faulted", healthStatus.Text);
                     Assert.Contains("Synthetic capture failure", vm.HealthLastFailureText);
                     Assert.DoesNotContain("29.5s / 30s", vm.HealthDetailsText);
 

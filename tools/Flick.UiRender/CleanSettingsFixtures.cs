@@ -121,9 +121,9 @@ internal static partial class Program
                 bool actionsFit = ProductVisuals(folders).OfType<Button>().Where(button => IsInRenderedPath(button, folders))
                     .All(button => ProductContains(bounds, RelativeBounds(button, folders)));
                 bool listFits = ProductContains(bounds, RelativeBounds(list, folders)) && list.ActualHeight >= 96;
-                var surface = ProductVisuals(list).OfType<ScrollViewer>().Single();
+                var surface = ProductVisuals(list).OfType<ScrollViewer>().Single(candidate => IsUserScrollSurface(candidate, folders));
                 bool singleSurface = !ProductVisuals(folders).OfType<ScrollViewer>()
-                    .Where(candidate => IsInRenderedPath(candidate, folders)).Any(candidate => candidate != surface);
+                    .Where(candidate => IsUserScrollSurface(candidate, folders)).Any(candidate => candidate != surface);
                 list.ScrollIntoView(vm.ConnectedFolders[^1]);
                 DrainDispatcherThroughContextIdle(folders.Dispatcher);
                 folders.UpdateLayout();
@@ -165,7 +165,7 @@ internal static partial class Program
             bool finiteViewport = scroll.ViewportHeight > 0 && double.IsFinite(scroll.ViewportHeight) && scroll.ViewportWidth > 0 &&
                 double.IsFinite(scroll.ViewportWidth) && ProductContains(pageBounds, scrollBounds);
             var nested = ProductVisuals(scroll).OfType<ScrollViewer>().Where(candidate => candidate != scroll &&
-                IsInRenderedPath(candidate, page) && candidate.ScrollableHeight > .5 &&
+                IsUserScrollSurface(candidate, page) && candidate.ScrollableHeight > .5 &&
                 candidate.VerticalScrollBarVisibility is ScrollBarVisibility.Auto or ScrollBarVisibility.Visible).ToArray();
             bool longPathPreserved = true;
             if (category == "Games")
@@ -248,5 +248,21 @@ internal static partial class Program
             if (ReferenceEquals(current, boundary)) return child.ActualWidth > 0 && child.ActualHeight > 0;
         }
         return false;
+    }
+
+    private static bool IsUserScrollSurface(ScrollViewer surface, FrameworkElement boundary)
+    {
+        if (!IsInRenderedPath(surface, boundary)) return false;
+        // WPF single-line text inputs use ScrollViewer PART_ContentHost for
+        // caret/horizontal text positioning. Counting that implementation
+        // detail as a second vertically scrolling pane is a false positive.
+        // A real multiline input or any independently scrolling list remains
+        // included, even if its current content happens not to overflow.
+        for (DependencyObject? current = VisualTreeHelper.GetParent(surface); current != null; current = VisualTreeHelper.GetParent(current))
+        {
+            if (current is TextBox { AcceptsReturn: false } or PasswordBox) return false;
+            if (ReferenceEquals(current, boundary)) break;
+        }
+        return true;
     }
 }

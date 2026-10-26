@@ -117,6 +117,20 @@ internal static class SharePresentationAssertions
             RefreshAvailability();
             Assert.True(vm.CanStartExport); Assert.True(export.IsEnabled);
 
+            // Readiness/size already appear on the tile. Suppress only that
+            // duplicate footer; action feedback and errors must remain visible.
+            Set("_isExportReady", true);
+            vm.ExportStatusMessage = "Ready to share · 1.56 MB";
+            for (int pass = 0; pass < 3; pass++)
+                dispatcher.Invoke(() => { }, DispatcherPriority.ContextIdle, CancellationToken.None, TimeSpan.FromSeconds(2));
+            Assert.Equal("", vm.ShareStatusSummary);
+            Assert.Equal(System.Windows.Visibility.Collapsed, ((Grid)window.FindName("ShareStatusRow")).Visibility);
+            vm.ExportStatusMessage = "Post failed: synthetic destination failure";
+            Assert.Contains("Post failed", vm.ShareStatusSummary);
+            vm.ExportStatusMessage = "File copied · paste into Discord";
+            Assert.Equal(vm.ExportStatusMessage, vm.ShareStatusSummary);
+            Set("_isExportReady", false);
+
             string completeFailure = "Export Failed: " + new string('x', 600) + " Keep the original and choose another folder.";
             vm.ExportStatusMessage = completeFailure;
             for (int pass = 0; pass < 3; pass++)

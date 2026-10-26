@@ -29,6 +29,6 @@ public static class WorkspaceLayoutRules
     {
         if (replayDurationSeconds < 15 || replayDurationSeconds > 120)
             throw new ArgumentOutOfRangeException(nameof(replayDurationSeconds));
-        return compact ? "Save Clip" : $"Save Last {replayDurationSeconds} Seconds";
+        return compact ? "Save clip" : $"Save last {replayDurationSeconds} seconds";
     }
 }

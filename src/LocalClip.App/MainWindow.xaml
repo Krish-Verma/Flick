@@ -9,6 +9,18 @@
         <services:WidthToVideoHeightConverter x:Key="Flick.VideoAspectHeight"/>
         <services:ThumbnailImageConverter x:Key="Flick.ThumbnailDecoder"/>
         <services:ShareAspectLabelConverter x:Key="Flick.ShareAspectLabel"/>
+        <DataTemplate x:Key="GameFilterLabel">
+            <TextBlock><TextBlock.Style><Style TargetType="TextBlock" BasedOn="{StaticResource Flick.Text.Control}">
+                <Setter Property="Text" Value="{Binding}"/>
+                <Style.Triggers><DataTrigger Binding="{Binding}" Value="All Games"><Setter Property="Text" Value="All games"/></DataTrigger></Style.Triggers>
+            </Style></TextBlock.Style></TextBlock>
+        </DataTemplate>
+        <DataTemplate x:Key="LibrarySortLabel">
+            <TextBlock><TextBlock.Style><Style TargetType="TextBlock" BasedOn="{StaticResource Flick.Text.Control}">
+                <Setter Property="Text" Value="{Binding}"/>
+                <Style.Triggers><DataTrigger Binding="{Binding}" Value="Recently Exported"><Setter Property="Text" Value="Recently exported"/></DataTrigger></Style.Triggers>
+            </Style></TextBlock.Style></TextBlock>
+        </DataTemplate>
     </Window.Resources>
 
     <Grid>
@@ -228,10 +240,10 @@
                         <Grid Margin="0,10,0,0">
                             <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="8"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                             <StackPanel><TextBlock Text="Game" Style="{StaticResource Flick.Text.Caption}" Margin="0,0,0,4"/>
-                                <ComboBox ItemsSource="{Binding GameGroups}" SelectedItem="{Binding GameFilter}" MinWidth="0" Style="{StaticResource Flick.Input.Combo}" AutomationProperties.Name="Filter by Game"/>
+                                <ComboBox ItemsSource="{Binding GameGroups}" SelectedItem="{Binding GameFilter}" ItemTemplate="{StaticResource GameFilterLabel}" MinWidth="0" Style="{StaticResource Flick.Input.Combo}" AutomationProperties.Name="Filter by game"/>
                             </StackPanel>
                             <StackPanel Grid.Column="2"><TextBlock Text="Sort" Style="{StaticResource Flick.Text.Caption}" Margin="0,0,0,4"/>
-                                <ComboBox ItemsSource="{Binding LibrarySortChoices}" SelectedItem="{Binding LibrarySort}" MinWidth="0" Style="{StaticResource Flick.Input.Combo}" AutomationProperties.Name="Sort Clips"/>
+                                <ComboBox ItemsSource="{Binding LibrarySortChoices}" SelectedItem="{Binding LibrarySort}" ItemTemplate="{StaticResource LibrarySortLabel}" MinWidth="0" Style="{StaticResource Flick.Input.Combo}" AutomationProperties.Name="Sort clips"/>
                             </StackPanel>
                         </Grid>
                         <Grid Margin="0,9,0,0"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="100"/></Grid.ColumnDefinitions>
@@ -282,9 +294,9 @@
                             </Grid.ColumnDefinitions>
                             <StackPanel Grid.Column="0" MinWidth="0" VerticalAlignment="Center">
                                 <Button x:Name="BtnBackToLibrary" Content="Your clips" ContentTemplate="{StaticResource Flick.IconText.Back}" Style="{StaticResource Flick.Button.Ghost}" HorizontalAlignment="Left" Margin="0,0,0,6" Click="BtnBackToLibrary_Click" Visibility="Collapsed" ToolTip="Return to Your Clips" AutomationProperties.Name="Back to Your Clips"/>
-                                <TextBlock Text="{Binding SelectedClip.Title, TargetNullValue=Select a Clip}" Style="{StaticResource Flick.Text.ClipTitle}" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"/>
+                                <TextBlock Text="{Binding SelectedClip.Title, TargetNullValue=Select a clip}" Style="{StaticResource Flick.Text.ClipTitle}" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"/>
                                 <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
-                                    <TextBlock Text="{Binding SelectedClip.LibrarySource, FallbackValue=Your Library}" Style="{StaticResource Flick.Text.Caption}" TextTrimming="CharacterEllipsis"/>
+                                    <TextBlock Text="{Binding SelectedClip.LibrarySource, FallbackValue=Your library}" Style="{StaticResource Flick.Text.Caption}" TextTrimming="CharacterEllipsis"/>
                                     <TextBlock Text="  ·  " Style="{StaticResource Flick.Text.Caption}"/>
                                     <TextBlock Text="{Binding SelectedClip.FormattedDuration, FallbackValue=0:00}" Style="{StaticResource Flick.Text.Caption}"/>
                                 </StackPanel>
@@ -398,6 +410,7 @@
                                             </ContextMenu>
                                         </Button.ContextMenu>
                                     </Button>
+                                    <Button x:Name="BtnShareDetails" DockPanel.Dock="Right" Content="Details" Click="ShareDetails_Click" Style="{StaticResource Flick.Button.Ghost}" MinHeight="32" MinWidth="60" Padding="8,0" Visibility="{Binding Visibility, ElementName=SharePanel}" ToolTip="Full export status, size and frame details"/>
                                     <TextBlock Text="Share clip" VerticalAlignment="Center" Margin="4,0,12,4">
                                         <TextBlock.Style>
                                             <Style TargetType="{x:Type TextBlock}" BasedOn="{StaticResource Flick.Text.Section}">
@@ -424,8 +437,8 @@
                             <StackPanel>
                             <components:TrimRangeControl x:Name="TrimTimeline" RangeCommitted="TrimTimeline_RangeCommitted" RangeChanging="TrimTimeline_RangeChanging" RangeReverted="TrimTimeline_RangeReverted" SeekRequested="TrimTimeline_SeekRequested"/>
                             <WrapPanel Margin="0,10,0,0">
-                                <Button Content="Set In (I)" Click="SetTrimIn_Click" Style="{StaticResource Flick.Button.Secondary}" Margin="0,0,8,6" Padding="9,0"/>
-                                <Button Content="Set Out (O)" Click="SetTrimOut_Click" Style="{StaticResource Flick.Button.Secondary}" Margin="0,0,8,6" Padding="9,0"/>
+                                <Button Content="Set in (I)" Click="SetTrimIn_Click" Style="{StaticResource Flick.Button.Secondary}" Margin="0,0,8,6" Padding="9,0"/>
+                                <Button Content="Set out (O)" Click="SetTrimOut_Click" Style="{StaticResource Flick.Button.Secondary}" Margin="0,0,8,6" Padding="9,0"/>
                                 <Button Content="Undo trim" Click="UndoTrim_Click" IsEnabled="{Binding CanUndoTrim}" Style="{StaticResource Flick.Button.Ghost}" Margin="0,0,8,6" Padding="9,0"/>
                                 <Button Content="Add marker (M)" Click="AddMarker_Click" Style="{StaticResource Flick.Button.Ghost}" Margin="0,0,0,6" Padding="9,0"/>
                             </WrapPanel>
@@ -455,9 +468,8 @@
                             <TextBlock Text="Keyboard shortcuts" ToolTip="Left/Right: seek · Ctrl+Left/Right: 5s · Home/End · I/O: trim · M: marker · Ctrl+Z: undo trim. Inactive while typing." Style="{StaticResource Flick.Text.Muted}" TextWrapping="Wrap" Margin="0,10,0,0"/>
                             </StackPanel>
                         </Border><Border Background="Transparent" BorderThickness="0" Padding="6,3" x:Name="AudioPanel" Visibility="Collapsed" Margin="0,8,0,0">
-                            <Expander x:Name="AudioExpander" Style="{StaticResource Flick.Expander.Disclosure}" IsEnabled="{Binding CanEditClip}" Header="Export audio" IsExpanded="False" Foreground="{DynamicResource Flick.Brush.TextPrimary}" Background="Transparent" Padding="4">
+                            <Expander x:Name="AudioExpander" Style="{StaticResource Flick.Expander.Disclosure}" IsEnabled="{Binding CanEditClip}" Header="Export audio" ToolTip="The original stays unchanged. Combined is a complete alternate mix and excludes the dedicated tracks." IsExpanded="False" Foreground="{DynamicResource Flick.Brush.TextPrimary}" Background="Transparent" Padding="4">
                                 <StackPanel Margin="5,8,5,8">
-                                    <TextBlock Text="Mix export audio" ToolTip="The original stays unchanged. Combined is a complete alternate mix and excludes the dedicated tracks." Style="{StaticResource Flick.Text.Caption}" Margin="0,0,0,8" TextWrapping="Wrap"/>
                                     <ItemsControl ItemsSource="{Binding SelectedClip.AudioTracks}">
                                         <ItemsControl.ItemTemplate>
                                             <DataTemplate>
@@ -546,7 +558,7 @@
                                         <ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding Converter={StaticResource Flick.ShareAspectLabel}}"/></DataTemplate></ComboBox.ItemTemplate>
                                     </ComboBox>
                                 </WrapPanel>
-                                <TextBlock x:Name="ShareFormatHint" Text="{Binding ShareFormatHint}" Style="{StaticResource Flick.Text.Muted}" TextWrapping="NoWrap" Margin="0,4,0,0" ToolTip="{Binding ExportAspectDescription}"/>
+                                <TextBlock x:Name="ShareFormatHint" Visibility="Collapsed" Text="{Binding ShareFormatHint}" Style="{StaticResource Flick.Text.Muted}" TextWrapping="NoWrap" Margin="0,4,0,0" ToolTip="{Binding ExportAspectDescription}"/>
                                 <Grid x:Name="ShareRecentExportsRow" Margin="0,6,0,0">
                                     <Grid.Style><Style TargetType="Grid"><Style.Triggers><DataTrigger Binding="{Binding RecentExports.Count}" Value="0"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger></Style.Triggers></Style></Grid.Style>
                                     <ComboBox x:Name="CmbRecentExports" ItemsSource="{Binding RecentExports}" SelectionChanged="RecentExport_SelectionChanged" MinWidth="0" Height="32" AutomationProperties.Name="Open a recent prepared MP4" ToolTip="Restore a recent export and its size limit; your default preference stays unchanged.">
@@ -559,9 +571,9 @@
                                 </Grid>
                                 <ProgressBar x:Name="ShareExportProgress" Height="4" Margin="0,4,0,0" IsIndeterminate="True" Foreground="{DynamicResource Flick.Brush.Accent}" Visibility="{Binding IsExporting, Converter={StaticResource BoolToVis}}" AutomationProperties.Name="Local MP4 export activity"/>
                                 <Grid x:Name="ShareStatusRow" Margin="0,4,0,0">
-                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                    <Grid.Style><Style TargetType="Grid"><Style.Triggers><DataTrigger Binding="{Binding ShareStatusSummary}" Value=""><Setter Property="Visibility" Value="Collapsed"/></DataTrigger></Style.Triggers></Style></Grid.Style>
                                     <TextBlock x:Name="TxtShareExportStatus" Text="{Binding ShareStatusSummary}" Style="{StaticResource Flick.Text.Caption}" TextWrapping="Wrap" MaxHeight="32" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" ToolTip="{Binding ExportStatusMessage}" AutomationProperties.LiveSetting="Polite"/>
-                                    <Button x:Name="BtnShareDetails" Grid.Column="1" Content="Details" Click="ShareDetails_Click" Style="{StaticResource Flick.Button.Ghost}" MinHeight="32" MinWidth="64" Padding="8,0" Margin="6,0,0,0" ToolTip="Full export status, size and frame details"/>
+
                                 </Grid>
                             </StackPanel>
                         </Border></Grid></DockPanel></Border></Grid>

@@ -148,7 +148,7 @@ internal static partial class Program
         Invoke("ResetPlayerForSelection");
         // Never imply that the synthetic poster is decoded gameplay/playback.
         Find<Image>("PlayerPoster").Visibility = Visibility.Collapsed;
-        Find<TextBlock>("PlayerPosterHint").Text = "Synthetic media fixture · press Play to Preview";
+        Find<TextBlock>("PlayerPosterHint").Text = "Synthetic media fixture · press Play to preview";
         void Split()
         {
             typeof(MainWindow).GetField("_layoutMode", Private)!.SetValue(window, WorkspaceLayoutMode.Split);
@@ -183,6 +183,7 @@ internal static partial class Program
             }
             bool libraryFits = true;
             double? listHeight = null;
+            object? libraryLayout = null;
             if (Find<Border>("ClipLibraryPanel").Visibility == Visibility.Visible)
             {
                 var library = Find<Border>("ClipLibraryPanel");
@@ -190,7 +191,7 @@ internal static partial class Program
                 listHeight = list.ActualHeight;
                 Rect listBounds = list.TransformToAncestor(library).TransformBounds(new Rect(list.RenderSize));
                 var scrollSurfaces = ProductVisuals(library).OfType<ScrollViewer>()
-                    .Where(surface => IsInRenderedPath(surface, library)).ToArray();
+                    .Where(surface => IsUserScrollSurface(surface, library)).ToArray();
                 bool oneListScroller = scrollSurfaces.Length == 1 && HasVisualAncestor(scrollSurfaces[0], list, library);
                 bool panelsFit = true;
                 foreach (string kind in new[] { "Filters", "Details" })
@@ -201,20 +202,27 @@ internal static partial class Program
                     var close = Find<Button>("BtnCloseLibrary" + kind + "Panel");
                     panelsFit &= ProductContains(new Rect(library.RenderSize), panelBounds) &&
                         ProductContains(panelBounds, RelativeBounds(close, library)) &&
-                        !ProductVisuals(panel).OfType<ScrollViewer>().Any() &&
+                        !ProductVisuals(panel).OfType<ScrollViewer>().Any(surface => IsUserScrollSurface(surface, panel)) &&
                         ProductVisuals(panel).OfType<Control>()
                             .Where(control => control is Button or CheckBox or ComboBox or TextBox)
                             .Where(control => IsInRenderedPath(control, library))
                             .All(control => ProductContains(panelBounds, RelativeBounds(control, library)));
                 }
-                libraryFits = list.ActualHeight >= 96 && ProductContains(new Rect(library.RenderSize), listBounds) &&
+                bool listContained = ProductContains(new Rect(library.RenderSize), listBounds);
+                libraryFits = list.ActualHeight >= 96 && listContained &&
                     oneListScroller && panelsFit;
+                libraryLayout = new { ListContained = listContained, SingleListScroller = oneListScroller,
+                    UserScrollSurfaceCount = scrollSurfaces.Length,
+                    Surfaces = scrollSurfaces.Select(surface => new { surface.Name, surface.ViewportHeight, surface.ScrollableHeight }),
+                    PanelsFit = panelsFit, LibraryWidth = library.ActualWidth, LibraryHeight = library.ActualHeight,
+                    ListWidth = list.ActualWidth, ListHeight = list.ActualHeight,
+                    ListBounds = new { listBounds.Left, listBounds.Top, listBounds.Width, listBounds.Height } };
             }
             observations.Add(new { Image = file, State = state, Width = width, Height = height,
                 FilteredClips = vm.FilteredClips.Count, RecentExports = vm.RecentExports.Count,
                 vm.FavoritesOnly, vm.GameFilter, vm.LibrarySort, Markers = vm.ClipMarkers.Count,
                 vm.ExportAspectPreset, EditorContextFits = contextFits, LibraryListFits = libraryFits,
-                ListHeight = listHeight, NoPlaybackOrCapture = true });
+                ListHeight = listHeight, LibraryLayout = libraryLayout, NoPlaybackOrCapture = true });
             WriteEvidence();
             // The global renderer records all Share layout failures and throws
             // after the last state. Preserve immediate failures for other tools.
@@ -237,7 +245,8 @@ internal static partial class Program
         var saveDetails = Find<Button>("BtnSaveClipDetails");
         bool saveReachable = ProductContains(RelativeBounds(detailsPanel, Find<Border>("ClipLibraryPanel")),
             RelativeBounds(saveDetails, Find<Border>("ClipLibraryPanel")));
-        bool detailsHaveNoScroller = !ProductVisuals(detailsPanel).OfType<ScrollViewer>().Any();
+        bool detailsHaveNoScroller = !ProductVisuals(detailsPanel).OfType<ScrollViewer>()
+            .Any(surface => IsUserScrollSurface(surface, detailsPanel));
         ProductFrame("66-clip-details-minimum-save.png", 720, 480, "Save details remains visible without scrolling");
         observations.Add(new { LibraryDetails = true, SaveReachable = saveReachable, NoNestedScroller = detailsHaveNoScroller });
         if (!saveReachable || !detailsHaveNoScroller)

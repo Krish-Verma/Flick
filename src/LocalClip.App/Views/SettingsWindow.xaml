@@ -342,12 +342,9 @@
                                Style="{StaticResource Flick.Text.Muted}"
                                TextWrapping="Wrap" Margin="0,0,0,12"/>
                     <Button x:Name="BtnUninstallFlick" Content="Uninstall Flick…"
-                            Click="UninstallFlick_Click"
+                            Click="UninstallFlick_Click" ToolTip="Portable copy: quit Flick, then delete the app folder. Your videos and preferences live separately."
                             Style="{StaticResource Flick.Button.Secondary}"
                             HorizontalAlignment="Left" MinWidth="150"/>
-                    <TextBlock Text="Portable copy? Quit Flick, then delete the app folder."
-                               Style="{StaticResource Flick.Text.Muted}"
-                               TextWrapping="Wrap" Margin="0,11,0,0"/>
                 </StackPanel>
 
                 <!-- Sharing -->

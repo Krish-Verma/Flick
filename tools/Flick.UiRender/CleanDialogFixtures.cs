@@ -30,9 +30,11 @@ internal static partial class Program
                 () => Invoke("BtnRename_Click", window, new RoutedEventArgs()));
             DialogFrame("132-rename-dialog-minimum.png", 720, 480, "Cancel", expectInput: true,
                 () => Invoke("BtnRename_Click", window, new RoutedEventArgs()));
-            vm.ExportStatusMessage = "Synthetic retained export detail · no export is running.";
+            vm.ExportStatusMessage = "Export failed: " + string.Join(" ", Enumerable.Repeat(
+                "Synthetic retained export detail; the selected output folder was unavailable. No export is running.", 8));
+            string fullExportDetail = vm.ExportStatusMessage;
             DialogFrame("133-share-details-dialog-minimum.png", 720, 480, "OK", expectInput: false,
-                () => Invoke("ShareDetails_Click", window, new RoutedEventArgs()));
+                () => Invoke("ShareDetails_Click", window, new RoutedEventArgs()), expectedMessage: fullExportDetail);
             DialogFrame("134-long-detail-dialog-minimum.png", 720, 480, "OK", expectInput: false,
                 () => FlickDialog.Show("Synthetic long retained detail: " +
                     string.Join(" ", Enumerable.Repeat("A local file was unavailable. Choose an accessible folder and try again.", 20)),
@@ -43,7 +45,8 @@ internal static partial class Program
         }
         finally { vm.ExportStatusMessage = originalExportStatus; }
 
-        void DialogFrame(string file, int width, int height, string safeLabel, bool expectInput, Action open, bool requireOverflow = false)
+        void DialogFrame(string file, int width, int height, string safeLabel, bool expectInput, Action open,
+            bool requireOverflow = false, string? expectedMessage = null)
         {
             bool observed = false;
             Exception? failure = null;
@@ -62,7 +65,7 @@ internal static partial class Program
                     // A single-line TextBox owns an internal content host; it
                     // is not another independently scrolling dialog region.
                     var scrollers = ProductVisuals(host).OfType<ScrollViewer>()
-                        .Where(candidate => inputs.All(input => !HasVisualAncestor(candidate, input, host))).ToArray();
+                        .Where(candidate => IsUserScrollSurface(candidate, host)).ToArray();
                     Rect bounds = new(root.RenderSize);
                     bool actionsFit = buttons.All(button => ProductContains(bounds, RelativeBounds(button, root)));
                     bool singleBodyScroll = scrollers.Length == 1 && scrollers[0].ViewportHeight > 0 &&
@@ -70,6 +73,8 @@ internal static partial class Program
                         buttons.All(button => !HasVisualAncestor(button, scrollers[0], host));
                     bool inputFits = inputs.Length == (expectInput ? 1 : 0) &&
                         inputs.All(input => ProductContains(bounds, RelativeBounds(input, root)));
+                    bool fullMessagePreserved = expectedMessage == null || ProductVisuals(host).OfType<TextBlock>()
+                        .Any(text => text.Text.Contains(expectedMessage, StringComparison.Ordinal));
                     Rect[] actionBounds = buttons.Select(button => RelativeBounds(button, root)).ToArray();
                     bool overflowWorks = !requireOverflow;
                     bool fixedActions = true;
@@ -87,12 +92,13 @@ internal static partial class Program
                     observations.Add(new { Image = file, ActionsFit = actionsFit, SingleBodyScroll = singleBodyScroll,
                         InputFits = inputFits, InputExpected = expectInput, OverflowRequired = requireOverflow,
                         OverflowWorks = overflowWorks, FixedActions = fixedActions, SafeAction = safeLabel,
+                        FullMessagePreserved = fullMessagePreserved, ExpectedMessageCharacters = expectedMessage?.Length ?? 0,
                         NoNativeWindowOrConfirmedMutation = true });
                     File.WriteAllText(Path.Combine(output, "clean-dialog-fixture-evidence.json"), JsonSerializer.Serialize(new {
                         Scope = "Actual production same-window WPF Rename/Export Details; rename is cancelled. One additional synthetic long message verifies the shared modal body scroller and fixed safe action. No file picker, rename, save, upload, capture or external operation.",
                         Observations = observations
                     }, new JsonSerializerOptions { WriteIndented = true }));
-                    if (!observed || !actionsFit || !singleBodyScroll || !inputFits || !overflowWorks || !fixedActions)
+                    if (!observed || !actionsFit || !singleBodyScroll || !inputFits || !overflowWorks || !fixedActions || !fullMessagePreserved)
                         throw new InvalidOperationException("Modal geometry or scrolling regressed in " + file);
                 }
                 catch (Exception error) { failure = error; }

@@ -506,7 +506,7 @@ public partial class MainViewModel : INotifyPropertyChanged, IDisposable
     private ClipMetadata? _selectedClip;
     private string _searchQuery = "";
     private string _clipSourceFilter = "All Clips";
-    private string _librarySummaryText = "0 Clips";
+    private string _librarySummaryText = "0 clips";
     private string _importStatusText = "";
     private bool _isImporting;
     private CancellationTokenSource? _importCancellation;
@@ -604,8 +604,8 @@ public partial class MainViewModel : INotifyPropertyChanged, IDisposable
     {
         int all = _storage.GetAllClips().Count;
         int folders = _connectedFolders.Count;
-        LibrarySummaryText = $"{all} {(all == 1 ? "Clip" : "Clips")} · " +
-                             $"{folders} {(folders == 1 ? "Folder" : "Folders")}";
+        LibrarySummaryText = $"{all} {(all == 1 ? "clip" : "clips")} · " +
+                             $"{folders} {(folders == 1 ? "folder" : "folders")}";
     }
 
     public string CaptureStatus
@@ -1810,7 +1810,7 @@ public partial class MainViewModel : INotifyPropertyChanged, IDisposable
         {
             IsExportReady = true;
             ReadyExportFilePath = ready;
-            ExportStatusMessage = $"Ready to Drag Into Discord · {SelectedClip.ExportedFileSizeBytes / 1_000_000.0:F2} MB";
+            ExportStatusMessage = $"Ready to share · {SelectedClip.ExportedFileSizeBytes / 1_000_000.0:F2} MB";
         }
         else
         {
@@ -1877,7 +1877,7 @@ public partial class MainViewModel : INotifyPropertyChanged, IDisposable
     {
         IsExportReady = false;
         ReadyExportFilePath = "";
-        ExportStatusMessage = "Clip edited: Click 'Export for Discord' to create share file.";
+        ExportStatusMessage = "Clip changed · export again.";
         if (SelectedClip != null)
         {
             bool hadReadyExport = SelectedClip.IsExportReady;
@@ -1939,7 +1939,7 @@ public partial class MainViewModel : INotifyPropertyChanged, IDisposable
                     IsExportReady = ReadyShareFile.TryGet(clip, TargetSizeMb, out _, _settings.ExportsFolder);
                     ExportProgress = 100;
                     ExportStatusMessage = IsExportReady
-                        ? $"Ready to Drag Into Discord · {mb:F2} MB"
+                        ? $"Ready to share · {mb:F2} MB"
                         : "Export verification failed";
                 }
                 else
@@ -1984,9 +1984,9 @@ public partial class MainViewModel : INotifyPropertyChanged, IDisposable
         {
             var files = new System.Collections.Specialized.StringCollection { path };
             Clipboard.SetFileDropList(files);
-            ExportStatusMessage = "MP4 File Copied · Paste It Into Discord";
+            ExportStatusMessage = "File copied · paste into Discord";
         }
-        catch (Exception ex) { ExportStatusMessage = "Couldn't Copy MP4: " + ex.Message; }
+        catch (Exception ex) { ExportStatusMessage = "Couldn't copy file: " + ex.Message; }
     }
 
     public void OpenExportFolder()
