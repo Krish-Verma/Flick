@@ -12,6 +12,8 @@ on:
       - 'scripts/build_*.ps1'
       - 'scripts/setup_tools.ps1'
       - 'scripts/check_obs_runtime.ps1'
+      - 'scripts/check_capture_host_runtime.ps1'
+      - 'scripts/test_flick_installer_update.ps1'
       - 'scripts/check_ffmpeg_runtime.ps1'
       - 'scripts/run_recording_qualification.ps1'
       - 'scripts/RecordingHarnessSession.cs'
@@ -124,8 +126,8 @@ jobs:
           g++ -O2 -std=c++17 -static-libgcc -static-libstdc++ \
             -Itools/obs/include/libobs -Isrc/LocalClip.CaptureHost \
             src/LocalClip.CaptureHost/main.cpp native-build/capture-version.o \
-            -Ltools/obs/runtime/bin/64bit -Wl,-Bstatic -lwinpthread \
-            -Wl,-Bdynamic -lobs -ldwmapi -lole32 \
+            -Ltools/obs/runtime/bin/64bit -Wl,-Bstatic,--whole-archive -lwinpthread \
+            -Wl,--no-whole-archive,-Bdynamic -lobs -ldwmapi -lole32 \
             -o tools/obs/runtime/bin/64bit/LocalClip.CaptureHost.exe
           test -f tools/obs/runtime/bin/64bit/LocalClip.CaptureHost.exe
       - name: Run offline source/design contracts
@@ -143,12 +145,12 @@ jobs:
           ./scripts/verify_flick_release.ps1
           $checksums = 'dist/SHA256SUMS.txt'
           $setup = 'dist/Flick-Setup.exe'
-          $portable = 'dist/Flick-v1.0.9-win-x64.zip'
+          $portable = 'dist/Flick-v1.0.10-win-x64.zip'
           foreach ($path in @($checksums, $setup, $portable)) {
             if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw "Missing $path" }
           }
           $manifest = Get-Content -LiteralPath $checksums -Raw
-          foreach ($name in @('Flick.exe', 'Flick-v1.0.9-win-x64.zip',
+          foreach ($name in @('Flick.exe', 'Flick-v1.0.10-win-x64.zip',
                               'Flick-Setup.exe', 'LocalClip.CaptureHost.exe')) {
             if (-not $manifest.Contains($name)) { throw "Missing hash entry: $name" }
           }
@@ -172,13 +174,21 @@ jobs:
           path: dist/installer-smoke/**
           if-no-files-found: warn
           retention-days: 14
+      - name: Upload portable capture helper dependency and noncapture startup evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: flick-portable-runtime-evidence-${{ github.sha }}
+          path: dist/capture-runtime/*.json
+          if-no-files-found: error
+          retention-days: 30
       - name: Upload unsigned preview files
         uses: actions/upload-artifact@v4
         with:
           name: flick-unsigned-preview-${{ github.sha }}
           path: |
             dist/Flick-Setup.exe
-            dist/Flick-v1.0.9-win-x64.zip
+            dist/Flick-v1.0.10-win-x64.zip
             dist/SHA256SUMS.txt
           if-no-files-found: error
           retention-days: 7

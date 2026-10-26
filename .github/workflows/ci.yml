@@ -255,14 +255,36 @@ jobs:
           g++ -O2 -std=c++17 -static-libgcc -static-libstdc++ \
             -Itools/obs/include/libobs -Isrc/LocalClip.CaptureHost \
             src/LocalClip.CaptureHost/main.cpp native-ci/capture-version.o \
-            -Ltools/obs/runtime/bin/64bit -Wl,-Bstatic -lwinpthread \
-            -Wl,-Bdynamic -lobs -ldwmapi -lole32 -o native-ci/LocalClip.CaptureHost.exe
-      - name: Confirm native executable exists
+            -Ltools/obs/runtime/bin/64bit -Wl,-Bstatic,--whole-archive -lwinpthread \
+            -Wl,--no-whole-archive,-Bdynamic -lobs -ldwmapi -lole32 -o native-ci/LocalClip.CaptureHost.exe
+          g++ -O2 -static-libgcc -static-libstdc++ \
+            tests/LocalClip.CaptureHost.Tests/runtime_dependency_probe.cpp \
+            -Wl,-Bdynamic -lwinpthread -o native-ci/require-dynamic-pthread.exe
+      - name: Reject dynamic compiler runtime regression and start complete helper without developer PATH
         shell: pwsh
         run: |
-          if (-not (Test-Path native-ci/LocalClip.CaptureHost.exe)) {
-            throw "Native host compile did not produce an executable"
+          $ErrorActionPreference = 'Stop'
+          $rejected = $false
+          try {
+            ./scripts/check_capture_host_runtime.ps1 -HostPath native-ci/require-dynamic-pthread.exe `
+              -ImportsOnly -EvidencePath native-ci/rejected-dynamic-runtime.json
+          } catch {
+            if ($_.Exception.Message -notmatch 'compiler.runtime') { throw }
+            $rejected = $true
           }
+          if (-not $rejected) { throw 'Import gate accepted the deliberately broken compiler-runtime fixture.' }
+          Copy-Item native-ci/LocalClip.CaptureHost.exe tools/obs/runtime/bin/64bit/LocalClip.CaptureHost.exe
+          ./scripts/check_capture_host_runtime.ps1 `
+            -HostPath tools/obs/runtime/bin/64bit/LocalClip.CaptureHost.exe `
+            -EvidencePath native-ci/clean-runtime.json
+      - name: Preserve native dependency and noncapture startup evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: flick-native-runtime-checks
+          path: native-ci/*.json
+          if-no-files-found: error
+          retention-days: 30
 
 # Native CI compiles the capture host; it does not perform real GPU/CPU
 # recording, real audio capture, game FPS checks, portable GUI launch,
