@@ -13,7 +13,7 @@ namespace Flick.UiRender;
 
 internal static partial class Program
 {
-    private static void RenderCleanDialogFixtures(MainWindow window, MainViewModel vm, string output,
+    private static IReadOnlyList<string> RenderCleanDialogFixtures(MainWindow window, MainViewModel vm, string output,
         Action<string, int, int> render)
     {
         void Invoke(string method, params object?[] values) => typeof(MainWindow).GetMethod(method, Private)!.Invoke(window, values);
@@ -22,6 +22,7 @@ internal static partial class Program
         string? originalTitle = vm.SelectedClip?.Title;
         string originalExportStatus = vm.ExportStatusMessage;
         var observations = new List<object>();
+        var failures = new List<string>();
         try
         {
             Invoke("ReturnToClipWorkspace");
@@ -44,6 +45,7 @@ internal static partial class Program
                 throw new InvalidOperationException("Dialog fixtures changed clip/preferences or left a live subsystem/modal running.");
         }
         finally { vm.ExportStatusMessage = originalExportStatus; }
+        return failures;
 
         void DialogFrame(string file, int width, int height, string safeLabel, bool expectInput, Action open,
             bool requireOverflow = false, string? expectedMessage = null)
@@ -109,8 +111,14 @@ internal static partial class Program
                 }
             }), DispatcherPriority.Normal);
             open();
-            if (failure != null) throw new InvalidOperationException("Dialog rendering failed.", failure);
-            if (!observed || FlickDialog.IsOpen) throw new InvalidOperationException("The dialog did not open and safely close in " + file);
+            if (FlickDialog.IsOpen) throw new InvalidOperationException("The dialog did not safely close in " + file);
+            if (failure != null || !observed)
+            {
+                failures.Add(file + ": " + (failure?.Message ?? "The dialog did not open."));
+                File.WriteAllText(Path.Combine(output, "clean-dialog-layout-failures.json"), JsonSerializer.Serialize(new {
+                    BatchMustFail = true, Failures = failures
+                }, new JsonSerializerOptions { WriteIndented = true }));
+            }
         }
     }
 }

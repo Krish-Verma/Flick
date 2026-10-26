@@ -451,14 +451,14 @@ public partial class SettingsStagingTests
                     }
                     runningTestField.SetValue(vm, true);
                     PublishRecordingTest();
-                    Assert.Equal("Cancel Test", runRecordingTest.Content);
+                    Assert.Equal("Cancel test", runRecordingTest.Content);
                     Assert.True(runRecordingTest.IsEnabled); // Running must not disable its own Cancel action.
                     Assert.False(includeTestAudio.IsEnabled);
                     vm.CancelRecordingDiagnostic();
                     DrainBindings();
                     Assert.True(vm.IsRecordingDiagnosticRunning); // Cleanup has not completed.
                     Assert.False(runRecordingTest.IsEnabled);
-                    Assert.Equal("Finishing Test…", runRecordingTest.Content);
+                    Assert.Equal("Finishing test…", runRecordingTest.Content);
                     runningTestField.SetValue(vm, false);
                     cancellingTestField.SetValue(vm, false);
                     PublishRecordingTest();

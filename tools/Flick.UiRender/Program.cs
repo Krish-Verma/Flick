@@ -390,11 +390,12 @@ internal static partial class Program
         Render("36-recording-test-failure-minimum.png", 720, 480);
         RenderShareFixtures(main, vm, settings, storage, fixtures, output, Render);
         RenderProductPhaseFixtures(main, vm, settings, storage, fixtures, output, Render);
-        RenderCleanSettingsFixtures(main, vm, settings, fixtures, output, Render);
-        RenderCleanDialogFixtures(main, vm, output, Render);
-        if (shareLayoutFailures.Count != 0 || resourceLayoutFailures.Count != 0)
+        var cleanSettingsFailures = RenderCleanSettingsFixtures(main, vm, settings, fixtures, output, Render);
+        var cleanDialogFailures = RenderCleanDialogFixtures(main, vm, output, Render);
+        if (shareLayoutFailures.Count != 0 || resourceLayoutFailures.Count != 0 || cleanSettingsFailures.Count != 0 || cleanDialogFailures.Count != 0)
             throw new InvalidOperationException("Layout regression(s). Share: " + string.Join(", ", shareLayoutFailures) +
-                "; resources: " + string.Join(", ", resourceLayoutFailures));
+                "; resources: " + string.Join(", ", resourceLayoutFailures) +
+                "; settings/folders: " + string.Join(", ", cleanSettingsFailures) + "; dialogs: " + string.Join(", ", cleanDialogFailures));
         string applicationVersion = typeof(MainWindow).Assembly
             .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? "unknown";
         File.WriteAllText(Path.Combine(output, "PROVENANCE.txt"),

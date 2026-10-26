@@ -154,6 +154,13 @@ internal static partial class Program
             failures.Add("Share content participates in scrolling.");
         if (Find<ScrollViewer>("EditorContextScroll").Visibility != Visibility.Collapsed)
             failures.Add("The separate Trim/Audio scroll host is not collapsed during Share.");
+        bool replacesEditor = Grid.GetRowSpan(context) > 1;
+        var backgroundVisibility = new[] { "PreviewSurface", "PlaybackControlsRow", "EditorToolBar" }
+            .Select(name => new { Name = name, Visibility = Find<FrameworkElement>(name).Visibility }).ToArray();
+        bool backgroundMatchesAllocation = backgroundVisibility.All(element =>
+            element.Visibility == (replacesEditor ? Visibility.Hidden : Visibility.Visible));
+        if (!backgroundMatchesAllocation)
+            failures.Add("Share background player/tools do not match the active card allocation.");
         if (!Contains(Bounds(Find<Grid>("ClipEditorPanel")), Bounds(context))) failures.Add("Share context exceeds the actual editor allocation.");
         void Check(string name, FrameworkElement container, bool required = true)
         {
@@ -238,6 +245,8 @@ internal static partial class Program
             ScrollableHeight = scrollHeight, ScrollableWidth = scrollWidth,
             NativeSingleLineEditingHosts = nativeEditors.Select(scroll => new { scroll.Name, scroll.ScrollableHeight, scroll.ScrollableWidth }),
             ShareContentScrollers = contentScrollers.Select(scroll => scroll.Name),
+            ReplacesEditorAllocation = replacesEditor, BackgroundMatchesAllocation = backgroundMatchesAllocation,
+            BackgroundVisibility = backgroundVisibility.Select(element => new { element.Name, Visibility = element.Visibility.ToString() }),
             ContextBounds = Coordinates(Bounds(context)), BodyBounds = Coordinates(Bounds(share)), FooterBounds = Coordinates(Bounds(footer)),
             Rows = rows, Text = textObservations, Failures = failures });
     }

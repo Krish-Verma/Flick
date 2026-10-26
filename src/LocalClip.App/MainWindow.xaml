@@ -328,7 +328,7 @@
                                     </WrapPanel>
                                 </StackPanel>
                             </Grid>
-                        </Border><Grid Grid.Row="2" Margin="0,4,0,12">
+                        </Border><Grid x:Name="PlaybackControlsRow" Grid.Row="2" Margin="0,4,0,12">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto"/>
                                 <ColumnDefinition Width="*"/>

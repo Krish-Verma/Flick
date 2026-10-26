@@ -1167,6 +1167,7 @@ public partial class MainWindow : Window
         _vm.ClearFilmstrip();
         EditorContextLayer.Visibility = Visibility.Collapsed;
         TrimPanel.Visibility = AudioPanel.Visibility = SharePanel.Visibility = Visibility.Collapsed;
+        UpdateEditorContextHeight();
         AudioExpander.IsExpanded = false;
         if (_activeEditorTool != null)
         {

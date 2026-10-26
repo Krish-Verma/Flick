@@ -14,7 +14,7 @@ namespace Flick.UiRender;
 
 internal static partial class Program
 {
-    private static void RenderCleanSettingsFixtures(MainWindow window, MainViewModel vm, AppSettings settings,
+    private static IReadOnlyList<string> RenderCleanSettingsFixtures(MainWindow window, MainViewModel vm, AppSettings settings,
         string fixtures, string output, Action<string, int, int> render)
     {
         void Invoke(string method, params object?[] values) => typeof(MainWindow).GetMethod(method, Private)!.Invoke(window, values);
@@ -22,6 +22,7 @@ internal static partial class Program
         byte[] profileBefore = File.ReadAllBytes(profile);
         string importStatusBefore = vm.ImportStatusText;
         var observations = new List<object>();
+        var failures = new List<string>();
         bool restored = false;
         int prohibitedActions = 0;
         var staged = JsonSerializer.Deserialize<AppSettings>(JsonSerializer.Serialize(settings))!;
@@ -92,14 +93,14 @@ internal static partial class Program
             render(customSound, 720, 480);
             ObserveSettings(customSound, "General", inspectReachability: true);
             if (!IsInRenderedPath(soundName, page))
-                throw new InvalidOperationException("Custom WAV settings must remain available when selected.");
+                failures.Add(customSound + ": custom WAV settings are unavailable when selected.");
             Page<CheckBox>("ChkClipSavedSound").IsChecked = false;
             scroll.ScrollToTop();
             string soundOff = $"{image++:00}-clean-settings-sound-off-minimum.png";
             render(soundOff, 720, 480);
             ObserveSettings(soundOff, "General", inspectReachability: true);
             if (IsInRenderedPath(soundName, page) || IsInRenderedPath(Page<ComboBox>("CmbNotificationTone"), page))
-                throw new InvalidOperationException("Disabled notification sound should collapse its inactive options.");
+                failures.Add(soundOff + ": disabled notification sound did not collapse its inactive options.");
             Invoke("ReturnToClipWorkspace");
 
             Invoke("OpenConnectedFolders");
@@ -118,23 +119,41 @@ internal static partial class Program
                 string file = $"{image++:00}-clean-folders-{size.Label}.png";
                 render(file, size.Width, size.Height);
                 Rect bounds = new(folders.RenderSize);
-                bool actionsFit = ProductVisuals(folders).OfType<Button>().Where(button => IsInRenderedPath(button, folders))
-                    .All(button => ProductContains(bounds, RelativeBounds(button, folders)));
+                var actions = ProductVisuals(folders).OfType<Button>().Where(button => IsInRenderedPath(button, folders)).ToArray();
+                Rect[] fixedActionBounds = actions.Select(button => RelativeBounds(button, folders)).ToArray();
+                bool actionsFit = fixedActionBounds.All(action => ProductContains(bounds, action));
                 bool listFits = ProductContains(bounds, RelativeBounds(list, folders)) && list.ActualHeight >= 96;
-                var surface = ProductVisuals(list).OfType<ScrollViewer>().Single(candidate => IsUserScrollSurface(candidate, folders));
-                bool singleSurface = !ProductVisuals(folders).OfType<ScrollViewer>()
-                    .Where(candidate => IsUserScrollSurface(candidate, folders)).Any(candidate => candidate != surface);
+                var surfaces = ProductVisuals(folders).OfType<ScrollViewer>()
+                    .Where(candidate => IsUserScrollSurface(candidate, folders)).ToArray();
+                var surface = surfaces.FirstOrDefault(candidate => HasVisualAncestor(candidate, list, folders));
+                bool singleSurface = surfaces.Length == 1 && surface != null;
                 list.ScrollIntoView(vm.ConnectedFolders[^1]);
-                DrainDispatcherThroughContextIdle(folders.Dispatcher);
-                folders.UpdateLayout();
-                bool lastFolderReachable = list.ItemContainerGenerator.ContainerFromIndex(vm.ConnectedFolders.Count - 1) is FrameworkElement last &&
-                    ProductContains(RelativeBounds(list, folders), RelativeBounds(last, folders));
-                observations.Add(new { Image = file, Category = "Connected folders", ActionsFit = actionsFit,
+                // Item virtualization schedules container realization and
+                // BringIntoView in separate dispatcher/layout turns. Use the
+                // actual scrollbar end command and ordinary complete render
+                // settle before observing the final row; never assign item
+                // coordinates, substitute a container or relax containment.
+                surface?.ScrollToEnd();
+                string endFile = Path.GetFileNameWithoutExtension(file) + "-end.png";
+                render(endFile, size.Width, size.Height);
+                var last = list.ItemContainerGenerator.ContainerFromIndex(vm.ConnectedFolders.Count - 1) as FrameworkElement;
+                Rect? lastBounds = last == null ? null : RelativeBounds(last, folders);
+                Rect listBounds = RelativeBounds(list, folders);
+                bool finiteViewport = surface != null && surface.ViewportHeight > 0 && double.IsFinite(surface.ViewportHeight);
+                bool lastFolderReachable = lastBounds != null && ProductContains(listBounds, lastBounds.Value);
+                bool actionsStayedFixed = fixedActionBounds.SequenceEqual(actions.Select(button => RelativeBounds(button, folders)));
+                observations.Add(new { Image = endFile, TopImage = file, Category = "Connected folders", ActionsFit = actionsFit,
                     ListFits = listFits, SingleScrollSurface = singleSurface, LastFolderReachable = lastFolderReachable,
-                    FolderCount = vm.ConnectedFolders.Count, ListHeight = list.ActualHeight, surface.ScrollableHeight });
+                    FiniteViewport = finiteViewport, ActionsStayedFixed = actionsStayedFixed,
+                    FolderCount = vm.ConnectedFolders.Count, ListHeight = list.ActualHeight,
+                    LastContainerGenerated = last != null,
+                    LastBounds = lastBounds == null ? null : new { lastBounds.Value.Left, lastBounds.Value.Top, lastBounds.Value.Width, lastBounds.Value.Height },
+                    ListBounds = new { listBounds.Left, listBounds.Top, listBounds.Width, listBounds.Height },
+                    ViewportHeight = surface?.ViewportHeight, ScrollableHeight = surface?.ScrollableHeight,
+                    VerticalOffset = surface?.VerticalOffset, ExtentHeight = surface?.ExtentHeight });
+                if (!actionsFit || !listFits || !singleSurface || !lastFolderReachable || !finiteViewport || !actionsStayedFixed)
+                    failures.Add(file + ": connected-folder actions, list containment, scroll topology or final-row reachability failed.");
                 WriteEvidence();
-                if (!actionsFit || !listFits || !singleSurface || !lastFolderReachable)
-                    throw new InvalidOperationException("Connected-folder list/actions do not fit or scroll cleanly in " + file);
             }
         }
         finally
@@ -147,6 +166,7 @@ internal static partial class Program
             WriteEvidence();
             if (!restored) throw new InvalidOperationException("Clean Settings fixtures changed preferences or started a live subsystem.");
         }
+        return failures;
 
         void ObserveSettings(string file, string category, bool inspectReachability)
         {
@@ -216,13 +236,14 @@ internal static partial class Program
                 StagedOnly = true });
             WriteEvidence();
             if (!fixedActions || !fixedNavigation || !finiteViewport || nested.Length != 0 || !allReachable || !longPathPreserved)
-                throw new InvalidOperationException("Settings actions/navigation, nested scrolling, or input reachability regressed in " + file);
+                failures.Add(file + ": fixed controls, nested scrolling, input reachability or full path preservation failed.");
         }
 
         void WriteEvidence() => File.WriteAllText(Path.Combine(output, "clean-settings-fixture-evidence.json"), JsonSerializer.Serialize(new {
             Scope = "Actual production WPF pages with synthetic staged game/audio/folder identities. No Save, scans, approvals, endpoints, network calls, capture or startup registration.",
             SettingsSaved = false, ProhibitedActionsRequested = prohibitedActions,
             OriginalProfileAndSubsystemStatePreserved = restored,
+            BatchMustFail = failures.Count > 0, Failures = failures,
             Observations = observations
         }, new JsonSerializerOptions { WriteIndented = true }));
     }
