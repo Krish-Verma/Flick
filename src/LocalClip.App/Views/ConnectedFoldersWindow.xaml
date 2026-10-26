@@ -39,12 +39,10 @@
         <Border Grid.Row="2" BorderBrush="{DynamicResource Flick.Brush.Divider}"
                 BorderThickness="0,1,0,1" Padding="0,4">
             <ListBox x:Name="FolderList" ItemsSource="{Binding ConnectedFolders}"
+                     Style="{StaticResource Flick.Library.List}"
                      ItemContainerStyle="{StaticResource Flick.Library.Item}"
                      ToolTip="Select a folder to rescan or unlink."
-                     BorderThickness="0" Background="Transparent"
-                     ScrollViewer.CanContentScroll="True"
-                     VirtualizingStackPanel.IsVirtualizing="True"
-                     VirtualizingStackPanel.VirtualizationMode="Recycling">
+                     HorizontalContentAlignment="Stretch">
                 <ListBox.ItemTemplate>
                     <DataTemplate>
                         <Grid Margin="10,10" MinHeight="52">

@@ -50,7 +50,8 @@ public partial class MainWindow
         // Share owns a finite complete card outside the Trim/Audio scroll host.
         // Keep playback controls clear when the preview can fit the card; use
         // the full editor allocation only when a compact viewport needs it.
-        bool useEditorArea = share && PreviewSurface.ActualHeight < 360;
+        bool useEditorArea = EditorContextLayer.Visibility == Visibility.Visible &&
+            PreviewSurface.ActualHeight < (share ? 360 : 280);
         // The compact card replaces this allocation. Keep its underlying
         // player/tools measured, but don't leave half-visible controls around
         // the card or keyboard stops behind it. Close restores the workspace.

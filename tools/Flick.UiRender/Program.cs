@@ -558,14 +558,19 @@ internal static partial class Program
                 throw new InvalidOperationException($"Save caption is clipped in {file}: actual button width " +
                     $"{saveButton.ActualWidth:F2}, required {requiredWidth:F2}; presenter width " +
                     $"{presenter.ActualWidth:F2}, caption {captionWidth:F2}.");
-            var bitmap = new RenderTargetBitmap(width, height, 96, 96, PixelFormats.Pbgra32);
-            bitmap.Render(root);
-            var encoder = new PngBitmapEncoder();
-            encoder.Frames.Add(BitmapFrame.Create(bitmap));
-            using var stream = File.Create(Path.Combine(output, file));
-            encoder.Save(stream);
+            RasterizeClient(root, Path.Combine(output, file), width, height);
             Console.WriteLine("Rendered " + file);
         }
+    }
+
+    private static void RasterizeClient(FrameworkElement root, string path, int width, int height)
+    {
+        var bitmap = new RenderTargetBitmap(width, height, 96, 96, PixelFormats.Pbgra32);
+        bitmap.Render(root);
+        var encoder = new PngBitmapEncoder();
+        encoder.Frames.Add(BitmapFrame.Create(bitmap));
+        using var stream = File.Create(path);
+        encoder.Save(stream);
     }
 
     private static void InvalidateVisualMeasure(DependencyObject visual)

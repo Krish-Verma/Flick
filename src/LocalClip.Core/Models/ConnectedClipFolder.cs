@@ -20,7 +20,7 @@ public sealed class ConnectedClipFolder
     public bool IsAvailable => Directory.Exists(Path);
 
     [JsonIgnore]
-    public string Status => IsAvailable ? "Connected" : "Folder Unavailable";
+    public string Status => IsAvailable ? "Connected" : "Unavailable";
 }
 
 /// <summary>Bounded incremental progress, never a fabricated percentage.</summary>
