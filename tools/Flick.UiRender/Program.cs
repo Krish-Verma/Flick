@@ -469,6 +469,11 @@ internal static partial class Program
             double roundingTolerance = 0.5 / VisualTreeHelper.GetDpi(saveButton).DpiScaleX;
             bool captionFits = saveButton.ActualWidth + roundingTolerance >= requiredWidth &&
                 presenter.ActualWidth + roundingTolerance >= captionWidth;
+            var bufferText = Find<TextBlock>("TxtBufferedDuration");
+            bool bufferVisible = IsInRenderedPath(bufferText, root);
+            bool bufferFits = !bufferVisible ||
+                ProductContains(RelativeBounds(Find<Border>("CaptureCommandBar"), root), RelativeBounds(bufferText, root)) &&
+                ProductContains(RelativeBounds(Find<Button>("BtnRecordingHealth"), root), RelativeBounds(bufferText, root));
             object? healthLayout = null;
             object? shareLayout = null;
             var resourceLayout = InspectResourceStatsLayout(main);
@@ -555,6 +560,8 @@ internal static partial class Program
                 requiredButtonWidth = requiredWidth,
                 roundingTolerance,
                 captionFits,
+                bufferVisible,
+                bufferFits,
                 resourceLayout = resourceLayout.Observation,
                 healthLayout,
                 shareLayout
@@ -562,6 +569,7 @@ internal static partial class Program
             File.WriteAllText(Path.Combine(output, "layout-observations.json"),
                 JsonSerializer.Serialize(layoutObservations, new JsonSerializerOptions { WriteIndented = true }));
             if (healthLayoutFailure != null) throw new InvalidOperationException(healthLayoutFailure);
+            if (!bufferFits) throw new InvalidOperationException("Live retained-buffer text is clipped in " + file);
             if (!captionFits)
                 throw new InvalidOperationException($"Save caption is clipped in {file}: actual button width " +
                     $"{saveButton.ActualWidth:F2}, required {requiredWidth:F2}; presenter width " +

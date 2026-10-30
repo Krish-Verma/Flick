@@ -60,7 +60,7 @@
         </Border>
 
         <!-- Capture bar always visible. One dominant action for the active state. -->
-        <Border Grid.Row="0" Grid.Column="1" Background="{DynamicResource Flick.Brush.Frosted}" BorderBrush="{DynamicResource Flick.Brush.Divider}" BorderThickness="0,0,0,1" Padding="14,5">
+        <Border x:Name="CaptureCommandBar" Grid.Row="0" Grid.Column="1" Background="{DynamicResource Flick.Brush.Frosted}" BorderBrush="{DynamicResource Flick.Brush.Divider}" BorderThickness="0,0,0,1" Padding="14,5">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition x:Name="CaptureSourceColumn" Width="260"/>
@@ -80,7 +80,7 @@
                 <Button Grid.Column="1" Style="{StaticResource Flick.Button.Icon}" Click="BtnRefreshTargets_Click" AutomationProperties.Name="Refresh Capture Sources" ToolTip="Refresh Capture Sources" Margin="0,0,12,0" VerticalAlignment="Center">
                     <Path Style="{StaticResource Flick.Icon.Symbol}" Data="{StaticResource Flick.Icon.Geometry.Refresh}" Width="16" Height="16"/>
                 </Button>
-                <Button x:Name="BtnRecordingHealth" Grid.Column="2" VerticalAlignment="Center" HorizontalAlignment="Center" Margin="0,0,14,0" MinWidth="0" Padding="4" Style="{StaticResource Flick.Button.Ghost}" Click="BtnRecordingHealth_Click" AutomationProperties.Name="Recording health and recent errors" ToolTip="Recording health · source, shortcuts and recent errors">
+                <Button x:Name="BtnRecordingHealth" Grid.Column="2" VerticalAlignment="Center" HorizontalAlignment="Center" Margin="0,0,14,0" MinWidth="0" Padding="0" Style="{StaticResource Flick.Button.Ghost}" Click="BtnRecordingHealth_Click" AutomationProperties.Name="Recording health and recent errors" ToolTip="Recording health · source, shortcuts and recent errors">
                 <StackPanel>
                     <Border x:Name="StatusBadge" Background="{DynamicResource Flick.Brush.Raised}" CornerRadius="6" Padding="8,3" HorizontalAlignment="Left" Margin="0,0,0,4">
                         <StackPanel Orientation="Horizontal">

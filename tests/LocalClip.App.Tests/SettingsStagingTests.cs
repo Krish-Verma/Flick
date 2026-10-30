@@ -157,6 +157,7 @@ public partial class SettingsStagingTests
                     // no-host polling timer while dispatcher layout work runs.
                     Assert.IsType<System.Windows.Threading.DispatcherTimer>(typeof(MainViewModel)
                         .GetField("_pollTimer", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(vm)).Stop();
+                    LibraryObservationAssertions.Settle(vm); // Constructor metadata is loaded; pump its read-only presentation work.
                     Assert.False(vm.DiagnosticsInitialized); // Unshown windows must not open a journal.
                     vm.Settings.ShowClipSavedOverlay = false; // No test desktop toast.
                     var saveButton = Assert.IsType<Button>(window.FindName("BtnSaveReplay"));
@@ -193,6 +194,21 @@ public partial class SettingsStagingTests
                         DrainBindings();
                         updateCaptureUi.Invoke(window, null);
                     }
+                    var healthStatus = Assert.IsType<TextBlock>(window.FindName("TxtHealthStatus"));
+                    var captureStatus = Assert.IsType<TextBlock>(window.FindName("TxtCaptureStatus"));
+                    var captureDot = Assert.IsType<System.Windows.Shapes.Ellipse>(window.FindName("CaptureStateDot"));
+                    void AssertSavePresentation(ReplaySaveState stage, string text, string tone, string diagnosticText)
+                    {
+                        PublishHealth();
+                        Assert.Equal(stage, vm.RecordingHealth.SaveState);
+                        Assert.Equal(text, vm.CaptureStateText);
+                        Assert.Equal(text, healthStatus.Text);
+                        Assert.Equal(text, captureStatus.Text);
+                        Assert.Equal(tone, vm.CaptureStateTone);
+                        Assert.Same(window.FindResource("Flick.Brush." + tone), captureDot.Fill);
+                        // The legacy ledger/diagnostic wording remains a separate contract.
+                        Assert.Equal(diagnosticText, vm.HealthStatusText);
+                    }
                     vm.CaptureStatus = "Armed";
                     var profile = new CaptureEncodingProfile("obs_qsv11_v2", "Intel Quick Sync H.264", false, 1920, 1080, 60);
                     typeof(MainViewModel).GetMethod("SetCaptureProfile", hidden)!.Invoke(vm, new object[] { profile });
@@ -200,8 +216,15 @@ public partial class SettingsStagingTests
                     health.ObserveBuffer(session, 29.5, 30, estimated: false);
                     vm.BufferedDurationText = "29.5s / 30s";
                     Assert.True(health.BeginSave(session, "synthetic-save"));
+                    AssertSavePresentation(ReplaySaveState.Requested, "Save requested…", "Warning", "Saving clip");
+                    Assert.True(health.MarkSaveAcknowledgementUnconfirmed(session, "synthetic-save"));
+                    AssertSavePresentation(ReplaySaveState.Requested, "Save still being checked", "Warning", "Saving clip");
+                    Assert.True(vm.RecordingHealth.SaveAcknowledgementUnconfirmed);
+                    Assert.True(health.AcknowledgeSave(session, "synthetic-save", accepted: true));
+                    AssertSavePresentation(ReplaySaveState.Accepted, "Saving clip…", "Warning", "Saving clip");
+                    Assert.False(vm.RecordingHealth.SaveAcknowledgementUnconfirmed);
                     Assert.True(health.MarkSaveValidating(session, "synthetic-save"));
-                    PublishHealth();
+                    AssertSavePresentation(ReplaySaveState.Validating, "Checking saved video…", "Warning", "Saving clip");
                     Assert.Equal(RecordingEngineState.Ready, vm.RecordingHealth.EngineState);
                     Assert.Equal(ReplaySaveState.Validating, vm.RecordingHealth.SaveState);
                     Assert.True(vm.IsArmed); // Saving does not pretend the engine stopped.
@@ -223,18 +246,31 @@ public partial class SettingsStagingTests
                     }
                     finally { saveRequestField.SetValue(vm, 0); }
 
-                    var healthStatus = Assert.IsType<TextBlock>(window.FindName("TxtHealthStatus"));
-                    Assert.Equal("Saving clip", healthStatus.Text);
+                    AssertSavePresentation(ReplaySaveState.Validating, "Checking saved video…", "Warning", "Saving clip");
 
                     Assert.True(health.RecordValidatedClip(session, "synthetic-save", "synthetic-summary", 12.5));
-                    PublishHealth();
-                    Assert.Equal("Save successful", healthStatus.Text);
+                    AssertSavePresentation(ReplaySaveState.Succeeded, "Clip saved", "Success", "Save successful");
+                    Assert.Contains("12.5", vm.CaptureStateDetail);
                     Assert.Contains("12.5", vm.HealthLastSavedText);
+                    // Stopping replay cannot settle or hide an accepted save.
+                    Assert.True(health.BeginSave(session, "synthetic-failed-save"));
+                    Assert.True(health.AcknowledgeSave(session, "synthetic-failed-save", accepted: true));
+                    vm.CaptureStatus = "Off";
+                    Assert.True(health.ObserveEngine(session, RecordingEngineState.Stopped));
+                    AssertSavePresentation(ReplaySaveState.Accepted, "Saving clip…", "Warning", "Saving clip");
+                    Assert.Equal(1, vm.RecordingHealth.PendingSaveCount);
+                    Assert.False(saveButton.IsEnabled);
+                    Assert.True(health.RecordSaveFailure(session, "synthetic-failed-save", "synthetic-save-fault", "Synthetic save failure."));
+                    AssertSavePresentation(ReplaySaveState.Failed, "Couldn't save clip", "Danger", "Save failed");
                     health.RecordRecordingIssue(session, "synthetic-fault", "Synthetic capture failure retained for review.");
                     vm.CaptureStatus = "Faulted";
                     PublishHealth();
                     Assert.False(saveButton.IsEnabled);
-                    Assert.Equal("Recording faulted", healthStatus.Text);
+                    Assert.Equal("Recording needs attention", healthStatus.Text);
+                    Assert.Equal("Recording needs attention", captureStatus.Text);
+                    Assert.Equal("Danger", vm.CaptureStateTone);
+                    Assert.Same(window.FindResource("Flick.Brush.Danger"), captureDot.Fill);
+                    Assert.Equal("Recording faulted", vm.HealthStatusText);
                     Assert.Contains("Synthetic capture failure", vm.HealthLastFailureText);
                     Assert.DoesNotContain("29.5s / 30s", vm.HealthDetailsText);
 
