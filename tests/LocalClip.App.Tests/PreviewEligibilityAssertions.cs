@@ -1,4 +1,6 @@
 using System.IO;
+using System.ComponentModel;
+using System.Diagnostics;
 using System.Reflection;
 using System.Text.Json;
 using System.Windows;
@@ -46,6 +48,7 @@ internal static class PreviewEligibilityAssertions
         Assert.False(vm.IsExporting);
         Assert.False(vm.IsImporting);
         Assert.False(vm.IsRecordingDiagnosticRunning);
+        AssertWorkerPresentationNotification(window, vm);
 
         string[] vmNames = ["_selectedClip", "_captureStatus", "_isImporting", "_isExporting", "_isRecordingDiagnosticRunning",
             "_isBuildingAudioPreview", "_gameAutomationBusy", "_diagnosticCleanupUnconfirmed", "_isPreparingToQuit",
@@ -201,6 +204,64 @@ internal static class PreviewEligibilityAssertions
             buttons["BtnPlayPoster"].ToolTip = tooltipBefore;
             Find<TextBlock>("TxtPreviewIssue").Text = previewIssueBefore;
             Find<TextBlock>("TxtPreviewFallbackHint").Text = previewHintBefore;
+        }
+    }
+
+    private static void AssertWorkerPresentationNotification(MainWindow window, MainViewModel vm)
+    {
+        // Flush earlier fixture notifications before installing the stale text;
+        // only this worker's notification may satisfy the repaint assertion.
+        window.Dispatcher.Invoke(() => { }, DispatcherPriority.ContextIdle);
+        // Raise the production VM event, so an absent/unsubscribed callback
+        // cannot pass merely because a worker returned without touching UI.
+        var notify = Assert.IsAssignableFrom<MethodInfo>(typeof(MainViewModel)
+            .GetMethod("OnPropertyChanged", Hidden, null, [typeof(string)], null));
+        var caption = Assert.IsType<TextBlock>(window.FindName("TxtCaptureStatus"));
+        string before = caption.Text;
+        string expected = vm.CaptureStateText;
+        const string stale = "unrefreshed fixture";
+        Assert.NotEqual(stale, expected);
+        int observed = 0, observedOnWorker = 0;
+        PropertyChangedEventHandler observer = (_, args) =>
+        {
+            if (args.PropertyName != nameof(MainViewModel.CaptureStateText)) return;
+            Interlocked.Increment(ref observed);
+            if (!window.Dispatcher.CheckAccess()) Interlocked.Increment(ref observedOnWorker);
+        };
+        vm.PropertyChanged += observer;
+        try
+        {
+            caption.SetCurrentValue(TextBlock.TextProperty, stale);
+            var worker = Task.Run(() =>
+            {
+                Assert.False(window.Dispatcher.CheckAccess());
+                notify.Invoke(vm, [nameof(MainViewModel.CaptureStateText)]);
+            });
+            // Returning from an event notification must not require the UI
+            // thread to block on that worker or install a global SyncContext.
+            Assert.True(SpinWait.SpinUntil(() => worker.IsCompleted, TimeSpan.FromSeconds(3)),
+                "Worker presentation notification did not return within three seconds.");
+            Assert.False(worker.IsFaulted, worker.Exception?.ToString());
+            worker.GetAwaiter().GetResult();
+            Assert.Equal(1, Volatile.Read(ref observed));
+            Assert.Equal(1, Volatile.Read(ref observedOnWorker));
+            Assert.Equal(stale, caption.Text); // Manual UI work must still be queued.
+            var elapsed = Stopwatch.StartNew();
+            while (caption.Text != expected && elapsed.Elapsed < TimeSpan.FromSeconds(3))
+            {
+                window.Dispatcher.Invoke(() => { }, DispatcherPriority.ContextIdle);
+                Thread.Sleep(1);
+            }
+            Assert.Equal(expected, caption.Text); // Proves the real subscribed UI callback ran.
+            Assert.Equal(expected, vm.CaptureStateText); // No model state was changed.
+            Assert.False(window.IsLoaded);
+            Assert.False(vm.CaptureHost.IsRunning);
+            Assert.Null(Assert.IsType<MediaElement>(window.FindName("VideoPlayer")).Source);
+        }
+        finally
+        {
+            vm.PropertyChanged -= observer;
+            caption.SetCurrentValue(TextBlock.TextProperty, before);
         }
     }
 }

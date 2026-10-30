@@ -173,58 +173,7 @@ public partial class MainWindow : Window
     {
         // Presentation observes the model before asynchronous startup.
         // This subscribes UI only; discovery, hotkeys, tray and replay stay in Loaded.
-        _vm.PropertyChanged += (s, ev) =>
-        {
-            if (ev.PropertyName is nameof(MainViewModel.CaptureStatus) or nameof(MainViewModel.HealthStatusText)
-                or nameof(MainViewModel.IsRecordingDiagnosticRunning) or nameof(MainViewModel.CanControlReplay)
-                or nameof(MainViewModel.ActiveReplayDurationSeconds) or nameof(MainViewModel.IsAutomaticGameCapture)
-                or nameof(MainViewModel.GameDetectionStatus) or nameof(MainViewModel.CaptureStateText)
-                or nameof(MainViewModel.CaptureStateTone) or nameof(MainViewModel.CaptureStateDetail))
-            {
-                UpdateStatusBadgeColor();
-                UpdateSelectedAvailabilityUi(refreshPoster: false);
-                if (_vm.CaptureStatus == "Starting" || _vm.IsRecordingDiagnosticRunning)
-                {
-                    // A real gameplay session always outranks a preview decoder.
-                    _previewCancellation?.Cancel();
-                    SuspendPlayback(clearSource: true);
-                }
-            }
-            else if (ev.PropertyName == nameof(MainViewModel.ShareCanCopy))
-            {
-                UpdateShareActionStyles();
-            }
-            else if (ev.PropertyName == nameof(MainViewModel.SelectedClipAvailabilityRevision))
-            {
-                UpdateSelectedAvailabilityUi(refreshPoster: true);
-            }
-            else if (ev.PropertyName is nameof(MainViewModel.IsCaptureActive) or nameof(MainViewModel.IsImporting)
-                or nameof(MainViewModel.IsExporting) or nameof(MainViewModel.IsBackgroundWorkActive))
-            {
-                UpdateSelectedAvailabilityUi(refreshPoster: false);
-            }
-            else if (ev.PropertyName == nameof(MainViewModel.AudioMixRevision))
-            {
-                CancelPendingPreview();
-                if (_playerView is PlayerView.Exported or PlayerView.LocalCopy or PlayerView.AudioMix) ShowOriginalPreview(startPlaying: false);
-            }
-            else if (ev.PropertyName == nameof(MainViewModel.SelectedClip))
-            {
-                ResetPlayerForSelection();
-                if (_vm.SelectedClip != null && _layoutMode == WorkspaceLayoutMode.Compact)
-                    ShowCompactEditor();
-            }
-            else if (ev.PropertyName == nameof(MainViewModel.IsExportReady) &&
-                     !_vm.IsExportReady && _playerView == PlayerView.Exported)
-            {
-                // The export became stale after edits, so never preview it as ready.
-                SuspendPlayback(clearSource: true);
-                _playerView = PlayerView.Original;
-                _previewWasReencoded = false;
-                BtnPreviewMode.Content = "Original";
-                UpdateSelectedAvailabilityUi(refreshPoster: true);
-            }
-        };
+        _vm.PropertyChanged += WorkspacePresentationChanged;
         UpdateStatusBadgeColor();
         UpdateShareActionStyles();
         UpdateSharePresetSelection();
@@ -232,6 +181,74 @@ public partial class MainWindow : Window
         ResetPlayerForSelection();
         _layoutInitialized = true;
         RefreshWorkspaceForSize();
+    }
+
+    private void WorkspacePresentationChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs args)
+    {
+        if (Dispatcher.CheckAccess())
+        {
+            ApplyWorkspacePresentationChange(args.PropertyName);
+            return;
+        }
+        // Bindings marshal model notifications themselves; this manual view
+        // observer must do the same after asynchronous worker completion.
+        if (!Dispatcher.HasShutdownStarted)
+            Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.DataBind,
+                new Action(() => ApplyWorkspacePresentationChange(args.PropertyName)));
+    }
+
+    private void ApplyWorkspacePresentationChange(string? propertyName)
+    {
+        if (_isRealClosing || Dispatcher.HasShutdownStarted) return;
+        if (propertyName is nameof(MainViewModel.CaptureStatus) or nameof(MainViewModel.HealthStatusText)
+            or nameof(MainViewModel.IsRecordingDiagnosticRunning) or nameof(MainViewModel.CanControlReplay)
+            or nameof(MainViewModel.ActiveReplayDurationSeconds) or nameof(MainViewModel.IsAutomaticGameCapture)
+            or nameof(MainViewModel.GameDetectionStatus) or nameof(MainViewModel.CaptureStateText)
+            or nameof(MainViewModel.CaptureStateTone) or nameof(MainViewModel.CaptureStateDetail))
+        {
+            UpdateStatusBadgeColor();
+            UpdateSelectedAvailabilityUi(refreshPoster: false);
+            if (_vm.CaptureStatus == "Starting" || _vm.IsRecordingDiagnosticRunning)
+            {
+                // A real gameplay session always outranks a preview decoder.
+                _previewCancellation?.Cancel();
+                SuspendPlayback(clearSource: true);
+            }
+        }
+        else if (propertyName == nameof(MainViewModel.ShareCanCopy))
+        {
+            UpdateShareActionStyles();
+        }
+        else if (propertyName == nameof(MainViewModel.SelectedClipAvailabilityRevision))
+        {
+            UpdateSelectedAvailabilityUi(refreshPoster: true);
+        }
+        else if (propertyName is nameof(MainViewModel.IsCaptureActive) or nameof(MainViewModel.IsImporting)
+            or nameof(MainViewModel.IsExporting) or nameof(MainViewModel.IsBackgroundWorkActive))
+        {
+            UpdateSelectedAvailabilityUi(refreshPoster: false);
+        }
+        else if (propertyName == nameof(MainViewModel.AudioMixRevision))
+        {
+            CancelPendingPreview();
+            if (_playerView is PlayerView.Exported or PlayerView.LocalCopy or PlayerView.AudioMix) ShowOriginalPreview(startPlaying: false);
+        }
+        else if (propertyName == nameof(MainViewModel.SelectedClip))
+        {
+            ResetPlayerForSelection();
+            if (_vm.SelectedClip != null && _layoutMode == WorkspaceLayoutMode.Compact)
+                ShowCompactEditor();
+        }
+        else if (propertyName == nameof(MainViewModel.IsExportReady) &&
+                 !_vm.IsExportReady && _playerView == PlayerView.Exported)
+        {
+            // The export became stale after edits, so never preview it as ready.
+            SuspendPlayback(clearSource: true);
+            _playerView = PlayerView.Original;
+            _previewWasReencoded = false;
+            BtnPreviewMode.Content = "Original";
+            UpdateSelectedAvailabilityUi(refreshPoster: true);
+        }
     }
 
     private async System.Threading.Tasks.Task ApplyBackgroundReplayIntentAsync()
