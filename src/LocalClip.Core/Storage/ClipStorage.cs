@@ -242,7 +242,8 @@ public sealed class ClipStorage
         var clip = new ClipMetadata
         {
             OriginalFilePath = normalized,
-            Title = Path.GetFileNameWithoutExtension(normalized),
+            Title = source == null ? ClipTitleRules.Create(targetName, info.CreationTime)
+                : Path.GetFileNameWithoutExtension(normalized),
             CreatedAt = info.CreationTime,
             DurationSeconds = probe.DurationSeconds,
             FileSizeBytes = info.Length,

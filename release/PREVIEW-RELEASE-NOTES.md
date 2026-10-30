@@ -1,9 +1,12 @@
-# Flick 1.0.10 Preview 1 — Capture Helper Fix (UNSIGNED)
+# Flick 1.0.11 Preview 1 — Replay and UX (UNSIGNED)
 
-Fixes the missing `libwinpthread-1.dll` error when Flick starts its capture helper. The threading runtime is now included inside the helper. No separate DLL download, compiler installation or settings reset is needed.
+- Subtle, smooth highlights across clickable controls, with keyboard focus, high-contrast and reduced-motion support. The purple identity and existing features are preserved.
+- Successful Settings Save returns to the clips dashboard. Invalid fields and failed writes keep your changes available.
+- Windows startup is repaired and independently verified on every enabled Save, including when the checkbox was already on. Windows-disabled startup is reported without overriding your Windows choices.
+- **Keep replay ready in the tray** starts your saved, available capture source for tray/background and Windows-startup launches. It is enabled by default and can be turned off in General. Ordinary foreground launches still wait for a manual start or an approved game. Microphone and app-audio choices retain their existing opt-ins.
+- Approved-game detection scans immediately, recovers after temporary window loss and no longer treats earlier automatic starts as permanent pauses. Manual Stop pauses automation; Start Replay resumes it. Replay is shown ready only when its buffer can actually save.
+- Opening Flick again restores the tray instance. Tray Settings opens a visible window. Cleaner source/date titles replace internal save IDs in the library; original files, imports and custom names stay intact.
 
-The earlier package allowed Flick's main window to open while its helper could fail. Builds now inspect the helper's actual DLL imports and require it to answer and exit using only its bundled files and standard Windows paths. The installed upgraded copy receives the same check. These checks do not start recording or capture audio.
+Install **Flick-Setup.exe** over the current installation after quitting Flick. Portable users should replace the complete extracted folder. Clips and preferences are retained. All previous releases, assets and tags remain available.
 
-Install **Flick-Setup.exe** over the existing installation without uninstalling first. Portable users should quit Flick and replace the complete extracted folder. Clips, preferences and existing features are preserved. Installed preview-enabled copies can check Settings > General > Software updates after publication.
-
-This remains an unsigned preview. Windows security protections remain enabled. Physical gameplay, GPU/audio, Discord and endurance testing are separate from the automated checks. Previous release entries, assets and tags are retained.
+This is an unsigned preview. Physical gameplay, GPU/audio, Discord and endurance testing remain separate from automated startup, policy, UI and installer checks.

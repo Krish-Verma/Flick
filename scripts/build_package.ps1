@@ -6,7 +6,7 @@ $ErrorActionPreference = "Stop"
 
 $RootDir = (Get-Item $PSScriptRoot).Parent.FullName
 $DistDir = Join-Path $RootDir "dist"
-$PackageName = "Flick-v1.0.10-win-x64"
+$PackageName = "Flick-v1.0.11-win-x64"
 $PackageDir = Join-Path $DistDir $PackageName
 $ZipPath = Join-Path $DistDir "$PackageName.zip"
 
@@ -104,20 +104,20 @@ if (-not (Test-Path -LiteralPath (Join-Path $PackageDir "Flick.exe"))) {
 
 # Generate User Readme
 $Readme = @'
-# Flick 1.0.10 Preview 1 — UNSIGNED
+# Flick 1.0.11 Preview 1 — UNSIGNED
 
-This Windows x64 preview fixes the capture helper's missing libwinpthread-1.dll error. Its threading runtime is included inside the helper. No separate DLL download or compiler installation is needed. Existing recording, editing, sharing and settings features are retained. Exact-source package and installer checks are required before publication; physical gameplay acceptance remains separate.
+This Windows x64 preview improves startup, tray replay, game detection, Settings Save, hover feedback and clip titles. Recording, editing, sharing and existing settings are retained. Exact-source package and installer checks are required before publication; physical gameplay acceptance remains separate.
 
 ## Start and save a replay
 
 1. Keep every bundled OBS, FFmpeg and .NET file together. Run Flick.exe for portable use, or use the matching Flick-Setup.exe for a per-user installation.
-2. Select an available window or display. Manual replay starts off. Use Start Replay (default Ctrl+Shift+F9), wait for Replay Ready, then Save Clip (default Ctrl+Shift+F8).
+2. Select an available window or display. Foreground launches wait for manual replay or an approved game. Tray/startup launches keep your saved replay source ready when enabled in General. Use Start Replay (default Ctrl+Shift+F9), wait for Replay Ready, then Save Clip (default Ctrl+Shift+F8).
 3. Recording Health shows the actual encoder/profile, retained-buffer estimate, source and save errors. A save is successful only after its original MKV is validated and indexed.
 4. The recording test uses the confirmed source and saves an actual test clip. Audio is off in its consent dialog unless explicitly included. Its result does not certify every game or device.
 
 ## Optional automatic game replay
 
-Games settings are off by default. To opt in, refresh running games, approve an exact executable and choose its replay profile. When enabled, this setting may start replay automatically for an eligible approved game, including after a later Flick launch. It does not select a display when the approved window is missing. Stop Replay pauses that running game session. Manual replay and its preferences remain separate.
+Games settings are off by default. Windows startup registration is verified on every enabled Settings Save; Windows Startup apps can independently disable launching. Successful Save returns to your clips. Keep replay ready in the tray starts only the saved, currently available source and can be disabled in General. Manual Stop pauses automatic replay; Start Replay resumes it. To opt in, refresh running games, approve an exact executable and choose its replay profile. When enabled, this setting may start replay automatically for an eligible approved game, including after a later Flick launch. It does not select a display when the approved window is missing. Stop Replay pauses that running game session. Manual replay and its preferences remain separate.
 
 ## Choose actual audio sources
 
@@ -151,7 +151,7 @@ GPU/hybrid setups, hotkeys during games, actual audio isolation, Discord transfe
 
 This preview has no trusted publisher signature. Windows Smart App Control may block it. Checksums verify transfer consistency, not publisher trust; keep Windows security protections enabled. SignPath/trusted signing and Microsoft Store certification remain separate work.
 
-See docs/USER-GUIDE.md, docs/CAPTURE-RUNTIME-FIX-20261026.md and docs/product-phase/MASTER-PLAN.md. Original Flick source remains GPL-2.0-or-later; bundled components retain their separate notices and obligations.
+See docs/USER-GUIDE.md, docs/UX-RELIABILITY-20261030.md and docs/product-phase/MASTER-PLAN.md. Original Flick source remains GPL-2.0-or-later; bundled components retain their separate notices and obligations.
 '@
 $Readme | Set-Content (Join-Path $PackageDir "README.md") -Encoding utf8
 
@@ -165,8 +165,8 @@ $ExeHash = (Get-FileHash -Path (Join-Path $PackageDir "Flick.exe") -Algorithm SH
 $HostHash = (Get-FileHash -Path (Join-Path $PackageDir "tools\obs\runtime\bin\64bit\LocalClip.CaptureHost.exe") -Algorithm SHA256).Hash
 
 $ChecksumContent = @"
-# Flick v1.0.10 Preview (unsigned Windows x64 capture-runtime-fix candidate) SHA-256 Checksums
-$ZipHash  Flick-v1.0.10-win-x64.zip
+# Flick v1.0.11 Preview (unsigned Windows x64 replay-and-UX candidate) SHA-256 Checksums
+$ZipHash  Flick-v1.0.11-win-x64.zip
 $ExeHash  Flick.exe
 $HostHash  LocalClip.CaptureHost.exe
 "@

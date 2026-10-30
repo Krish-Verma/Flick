@@ -12,12 +12,15 @@ public static class CaptureTargetSelectionRules
 {
     public static bool MatchesSavedPreference(
         AppSettings saved, string candidateType, int candidateMonitorIndex,
-        string? candidateWindowTitle, string? candidateWindowExecutable)
+        string? candidateWindowTitle, string? candidateWindowExecutable,
+        string? candidateMonitorDevice = null)
     {
         ArgumentNullException.ThrowIfNull(saved);
         if (string.Equals(saved.TargetType, "Monitor", StringComparison.Ordinal))
             return string.Equals(candidateType, "Monitor", StringComparison.Ordinal)
-                && candidateMonitorIndex == saved.MonitorIndex;
+                && (string.IsNullOrWhiteSpace(saved.MonitorDevice)
+                    ? candidateMonitorIndex == saved.MonitorIndex
+                    : string.Equals(candidateMonitorDevice, saved.MonitorDevice, StringComparison.OrdinalIgnoreCase));
 
         if (!string.Equals(saved.TargetType, "Window", StringComparison.Ordinal) ||
             !string.Equals(candidateType, "Window", StringComparison.Ordinal))

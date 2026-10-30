@@ -1,4 +1,4 @@
-Flick 1.0.10-preview.1 — UNRELEASED UNSIGNED capture runtime fix
+Flick 1.0.11-preview.1 — UNRELEASED UNSIGNED replay and UX preview
 
 THIS BUILD IS AN UNQUALIFIED DEVELOPMENT CANDIDATE:
 - Targets Windows 11 with a 64-bit x86-64 CPU and working Direct3D 11 graphics.
@@ -18,18 +18,19 @@ REQUIRED BEFORE RECORDING:
 
 NVIDIA, AMD, Intel, hybrid-GPU and CPU recording paths require physical
 Windows acceptance on this exact candidate. Historical RTX 5060 results
-and hosted CI for earlier versions are not qualification of this 1.0.10 build.
+and hosted CI for earlier versions are not qualification of this 1.0.11 build.
 
 NOT QUALIFIED:
 - Windows on ARM/Snapdragon, 32-bit Windows, macOS and Linux.
 - Windows 10 and clean Windows installations without verified prerequisites.
 - All games, anti-cheat systems, DRM-protected content and HDR configurations.
 Software encoding does not bypass capture restrictions or missing graphics
-support. Manual replay starts OFF; select a source, press Start Replay and
-wait for Replay Ready before pressing Save Clip. Games automation is OFF by
-default; if explicitly enabled, it may start recording an eligible approved
-game automatically, including after a later Flick launch. Stop Replay pauses
-that running game session. The save hotkey reports unavailable replay.
+support. Foreground launches wait for manual replay or an approved game. When Keep
+replay ready in the tray is enabled, tray and Windows-startup launches start
+your saved source automatically if it is available. Games automation remains
+opt-in and records only approved game executables. Stop Replay pauses
+automatic replay; Start Replay resumes it. Save is available only when the
+buffer is actually ready. Microphone and app-audio opt-ins are unchanged.
 
 Separate App Audio requires supported Windows process-loopback capability
 and a current exact process selection. It includes selected process trees,

@@ -33,6 +33,7 @@ public partial class SettingsWindow : UserControl
     // actual-profile write and per-user Windows startup registration.
     private readonly Action<AppSettings> _saveReviewedSettings;
     private readonly Action<bool, bool> _applyWindowsStartup;
+    private readonly Func<bool, WindowsStartupStatus> _readWindowsStartupStatus;
     public string LastSaveWarning { get; private set; } = "";
     private string _customSoundPath = "";
     private bool _loading;
@@ -59,7 +60,8 @@ public partial class SettingsWindow : UserControl
 
     public SettingsWindow(AppSettings settings, Func<bool> isCaptureActive, Func<Task<TargetList>>? loadAudioSources = null,
         Func<AudioEndpointFlow, IReadOnlyList<AudioEndpoint>>? loadAudioEndpoints = null,
-        Action<AppSettings>? saveReviewedSettings = null, Action<bool, bool>? applyWindowsStartup = null)
+        Action<AppSettings>? saveReviewedSettings = null, Action<bool, bool>? applyWindowsStartup = null,
+        Func<bool, WindowsStartupStatus>? readWindowsStartupStatus = null)
     {
         InitializeComponent();
         _settings = settings;
@@ -69,6 +71,9 @@ public partial class SettingsWindow : UserControl
         _saveReviewedSettings = saveReviewedSettings ??
             (reviewed => reviewed.SaveReviewedToFile(AppSettings.GetSettingsFilePath()));
         _applyWindowsStartup = applyWindowsStartup ?? WindowsStartupRegistration.Apply;
+        _readWindowsStartupStatus = readWindowsStartupStatus ?? (applyWindowsStartup == null
+            ? WindowsStartupRegistration.ReadStatus
+            : _ => new WindowsStartupStatus(WindowsStartupRegistrationState.Registered, "Registered for Windows startup."));
         Populate(settings);
         SelectCategory("Recording");
         TxtCurrentVersion.Text = "Version " + FlickUpdateService.CurrentVersion;
@@ -298,6 +303,7 @@ public partial class SettingsWindow : UserControl
             ChkSoftwareFallback.IsChecked = settings.AllowSoftwareFallback;
             ChkStartWithWindows.IsChecked = settings.StartWithWindows;
             ChkStartMinimized.IsChecked = settings.StartMinimizedToTray;
+            ChkKeepReplayReadyInBackground.IsChecked = settings.KeepReplayReadyInBackground;
             ChkShowResourceUsage.IsChecked = settings.ShowResourceUsage;
             ChkPreviewUpdates.IsChecked = settings.IncludePreviewUpdates;
             ChkClipSavedOverlay.IsChecked = settings.ShowClipSavedOverlay;
@@ -608,6 +614,7 @@ public partial class SettingsWindow : UserControl
             staged.AllowSoftwareFallback = ChkSoftwareFallback.IsChecked == true;
             staged.StartWithWindows = ChkStartWithWindows.IsChecked == true;
             staged.StartMinimizedToTray = ChkStartMinimized.IsChecked == true;
+            staged.KeepReplayReadyInBackground = ChkKeepReplayReadyInBackground.IsChecked == true;
             staged.IncludePreviewUpdates = ChkPreviewUpdates.IsChecked == true;
             StageDisplay(staged);
             staged.ShowClipSavedOverlay = ChkClipSavedOverlay.IsChecked == true;
@@ -625,22 +632,30 @@ public partial class SettingsWindow : UserControl
             Directory.CreateDirectory(exports);
             // Windows startup is a separate OS registration; failure must not
             // discard unrelated settings such as RAM/CPU or tray preferences.
-            // Only touch HKCU Run when its desired command actually changed.
-            bool startupChanged = staged.StartWithWindows != originalStartup ||
-                (staged.StartWithWindows && staged.StartMinimizedToTray != originalMinimized);
-            if (startupChanged)
+            // An enabled preference may outlive a missing/stale Run entry. A
+            // deliberate Save repairs and verifies it even when JSON is unchanged.
+            // Disabled, unrelated Saves never create or modify startup entries.
+            if (staged.StartWithWindows || staged.StartWithWindows != originalStartup)
             {
                 try
                 {
                     _applyWindowsStartup(staged.StartWithWindows, staged.StartMinimizedToTray);
                     startupTouched = true;
+                    if (staged.StartWithWindows)
+                    {
+                        var status = _readWindowsStartupStatus(staged.StartMinimizedToTray);
+                        if (status.State == WindowsStartupRegistrationState.MissingOrStale)
+                            throw new IOException("Windows startup registration could not be verified.");
+                        if (status.State != WindowsStartupRegistrationState.Registered)
+                            LastSaveWarning = status.Message;
+                    }
                 }
                 catch (Exception startupError)
                 {
                     // Don't persist a false claim that Windows startup was changed.
                     staged.StartWithWindows = originalStartup;
-                    LastSaveWarning = "Other preferences were saved, but Windows startup registration was not changed: " +
-                        startupError.Message;
+                    LastSaveWarning = "Windows startup couldn't be updated. Open Settings to retry.";
+                    TxtSaveStatus.ToolTip = startupError.Message;
                 }
             }
             // Save all fields together and independently re-read the complete
@@ -675,6 +690,7 @@ public partial class SettingsWindow : UserControl
             _settings.AllowSoftwareFallback = staged.AllowSoftwareFallback;
             _settings.StartWithWindows = staged.StartWithWindows;
             _settings.StartMinimizedToTray = staged.StartMinimizedToTray;
+            _settings.KeepReplayReadyInBackground = staged.KeepReplayReadyInBackground;
             _settings.ShowResourceUsage = staged.ShowResourceUsage;
             _settings.IncludePreviewUpdates = staged.IncludePreviewUpdates;
             _settings.ShowClipSavedOverlay = staged.ShowClipSavedOverlay;
@@ -686,7 +702,7 @@ public partial class SettingsWindow : UserControl
             _settings.MaskedWebhookUrl = staged.MaskedWebhookUrl;
             _settings.EnableDiscordWebhook = staged.EnableDiscordWebhook;
             TxtSaveStatus.Text = LastSaveWarning.Length > 0
-                ? "Saved. Windows startup couldn't be changed."
+                ? "Saved. Review Windows startup."
                 : "Settings saved.";
             CloseRequested?.Invoke(true);
         }

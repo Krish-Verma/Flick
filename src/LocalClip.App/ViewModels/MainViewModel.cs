@@ -891,6 +891,9 @@ public partial class MainViewModel : INotifyPropertyChanged, IDisposable
         try
         {
             var targets = await _captureHost.GetTargetsAsync();
+            // A refresh replaces TargetItem instances. Never leave the old
+            // selected object displayed while it is absent from Targets.
+            SelectedTarget = null;
             Targets.Clear();
 
             foreach (var m in targets.Monitors)
@@ -924,12 +927,12 @@ public partial class MainViewModel : INotifyPropertyChanged, IDisposable
                 // Never silently replace a previously authorized game window
                 // with desktop/monitor capture. Window handles may be recycled,
                 // so require matching title AND executable on a new session.
-                var previouslyAuthorized = Targets.FirstOrDefault(target =>
+                var previouslyAuthorized = Targets.Where(target =>
                     CaptureTargetSelectionRules.MatchesSavedPreference(
                         _settings, target.Type, target.MonitorIndex,
-                        target.Title, target.Exe));
-                if (previouslyAuthorized != null)
-                    SelectedTarget = previouslyAuthorized;
+                        target.Title, target.Exe, target.MonitorDevice)).ToArray();
+                if (previouslyAuthorized.Length == 1)
+                    SelectedTarget = previouslyAuthorized[0];
                 else
                     StatusDetails = "Saved capture source isn't available. Choose a source before starting replay.";
             }
@@ -957,6 +960,7 @@ public partial class MainViewModel : INotifyPropertyChanged, IDisposable
         {
             _settings.TargetType = "Monitor";
             _settings.MonitorIndex = SelectedTarget.MonitorIndex;
+            _settings.MonitorDevice = SelectedTarget.MonitorDevice;
             _settings.WindowHwnd = 0;
             _settings.WindowTitle = "";
         }
@@ -977,9 +981,11 @@ public partial class MainViewModel : INotifyPropertyChanged, IDisposable
         }
     }
 
+    private int _manualReplayIntent;
+
     public async Task ToggleCaptureAsync(DiagnosticControlOrigin origin = DiagnosticControlOrigin.Unknown)
     {
-        if (CaptureStatus is "Starting" or "Stopping") return;
+        if (CaptureStatus == "Stopping") return;
         bool stopping = _automaticGame != null ||
             CaptureStatus is not ("Off" or "Faulted" or "Paused");
         if (stopping && origin == DiagnosticControlOrigin.GlobalHotkey && IsReplaySavePending)
@@ -992,8 +998,16 @@ public partial class MainViewModel : INotifyPropertyChanged, IDisposable
             return;
         }
         RecordReplayControl(origin, stopping ? DiagnosticControlAction.Stop : DiagnosticControlAction.Start);
-        if (stopping) await StopCaptureAsync();
-        else await StartCaptureAsync();
+        if (stopping) await StopCaptureAsync(userPause: true);
+        else
+        {
+            int intent = ++_manualReplayIntent;
+            bool resumed = await ResumeAutomaticReplayAsync();
+            if (intent != _manualReplayIntent || _isPreparingToQuit) return;
+            await StartCaptureAsync();
+            if (!resumed && IsCaptureActive)
+                StatusDetails = "Replay started. Check Games settings before using automatic replay.";
+        }
     }
 
     public async Task StartCaptureAsync()
@@ -1032,8 +1046,6 @@ public partial class MainViewModel : INotifyPropertyChanged, IDisposable
             if (!await CancelAudioPreviewAndWaitAsync()) throw new InvalidOperationException("Audio preview cleanup is not finished; wait before starting replay.");
             if (!await StopFilmstripAsync()) throw new InvalidOperationException("Preview frames are still stopping. Wait before starting replay.");
             if (startingEpoch != _captureEpoch || startingSession != _healthSession || _isPreparingToQuit || _manualStopOperation != null) return;
-            await ReserveManualGameSessionsAsync();
-            if (startingEpoch != _captureEpoch || startingSession != _healthSession || _isPreparingToQuit || _manualStopOperation != null) return;
             CaptureStartOptions? sourceOptions = null;
             if (SelectedTarget.Type == "Window")
             {
@@ -1062,8 +1074,9 @@ public partial class MainViewModel : INotifyPropertyChanged, IDisposable
         }
     }
 
-    public async Task StopCaptureAsync(DiagnosticControlOrigin origin = DiagnosticControlOrigin.Unknown)
+    public async Task StopCaptureAsync(DiagnosticControlOrigin origin = DiagnosticControlOrigin.Unknown, bool userPause = false)
     {
+        _manualReplayIntent++; // A later Stop always wins over an awaiting Start.
         if (origin != DiagnosticControlOrigin.Unknown)
             RecordReplayControl(origin, DiagnosticControlAction.Stop);
         if (_manualStopOperation is { } stopping) { await stopping; return; }
@@ -1072,7 +1085,13 @@ public partial class MainViewModel : INotifyPropertyChanged, IDisposable
         PublishGameAutomation();
         try
         {
-            if (CaptureStatus == "Starting") await Task.Run(() => _captureHost.Dispose());
+            if (userPause || origin is DiagnosticControlOrigin.GlobalHotkey or DiagnosticControlOrigin.CaptureBar or DiagnosticControlOrigin.SystemTray)
+                await PauseAutomaticReplayAsync();
+            if (CaptureStatus == "Starting")
+            {
+                _captureEpoch++; // A user cancellation is not a failed late start.
+                await Task.Run(() => _captureHost.Dispose());
+            }
             await StopRequestedCaptureAsync();
         }
         finally { _manualStopOperation = null; completion.TrySetResult(); PublishGameAutomation(); }
@@ -1080,24 +1099,13 @@ public partial class MainViewModel : INotifyPropertyChanged, IDisposable
 
     private async Task StopRequestedCaptureAsync()
     {
-        bool manualWasActive = _automaticGame == null && CaptureActive;
         await QuiesceGameAutomationAsync();
-        if (manualWasActive && _gameSuppressionStore != null && _settings.GameDetectionEnabled)
-        {
-            try { await ReserveManualGameSessionsAsync(); }
-            catch
-            {
-                _gameStateUnavailable = true;
-                _gameTimer?.Stop();
-                PublishGameAutomation("Automatic replay is paused because the manual-stop state could not be saved. Review Games settings before restarting Flick.");
-            }
-        }
         await StopCaptureManagedAsync();
         _manualReplayReserved = false;
         if (_automaticGame != null)
         {
             ClearAutomaticGame();
-            PublishGameAutomation("Automatic replay is paused for this game session. Start manually or restart the game.");
+            PublishGameAutomation("Replay stopped.");
         }
     }
 
@@ -1944,7 +1952,7 @@ public partial class MainViewModel : INotifyPropertyChanged, IDisposable
                 }
                 else
                 {
-                    ExportStatusMessage = $"Exported {clip.Title} · Select It to Share";
+                    ExportStatusMessage = $"Exported {clip.DisplayTitle} · Select to share";
                     OnSelectedClipChanged();
                 }
             }
@@ -2011,8 +2019,8 @@ public partial class MainViewModel : INotifyPropertyChanged, IDisposable
         if (SelectedClip == null) return;
         bool imported = SelectedClip.IsImported;
         string question = imported
-            ? $"Remove '{SelectedClip.Title}' from Flick? The original video and any export will NOT be deleted. It will stay excluded from rescans until you unlink and reconnect its folder."
-            : $"Delete '{SelectedClip.Title}'? The original video will be sent to the Recycle Bin. Any associated exported MP4 may be permanently deleted.";
+            ? $"Remove '{SelectedClip.DisplayTitle}' from Flick? Files stay in their folder. To include it again, unlink and reconnect the folder."
+            : $"Delete '{SelectedClip.DisplayTitle}'? The original goes to the Recycle Bin. Its exported MP4 may be permanently deleted.";
         var answer = LocalClip.App.Services.FlickDialog.Show(question,
             imported ? "Remove from library" : "Delete original video",
             MessageBoxButton.YesNo, MessageBoxImage.Question);

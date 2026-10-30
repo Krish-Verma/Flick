@@ -2,7 +2,7 @@ using System.Text.Json;
 
 namespace LocalClip.Core.GameDetection;
 
-/// <summary>Only approved process identities are retained; never window titles, screenshots or scan history.</summary>
+/// <summary>Explicit user pauses only; attempts and temporary window loss are never persisted.</summary>
 public sealed class GameSuppressionStore(string path)
 {
     public const int MaximumEntries = 128;
@@ -13,11 +13,15 @@ public sealed class GameSuppressionStore(string path)
         if (!File.Exists(path)) return [];
         if (new FileInfo(path).Length > 512 * 1024) throw new InvalidDataException("Game replay state is too large; automatic recording is paused.");
         var state = JsonSerializer.Deserialize<State>(File.ReadAllBytes(path));
-        if (state?.SchemaVersion != 1 || state.Suppressed == null || state.Suppressed.Count > MaximumEntries ||
+        if (state == null || state.SchemaVersion is not (1 or 2) || state.Suppressed == null || state.Suppressed.Count > MaximumEntries ||
             state.Suppressed.Any(identity => identity == null || !identity.IsComplete) ||
             state.Suppressed.Select(identity => identity.Key).Distinct(StringComparer.OrdinalIgnoreCase).Count() != state.Suppressed.Count)
             throw new InvalidDataException("Game replay state is unreadable; automatic recording is paused.");
-        return state.Suppressed.AsReadOnly();
+        // Version 1 mixed successful starts, failed attempts and manual pauses.
+        // Carrying those reservations forward made a running game stay disabled
+        // after every application restart. Version 2 stores actual Stop intent.
+        // Validate old bytes first, but leave them untouched until the next Save.
+        return state.SchemaVersion == 1 ? [] : state.Suppressed.AsReadOnly();
     }
 
     public void Save(IReadOnlyList<GameProcessIdentity> identities)
@@ -33,7 +37,7 @@ public sealed class GameSuppressionStore(string path)
         {
             using (var file = new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None))
             {
-                JsonSerializer.Serialize(file, new State(1, identities.ToList()));
+                JsonSerializer.Serialize(file, new State(2, identities.ToList()));
                 file.Flush(true);
             }
             File.Move(temporary, path, true);

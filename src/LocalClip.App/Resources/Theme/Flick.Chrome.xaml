@@ -29,12 +29,10 @@
             <Setter.Value>
                 <ControlTemplate TargetType="{x:Type Thumb}">
                     <Border x:Name="Grip" Background="{TemplateBinding Background}"
-                            CornerRadius="5" Margin="2" SnapsToDevicePixels="True"/>
+                            CornerRadius="5" Margin="2" SnapsToDevicePixels="True">
+                        <Border x:Name="PART_FlickHoverSurface" Background="White" Opacity="0" IsHitTestVisible="False" CornerRadius="{Binding CornerRadius, ElementName=Grip}"/>
+                    </Border>
                     <ControlTemplate.Triggers>
-                        <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="Grip" Property="Background"
-                                    Value="{DynamicResource Flick.Brush.TextSecondary}"/>
-                        </Trigger>
                         <Trigger Property="IsDragging" Value="True">
                             <Setter TargetName="Grip" Property="Background"
                                     Value="{DynamicResource Flick.Brush.TextPrimary}"/>
@@ -169,28 +167,28 @@
             <Setter.Value>
                 <ControlTemplate TargetType="{x:Type MenuItem}">
                     <Border x:Name="ActionRow" Background="{TemplateBinding Background}"
-                            CornerRadius="{StaticResource Flick.Corner.Control}"
-                            Padding="{TemplateBinding Padding}" Margin="1">
+                            CornerRadius="{StaticResource Flick.Corner.Control}" Margin="1">
                         <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto"/>
-                            </Grid.ColumnDefinitions>
-                            <ContentPresenter Grid.Column="0" ContentSource="Header"
+                            <Border x:Name="PART_FlickHoverSurface" Background="White" Opacity="0" IsHitTestVisible="False" CornerRadius="{Binding CornerRadius, ElementName=ActionRow}"/>
+                            <Grid Margin="{TemplateBinding Padding}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <ContentPresenter Grid.Column="0" ContentSource="Header"
                                               RecognizesAccessKey="True"
                                               VerticalAlignment="Center"/>
-                            <Path x:Name="SubmenuArrow" Grid.Column="1"
+                                    <Path x:Name="SubmenuArrow" Grid.Column="1"
                                   Visibility="Collapsed" Width="5" Height="9"
                                   Data="M 0,0 L 4,4.5 0,9" Stretch="Uniform"
                                   Stroke="{DynamicResource Flick.Brush.TextSecondary}"
                                   StrokeThickness="1.5" Margin="10,0,0,0"/>
+                                </Grid>
+                            </Grid>
                         </Grid>
                     </Border>
                     <ControlTemplate.Triggers>
-                        <Trigger Property="IsHighlighted" Value="True">
-                            <Setter TargetName="ActionRow" Property="Background"
-                                    Value="{DynamicResource Flick.Brush.Hover}"/>
-                        </Trigger>
                         <Trigger Property="IsKeyboardFocusWithin" Value="True">
                             <Setter TargetName="ActionRow" Property="BorderBrush"
                                     Value="{DynamicResource Flick.Brush.Focus}"/>

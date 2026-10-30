@@ -25,7 +25,7 @@ public sealed record GameProcessIdentity(string ExecutablePath, uint Pid, ulong 
 
 public sealed record GameWindowObservation(GameProcessIdentity Process, ulong Hwnd, string Title,
     string WindowClass, bool Visible, bool Minimized, bool Cloaked, bool ToolWindow,
-    int Width, int Height, bool IdentityComplete = true, bool Elevated = false)
+    int Width, int Height, bool IdentityComplete = true, bool Elevated = false, bool IsForeground = false)
 {
     public bool Eligible => IdentityComplete && !Elevated && Process.IsComplete && Hwnd != 0 &&
         Visible && !Minimized && !Cloaked && !ToolWindow && Width >= 100 && Height >= 100 &&
@@ -41,15 +41,15 @@ public sealed record GameDetectionDecision(GameDetectionReason Reason, ApprovedG
 {
     public string StatusText => Reason switch
     {
-        GameDetectionReason.Disabled => "Automatic game replay is off.",
-        GameDetectionReason.NoProfiles => "Approve a running game in Settings to enable automatic replay.",
-        GameDetectionReason.InvalidProfiles => "Review the approved game profiles before enabling automatic replay.",
-        GameDetectionReason.Unavailable => "Game detection is unavailable. Automatic recording is paused.",
-        GameDetectionReason.NoMatch => "Waiting for an approved game.",
-        GameDetectionReason.Ineligible => "Approved game is minimized, hidden, elevated or unavailable.",
-        GameDetectionReason.Ambiguous => "More than one approved game or window is open. Start replay manually.",
-        GameDetectionReason.Suppressed => "Automatic replay is paused for this game session. Start manually or restart the game.",
-        _ => "Approved game ready for automatic replay."
+        GameDetectionReason.Disabled => "Game replay is off.",
+        GameDetectionReason.NoProfiles => "Add a game in Settings → Games.",
+        GameDetectionReason.InvalidProfiles => "Review your games in Settings.",
+        GameDetectionReason.Unavailable => "Game detection unavailable.",
+        GameDetectionReason.NoMatch => "Waiting for a game.",
+        GameDetectionReason.Ineligible => "Waiting for the game window.",
+        GameDetectionReason.Ambiguous => "Choose a game source to start replay.",
+        GameDetectionReason.Suppressed => "Replay paused for this game. Start replay to resume.",
+        _ => "Starting game replay."
     };
 }
 
@@ -115,13 +115,27 @@ public static class GameDetectionPolicy
             return new(GameDetectionReason.Ambiguous);
         var eligible = matches.Where(window => window.Eligible).GroupBy(window => window.Hwnd).Select(group => group.First()).ToArray();
         if (eligible.Length == 0) return new(GameDetectionReason.Ineligible);
-        if (eligible.Length != 1) return new(GameDetectionReason.Ambiguous);
+        // Multiple unrelated processes still require an explicit source choice.
+        // Within one approved process, the actual foreground window can resolve
+        // a launcher/secondary-window ambiguity without guessing the first item.
+        if (eligible.Length > 1)
+        {
+            var foreground = eligible.Where(window => window.IsForeground).ToArray();
+            if (foreground.Length != 1) return new(GameDetectionReason.Ambiguous);
+            eligible = foreground;
+        }
         var candidate = eligible[0];
         if (suppressed?.Any(process => process.Matches(candidate.Process)) == true)
             return new(GameDetectionReason.Suppressed);
         return new(GameDetectionReason.Eligible, approved.Single(profile =>
             string.Equals(profile.ExecutablePath.Replace('/', '\\'), candidate.Process.ExecutablePath, StringComparison.OrdinalIgnoreCase)), candidate);
     }
+
+    public static bool CanContinue(ApprovedGameProfile profile, GameWindowObservation active, GameWindowSnapshot snapshot) =>
+        profile.Enabled && snapshot.Status == GameScanStatus.Complete &&
+        string.Equals(profile.ExecutablePath.Replace('/', '\\'), active.Process.ExecutablePath, StringComparison.OrdinalIgnoreCase) &&
+        snapshot.Windows.Any(window => window.Eligible && window.Hwnd == active.Hwnd &&
+            window.Process.Matches(active.Process) && window.WindowClass == active.WindowClass);
 }
 
 public enum GameProcessPresence { Alive, Exited, Unknown }

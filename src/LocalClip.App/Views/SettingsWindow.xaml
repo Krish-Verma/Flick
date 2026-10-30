@@ -258,8 +258,14 @@
                               Margin="0,0,0,14"/>
                     <CheckBox x:Name="ChkStartMinimized"
                               Style="{StaticResource Flick.Toggle}"
-                              Content="Minimize to tray and start hidden"
-                              ToolTip="Minimizing hides Flick in the system tray; the next app launch also starts hidden. This does not start replay."
+                              Content="Start in the tray"
+                              ToolTip="Open Flick in the tray and keep it there when minimized."
+                              Margin="0,0,0,14"/>
+                    <CheckBox x:Name="ChkKeepReplayReadyInBackground"
+                              Style="{StaticResource Flick.Toggle}"
+                              Content="Keep replay ready in the tray"
+                              ToolTip="Start replay from your saved source when Flick runs in the background."
+                              AutomationProperties.Name="Keep replay ready in the tray"
                               Margin="0,0,0,22"/>
                     <TextBlock Text="Display" Style="{StaticResource Flick.Text.Section}" Margin="0,8,0,12"/>
                     <CheckBox x:Name="ChkShowResourceUsage" Content="Show RAM and CPU"
@@ -392,7 +398,7 @@
                             <TextBlock Text="Webhook URL"
                                        Style="{StaticResource Flick.Text.Control}"
                                        Margin="0,0,0,6"/>
-                            <PasswordBox x:Name="TxtWebhookUrl"
+                            <PasswordBox x:Name="TxtWebhookUrl" Style="{StaticResource Flick.Input.Password}"
                                          Background="{DynamicResource Flick.Brush.Raised}"
                                          Foreground="{DynamicResource Flick.Brush.TextPrimary}"
                                          BorderBrush="{DynamicResource Flick.Brush.Border}"

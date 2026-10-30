@@ -22,7 +22,7 @@ public partial class MainViewModel
     public bool ShareHasPreview => _sharePreview != null;
     public bool ShareCanCopy => SelectedClip != null && IsExportReady && !IsExporting;
     public bool ShareCanCancel => IsExporting && !_shareCancellationRequested;
-    public string ShareClipTitle => SelectedClip?.Title ?? "Choose a clip to share";
+    public string ShareClipTitle => SelectedClip?.DisplayTitle ?? "Choose a clip to share";
     public string ShareClipDetails => SelectedClip == null ? "Your originals stay unchanged."
         : FormatShareDuration(SelectedClip.SelectedDurationSeconds) +
           (IsExportReady ? $" · MP4 · {SelectedClip.ExportedFileSizeBytes / 1_000_000d:0.00} MB" : " · Original preview");

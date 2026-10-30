@@ -8,7 +8,7 @@ Does not exercise GPU capture, UI appearance, Smart App Control, or publisher tr
 #>
 param(
     [string]$SetupPath = "dist/Flick-Setup.exe",
-    [string]$PackagePath = "dist/Flick-v1.0.10-win-x64",
+    [string]$PackagePath = "dist/Flick-v1.0.11-win-x64",
     [string]$BaselineSetupPath = ""
 )
 

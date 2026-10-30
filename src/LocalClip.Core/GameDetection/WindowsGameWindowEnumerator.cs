@@ -80,7 +80,8 @@ public sealed class WindowsGameWindowEnumerator : IGameWindowEnumerator
                 WaitForSingleObject(process, 0) != 258) return null;
             return new(identity, unchecked((ulong)hwnd.ToInt64()), title.ToString(), windowClass.ToString(),
                 IsWindowVisible(hwnd), IsIconic(hwnd), cloaked != 0, (GetWindowLongPtrW(hwnd, -20).ToInt64() & 0x80) != 0,
-                bounds.Right - bounds.Left, bounds.Bottom - bounds.Top, cloakKnown, elevated);
+                bounds.Right - bounds.Left, bounds.Bottom - bounds.Top, cloakKnown, elevated,
+                hwnd == GetForegroundWindow());
         }
         finally { CloseHandle(process); }
     }
@@ -113,6 +114,7 @@ public sealed class WindowsGameWindowEnumerator : IGameWindowEnumerator
     private static extern bool EnumWindows(EnumCallback callback, IntPtr parameter);
     [DllImport("user32.dll")] private static extern IntPtr GetAncestor(IntPtr hwnd, uint flags);
     [DllImport("user32.dll")] private static extern IntPtr GetWindow(IntPtr hwnd, uint command);
+    [DllImport("user32.dll")] private static extern IntPtr GetForegroundWindow();
     [DllImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] private static extern bool IsWindow(IntPtr hwnd);
     [DllImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] private static extern bool IsWindowVisible(IntPtr hwnd);
     [DllImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] private static extern bool IsIconic(IntPtr hwnd);
