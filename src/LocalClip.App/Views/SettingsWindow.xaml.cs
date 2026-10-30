@@ -7,6 +7,8 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
+using LocalClip.Core.GameDetection;
 using System.Windows.Input;
 using LocalClip.App.Hotkeys;
 using LocalClip.App.Services;
@@ -41,6 +43,14 @@ public partial class SettingsWindow : UserControl
     private string _shortcutBeforeEdit = "";
     public event Action<bool>? ShortcutEditingChanged;
     private string _activeCategory = "Recording";
+    private string _originalDraft = "";
+    private bool _trackingDraft;
+    private WindowsStartupStatus? _startupReview;
+
+    // These are observations of the staged form, never device discovery or disk writes.
+    public bool HasUnsavedChanges { get; private set; }
+    public bool CanSaveDraft { get; private set; }
+
 
     private CancellationTokenSource? _updateCancellation;
     private AvailableUpdate? _availableUpdate;
@@ -83,6 +93,16 @@ public partial class SettingsWindow : UserControl
         TxtUpdateMode.ToolTip = FlickUninstallLauncher.IsInstalled
             ? "Save pending settings before installing an update."
             : "Quit Flick before replacing the extracted application folder. Clips and preferences live separately.";
+        _originalDraft = DraftFingerprint();
+        _trackingDraft = true;
+        RefreshStartupReview();
+        AddHandler(TextBoxBase.TextChangedEvent, new TextChangedEventHandler(DraftText_Changed));
+        AddHandler(Selector.SelectionChangedEvent, new SelectionChangedEventHandler(DraftSelection_Changed));
+        AddHandler(ToggleButton.CheckedEvent, new RoutedEventHandler(DraftControl_Changed));
+        AddHandler(ToggleButton.UncheckedEvent, new RoutedEventHandler(DraftControl_Changed));
+        AddHandler(PasswordBox.PasswordChangedEvent, new RoutedEventHandler(DraftControl_Changed));
+        _stagedGameProfiles.CollectionChanged += (_, _) => UpdateDraftState();
+        UpdateDraftState();
         Unloaded += (_, _) => LeavePage();
     }
 
@@ -327,6 +347,8 @@ public partial class SettingsWindow : UserControl
         finally { _loading = false; }
         UpdateBufferWarning();
         SaveShortcutLabel.Text = $"Save last {settings.ReplayDurationSeconds}s";
+        if (_trackingDraft) RefreshStartupReview();
+        UpdateDraftState();
     }
 
     private string Preset() => CmbQuality.SelectedIndex switch
@@ -537,6 +559,7 @@ public partial class SettingsWindow : UserControl
             _customSoundPath = picker.FileName;
             CustomSoundName.Text = Path.GetFileName(_customSoundPath);
             CmbNotificationTone.SelectedIndex = 2;
+            UpdateDraftState();
         }
         catch (Exception ex) { FlickDialog.Show(ex.Message, "Choose a short WAV sound"); }
     }
@@ -546,12 +569,19 @@ public partial class SettingsWindow : UserControl
         _customSoundPath = "";
         CustomSoundName.Text = "No custom sound selected";
         CmbNotificationTone.SelectedIndex = 0;
+        UpdateDraftState();
     }
 
     private void Save_Click(object sender, RoutedEventArgs e)
     {
         CancelShortcutEdit();
         LastSaveWarning = "";
+        var invalidDraft = FindDraftValidation();
+        if (invalidDraft != null)
+        {
+            ShowSaveValidation(invalidDraft.Category, invalidDraft.Field, invalidDraft.Message);
+            return;
+        }
         TxtSaveStatus.Text = "Saving…";
         TxtSaveStatus.ToolTip = null;
         if (!int.TryParse(TxtDuration.Text, out int duration) ||
@@ -748,10 +778,134 @@ public partial class SettingsWindow : UserControl
     private void ShowSaveValidation(string category, FrameworkElement field, string message)
     {
         SelectCategory(category);
-        TxtSaveStatus.Text = message;
+        if (ReferenceEquals(field, TxtWebhookUrl)) WebhookExpander.IsExpanded = true;
+        SetFieldValidation(category, message, field);
+        TxtSaveStatus.Text = HasUnsavedChanges ? "Unsaved changes" : "Review " + category.ToLowerInvariant() + ".";
         TxtSaveStatus.ToolTip = message;
         field.Focus();
         field.BringIntoView();
+    }
+
+    private void DraftText_Changed(object sender, TextChangedEventArgs e) => UpdateDraftState();
+    private void DraftSelection_Changed(object sender, SelectionChangedEventArgs e) => UpdateDraftState();
+    private void DraftControl_Changed(object sender, RoutedEventArgs e)
+    {
+        if (!_trackingDraft || _loading) return;
+        if (ReferenceEquals(e.OriginalSource, ChkStartWithWindows) || ReferenceEquals(e.OriginalSource, ChkStartMinimized))
+            RefreshStartupReview();
+        UpdateDraftState();
+    }
+
+    private void RefreshStartupReview()
+    {
+        _startupReview = null;
+        if (ChkStartWithWindows.IsChecked == true)
+        {
+            try { _startupReview = _readWindowsStartupStatus(ChkStartMinimized.IsChecked == true); }
+            catch { _startupReview = new(WindowsStartupRegistrationState.Unavailable, "Windows startup couldn't be checked. Save to retry."); }
+        }
+        TxtStartupStatus.Text = _startupReview?.State == WindowsStartupRegistrationState.Registered
+            ? "" : _startupReview?.Message ?? "";
+        TxtStartupStatus.Visibility = TxtStartupStatus.Text.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
+    }
+
+    private IReadOnlyList<ApprovedGameProfile> DraftGames() => _stagedGameProfiles.Select(game =>
+        game.Id != _editingGameProfileId ? game : game with {
+            Name = TxtGameName.Text.Trim(), Enabled = ChkGameProfileEnabled.IsChecked == true,
+            QualityPreset = CmbGameQuality.SelectedIndex switch { 0 => "Light", 2 => "Smooth", _ => "Balanced" },
+            ReplayDurationSeconds = int.TryParse(TxtGameDuration.Text, out int duration) ? duration : 0,
+            AllowMicrophone = ChkGameMicrophone.IsChecked == true
+        }).ToArray();
+
+    private string DraftFingerprint() => JsonSerializer.Serialize(new {
+        Text = new[] { TxtToggleHotkey, TxtSaveHotkey, TxtOriginalsFolder, TxtExportsFolder, TxtDuration,
+            TxtWebhookChannel }.Select(field => ReferenceEquals(field, _editingShortcut) ? _shortcutBeforeEdit : field.Text.Trim()).ToArray(),
+        Checks = new[] { ChkMicrophone, ChkSoftwareFallback, ChkStartWithWindows, ChkStartMinimized,
+            ChkKeepReplayReadyInBackground, ChkShowResourceUsage, ChkPreviewUpdates, ChkClipSavedOverlay,
+            ChkClipSavedSound, ChkEnableWebhook, ChkGameDetectionEnabled }.Select(field => field.IsChecked == true).ToArray(),
+        Quality = CmbQuality.SelectedIndex, AudioMode = CmbAudioMode.SelectedIndex,
+        GameAudio = (CmbGameAudio.SelectedItem as AudioChoice)?.Identity,
+        VoiceAudio = (CmbVoiceAudio.SelectedItem as AudioChoice)?.Identity,
+        Output = (CmbSystemAudioDevice.SelectedItem as AudioEndpointChoice)?.Id,
+        Microphone = (CmbMicrophoneDevice.SelectedItem as AudioEndpointChoice)?.Id,
+        Tone = NotificationTone(), Sound = _customSoundPath, Cap = GetShareCap(),
+        CustomCap = CmbShareCap.SelectedIndex == 4 ? TxtShareCustomMb.Text.Trim() : "",
+        Webhook = TxtWebhookUrl.Password.Trim(), Games = DraftGames()
+    });
+
+    private sealed record DraftValidation(string Category, FrameworkElement Field, string Message);
+
+    // Pure form validation: don't enumerate endpoints, read sound files, protect
+    // secrets or query Windows on each keypress. Save still owns the verified write.
+    private DraftValidation? FindDraftValidation()
+    {
+        if (!int.TryParse(TxtDuration.Text, out int duration) || duration is < 15 or > 120)
+            return new("Recording", TxtDuration, "Choose 15–120 seconds.");
+        if (!ShareExportTargets.IsValid(GetShareCap()))
+            return new("Sharing", TxtShareCustomMb, "Choose a file limit from 1 to 250 MB.");
+        string toggle = ReferenceEquals(_editingShortcut, TxtToggleHotkey) ? _shortcutBeforeEdit : TxtToggleHotkey.Text.Trim();
+        string save = ReferenceEquals(_editingShortcut, TxtSaveHotkey) ? _shortcutBeforeEdit : TxtSaveHotkey.Text.Trim();
+        if (!HotkeyManager.IsValidHotkey(toggle) || !HotkeyManager.IsValidHotkey(save) || HotkeyManager.AreEquivalentHotkeys(toggle, save))
+            return new("Shortcuts", TxtToggleHotkey, "Choose two different valid shortcuts.");
+        try
+        {
+            string originals = TxtOriginalsFolder.Text.Trim(), exports = TxtExportsFolder.Text.Trim();
+            if (!Path.IsPathFullyQualified(originals) || !Path.IsPathFullyQualified(exports) ||
+                string.Equals(Path.TrimEndingDirectorySeparator(Path.GetFullPath(originals)),
+                    Path.TrimEndingDirectorySeparator(Path.GetFullPath(exports)), StringComparison.OrdinalIgnoreCase))
+                return new("Storage", TxtOriginalsFolder, "Choose separate folders for clips and exports.");
+        }
+        catch (Exception) { return new("Storage", TxtOriginalsFolder, "Choose separate folders for clips and exports."); }
+        if (ChkEnableWebhook.IsChecked == true && !DiscordWebhookClient.ValidateWebhookUrl(TxtWebhookUrl.Password.Trim(), out _))
+            return new("Sharing", TxtWebhookUrl, "Enter a valid Discord webhook or turn off direct posting.");
+        var games = DraftGames();
+        if (!GameDetectionPolicy.ValidateProfiles(games, out string error))
+            return new("Games", TxtGameDuration, error);
+        if (ChkGameDetectionEnabled.IsChecked == true && !games.Any(game => game.Enabled))
+            return new("Games", ChkGameDetectionEnabled, "Approve and enable at least one game first.");
+        try { StageAudio(AppSettings.CreateDefault()); }
+        catch (ArgumentException ex)
+        {
+            FrameworkElement field = ex.Message.Contains("microphone", StringComparison.OrdinalIgnoreCase) ? CmbMicrophoneDevice :
+                ex.Message.Contains("output", StringComparison.OrdinalIgnoreCase) ? CmbSystemAudioDevice : CmbAudioMode;
+            return new("Audio", field, ex.Message);
+        }
+        return null;
+    }
+
+    private void SetFieldValidation(string category, string message, FrameworkElement? field = null)
+    {
+        TextBlock label = category switch {
+            "Recording" => TxtDurationError, "Shortcuts" => TxtShortcutError,
+            "Storage" => TxtStorageError,
+            "Audio" when ReferenceEquals(field, CmbSystemAudioDevice) => TxtOutputError,
+            "Audio" when ReferenceEquals(field, CmbMicrophoneDevice) => TxtMicrophoneError,
+            "Audio" => TxtAudioError,
+            "Games" => TxtGameValidation, "Sharing" when ReferenceEquals(field, TxtWebhookUrl) => TxtWebhookError,
+            _ => TxtShareCapError
+        };
+        label.Text = message;
+        label.Visibility = message.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
+    }
+
+    private void UpdateDraftState()
+    {
+        if (!_trackingDraft || _loading || _loadingGames) return;
+        HasUnsavedChanges = !string.Equals(_originalDraft, DraftFingerprint(), StringComparison.Ordinal);
+        foreach (TextBlock label in new[] { TxtDurationError, TxtShortcutError, TxtStorageError, TxtAudioError,
+            TxtGameValidation, TxtShareCapError, TxtWebhookError, TxtOutputError, TxtMicrophoneError })
+        { label.Text = ""; label.Visibility = Visibility.Collapsed; }
+        var invalid = FindDraftValidation();
+        if (invalid != null) SetFieldValidation(invalid.Category, invalid.Message, invalid.Field);
+        bool repair = ChkStartWithWindows.IsChecked == true && _startupReview?.State is
+            WindowsStartupRegistrationState.MissingOrStale or WindowsStartupRegistrationState.Unavailable;
+        CanSaveDraft = invalid == null && (HasUnsavedChanges || _settings.RequiresExplicitSettingsSave || repair);
+        BtnSaveSettings.IsEnabled = CanSaveDraft;
+        TxtSaveStatus.Text = HasUnsavedChanges ? "Unsaved changes" : invalid != null ? "Review " + invalid.Category.ToLowerInvariant() + "."
+            : _settings.RequiresExplicitSettingsSave ? "Review recovered settings" : repair ? "Save to repair startup" : "";
+        TxtSaveStatus.ToolTip = invalid?.Message ?? TxtSaveStatus.Text;
+        BtnSaveSettings.ToolTip = invalid?.Message ?? (repair ? "Save to repair Windows startup." :
+            CanSaveDraft ? "Save your reviewed preferences." : "No changes to save.");
     }
 
     private void UninstallFlick_Click(object sender, RoutedEventArgs e)

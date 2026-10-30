@@ -6,7 +6,7 @@ $ErrorActionPreference = "Stop"
 
 $RootDir = (Get-Item $PSScriptRoot).Parent.FullName
 $DistDir = Join-Path $RootDir "dist"
-$PackageName = "Flick-v1.0.11-win-x64"
+$PackageName = "Flick-v1.0.12-win-x64"
 $PackageDir = Join-Path $DistDir $PackageName
 $ZipPath = Join-Path $DistDir "$PackageName.zip"
 
@@ -104,7 +104,7 @@ if (-not (Test-Path -LiteralPath (Join-Path $PackageDir "Flick.exe"))) {
 
 # Generate User Readme
 $Readme = @'
-# Flick 1.0.11 Preview 1 — UNSIGNED
+# Flick 1.0.12 Preview 1 — UNSIGNED
 
 This Windows x64 preview improves startup, tray replay, game detection, Settings Save, hover feedback and clip titles. Recording, editing, sharing and existing settings are retained. Exact-source package and installer checks are required before publication; physical gameplay acceptance remains separate.
 
@@ -165,8 +165,8 @@ $ExeHash = (Get-FileHash -Path (Join-Path $PackageDir "Flick.exe") -Algorithm SH
 $HostHash = (Get-FileHash -Path (Join-Path $PackageDir "tools\obs\runtime\bin\64bit\LocalClip.CaptureHost.exe") -Algorithm SHA256).Hash
 
 $ChecksumContent = @"
-# Flick v1.0.11 Preview (unsigned Windows x64 replay-and-UX candidate) SHA-256 Checksums
-$ZipHash  Flick-v1.0.11-win-x64.zip
+# Flick v1.0.12 Preview (unsigned Windows x64 replay-and-UX candidate) SHA-256 Checksums
+$ZipHash  Flick-v1.0.12-win-x64.zip
 $ExeHash  Flick.exe
 $HostHash  LocalClip.CaptureHost.exe
 "@

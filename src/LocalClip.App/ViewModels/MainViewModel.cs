@@ -460,6 +460,7 @@ public partial class MainViewModel : INotifyPropertyChanged, IDisposable
 
     private void PublishHealth()
     {
+        PublishCapturePresentation();
         OnPropertyChanged(nameof(RecordingHealth));
         OnPropertyChanged(nameof(HealthStatusText));
         OnPropertyChanged(nameof(HealthDetailsText));
@@ -1286,6 +1287,7 @@ public partial class MainViewModel : INotifyPropertyChanged, IDisposable
                     // the request registered until a correlated terminal event
                     // or confirmed capture-host exit settles its outcome.
                     RecordDiagnostic(DiagnosticEventKind.HostChanged, DiagnosticErrorCode.HostUnresponsive);
+                    _health.MarkSaveAcknowledgementUnconfirmed(saveSession, saveId);
                     PublishHealth();
                 }
                 if (!_captureHost.HasPendingReplaySaves)
@@ -1793,6 +1795,7 @@ public partial class MainViewModel : INotifyPropertyChanged, IDisposable
         _applyingLibraryFilter = true;
         try { _filteredClips.ReplaceAll(visible); }
         finally { _applyingLibraryFilter = false; }
+        PublishLibraryPresentation();
     }
 
     private void OnSelectedClipChanged()
@@ -2155,6 +2158,9 @@ public partial class MainViewModel : INotifyPropertyChanged, IDisposable
     protected void OnPropertyChanged([CallerMemberName] string? name = null)
     {
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
+        if (name is nameof(SelectedTarget) or nameof(AutomaticGameSourceText) or nameof(IsAutomaticGameCapture)
+            or nameof(ReplayWaitingText) or nameof(IsRecordingDiagnosticRunning))
+            PublishCapturePresentation();
         OnShareDependencyChanged(name);
         if (name is nameof(IsCaptureActive) or nameof(CaptureStatus) or nameof(CanEditClip) or nameof(IsExporting) or nameof(IsBackgroundWorkActive))
         {

@@ -63,7 +63,7 @@ Require $install 'MyAppVersion "1\.0\.11"' "Inno Setup AppVersion must match"
 Require $package 'Flick-v1\.0\.11-win-x64' "Portable version must match installer"
 Require $setupScript 'Flick-Setup\.exe' "User-facing installer must be a single EXE"
 Require $lock '1\.0\.11-preview\.1' "Pinned app version must match tag"
-if ($versions.Trim() -ne "1.0.11-preview.1") { throw "Release version manifest does not match compiled version" }
+if ($versions.Trim() -ne "1.0.12-preview.1") { throw "Release version manifest does not match compiled version" }
 Write-Host "Flick packaging and memory source contracts PASS (not a hardware performance test)." -ForegroundColor Green
 
 # No automatic unsigned GitHub Releases may be created after SAC block report.

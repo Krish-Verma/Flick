@@ -115,6 +115,7 @@ public partial class SettingsWindow
             ChkGameMicrophone.IsChecked = profile.AllowMicrophone;
         }
         finally { _loadingGames = false; }
+        UpdateDraftState();
     }
 
     private bool TryStageGameEditor(out string error)
@@ -137,6 +138,7 @@ public partial class SettingsWindow
             if (wasSelected) LstApprovedGames.SelectedItem = edited;
         }
         finally { _loadingGames = false; }
+        UpdateDraftState();
         return true;
     }
 

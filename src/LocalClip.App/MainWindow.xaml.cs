@@ -172,7 +172,8 @@ public partial class MainWindow : Window
             if (ev.PropertyName is nameof(MainViewModel.CaptureStatus) or nameof(MainViewModel.HealthStatusText)
                 or nameof(MainViewModel.IsRecordingDiagnosticRunning) or nameof(MainViewModel.CanControlReplay)
                 or nameof(MainViewModel.ActiveReplayDurationSeconds) or nameof(MainViewModel.IsAutomaticGameCapture)
-                or nameof(MainViewModel.GameDetectionStatus))
+                or nameof(MainViewModel.GameDetectionStatus) or nameof(MainViewModel.CaptureStateText)
+                or nameof(MainViewModel.CaptureStateTone) or nameof(MainViewModel.CaptureStateDetail))
             {
                 UpdateStatusBadgeColor();
                 if (_vm.CaptureStatus == "Starting" || _vm.IsRecordingDiagnosticRunning)
@@ -417,27 +418,22 @@ public partial class MainWindow : Window
         bool testing = _vm.IsRecordingDiagnosticRunning;
 
         bool compact = _layoutMode == WorkspaceLayoutMode.Compact;
-        TxtCaptureStatus.Text = testing ? "Testing recording" : _vm.RecordingHealth.SessionId != Guid.Empty || _vm.RecordingHealth.LastSaveIssue != null
-            ? _vm.HealthStatusText : status switch
-        {
-            "Armed" => compact ? "Ready" : "Replay ready",
-            "Buffering" => compact ? "Buffering" : "Buffering replay",
-            "Starting" => compact ? "Starting" : "Starting replay",
-            "Stopping" => compact ? "Stopping" : "Stopping replay",
-            "Faulted" => compact ? "Error" : "Capture error",
-            "Paused" => compact ? "Paused" : "Replay paused",
-            _ => compact ? "Off" : "Replay off"
-        };
-        if (!testing && !active && !transitional && !fault)
-            TxtCaptureStatus.Text = _vm.ReplayWaitingText;
+        TxtCaptureStatus.Text = testing ? "Testing recording" : _vm.CaptureStateText;
+        System.Windows.Automation.AutomationProperties.SetName(BtnRecordingHealth, TxtCaptureStatus.Text);
+        System.Windows.Automation.AutomationProperties.SetHelpText(BtnRecordingHealth, _vm.CaptureStateDetail);
+        BtnRecordingHealth.ToolTip = _vm.CaptureStateDetail;
 
         var neutral = (System.Windows.Media.Brush)FindResource("Flick.Brush.TextMuted");
         var green = (System.Windows.Media.Brush)FindResource("Flick.Brush.Success");
         var amber = (System.Windows.Media.Brush)FindResource("Flick.Brush.Warning");
         var danger = (System.Windows.Media.Brush)FindResource("Flick.Brush.Danger");
-        bool waiting = !active && !fault && _vm.ReplayWaitingText is "Waiting for game" or "Waiting to start replay";
-        CaptureStateDot.Fill = testing ? amber : ready ? green : buffering || transitional || waiting ? amber :
-            fault ? danger : neutral;
+        CaptureStateDot.Fill = testing ? amber : _vm.CaptureStateTone switch
+        {
+            "Success" => green,
+            "Warning" => amber,
+            "Danger" => danger,
+            _ => neutral
+        };
         // Badge surface is a DynamicResource so a Windows high-contrast
         // theme can override it without stale fixed-color rendering.
 

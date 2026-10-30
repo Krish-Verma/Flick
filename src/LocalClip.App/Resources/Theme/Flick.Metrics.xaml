@@ -11,12 +11,15 @@
     <sys:Double x:Key="Flick.Space.8">32</sys:Double>
 
     <Thickness x:Key="Flick.Inset.Compact">8,4</Thickness>
-    <Thickness x:Key="Flick.Inset.Control">12,6</Thickness>
+    <Thickness x:Key="Flick.Inset.Control">12,4</Thickness>
     <Thickness x:Key="Flick.Inset.Panel">16</Thickness>
-    <Thickness x:Key="Flick.Inset.Toast">10,8</Thickness>
+    <Thickness x:Key="Flick.Inset.Toast">12,8</Thickness>
     <Thickness x:Key="Flick.Gap.Row">0,0,0,8</Thickness>
     <Thickness x:Key="Flick.Gap.Section">0,0,0,16</Thickness>
     <Thickness x:Key="Flick.Gap.Group">0,0,0,24</Thickness>
+
+    <!-- Reserve this same boundary at rest and focus; keyboard focus never reflows content. -->
+    <Thickness x:Key="Flick.Thickness.Focus">2</Thickness>
 
     <CornerRadius x:Key="Flick.Corner.Control">6</CornerRadius>
     <CornerRadius x:Key="Flick.Corner.Panel">8</CornerRadius>
@@ -36,7 +39,9 @@
 
     <FontFamily x:Key="Flick.Font.UI">Segoe UI Variable Text, Segoe UI</FontFamily>
     <sys:Double x:Key="Flick.Font.Caption">12</sys:Double>
-    <sys:Double x:Key="Flick.Font.Control">13</sys:Double>
+    <sys:Double x:Key="Flick.Font.Control">14</sys:Double>
+    <sys:Double x:Key="Flick.Font.Dense">13</sys:Double>
+    <sys:Double x:Key="Flick.Font.Status">13</sys:Double>
     <sys:Double x:Key="Flick.Font.Body">14</sys:Double>
     <sys:Double x:Key="Flick.Font.Section">15</sys:Double>
     <sys:Double x:Key="Flick.Font.ClipTitle">18</sys:Double>

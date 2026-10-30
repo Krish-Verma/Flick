@@ -28,6 +28,7 @@ internal static class SettingsPersistenceAssertions
         try
         {
             SettingsAudioPersistenceAssertions.Run(root);
+            SettingsDraftAssertions.Run(root);
             RepeatStartupSaveRepairsRegistration(root);
             FailedDiskSaveRetainsStartupDraftAndRollsBackRegistration(root);
             var source = AppSettings.CreateDefault();

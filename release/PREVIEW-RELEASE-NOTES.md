@@ -1,4 +1,4 @@
-# Flick 1.0.11 Preview 1 — Replay and UX (UNSIGNED)
+# Flick 1.0.12 Preview 1 — Design Research (UNSIGNED)
 
 - Subtle, smooth highlights across clickable controls, with keyboard focus, high-contrast and reduced-motion support. The purple identity and existing features are preserved.
 - The app, tray and installer use the supplied corrected Flick artwork with consistent placement.

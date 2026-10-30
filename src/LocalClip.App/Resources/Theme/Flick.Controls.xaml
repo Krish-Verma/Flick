@@ -24,11 +24,13 @@
     </Style>
 
     <Style x:Key="Flick.Button.Base" TargetType="{x:Type Button}">
+        <Setter Property="ToolTipService.ShowOnDisabled" Value="True"/>
+        <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
         <Setter Property="services:FlickHoverFeedback.Enabled" Value="True"/>
         <Setter Property="Background" Value="{DynamicResource Flick.Brush.Raised}"/>
         <Setter Property="Foreground" Value="{DynamicResource Flick.Brush.TextPrimary}"/>
         <Setter Property="BorderBrush" Value="{DynamicResource Flick.Brush.Border}"/>
-        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="BorderThickness" Value="{StaticResource Flick.Thickness.Focus}"/>
         <Setter Property="FontFamily" Value="{StaticResource Flick.Font.UI}"/>
         <Setter Property="FontSize" Value="{StaticResource Flick.Font.Control}"/>
         <Setter Property="FontWeight" Value="Normal"/>
@@ -64,10 +66,12 @@
                         <Trigger Property="IsKeyboardFocused" Value="True">
                             <Setter TargetName="Chrome" Property="BorderBrush"
                                     Value="{DynamicResource Flick.Brush.Focus}"/>
-                            <Setter TargetName="Chrome" Property="BorderThickness" Value="1"/>
                         </Trigger>
                         <Trigger Property="IsEnabled" Value="False">
-                            <Setter Property="Opacity" Value=".43"/>
+                            <Setter Property="Foreground" Value="{DynamicResource Flick.Brush.TextMuted}"/>
+                            <Setter Property="Cursor" Value="Arrow"/>
+                            <Setter Property="Background" Value="{DynamicResource Flick.Brush.Raised}"/>
+                            <Setter Property="BorderBrush" Value="{DynamicResource Flick.Brush.Divider}"/>
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -100,17 +104,19 @@
     </Style>
 
     <Style x:Key="Flick.Input.Text" TargetType="{x:Type TextBox}">
+        <Setter Property="ToolTipService.ShowOnDisabled" Value="True"/>
+        <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
         <Setter Property="services:FlickHoverFeedback.Enabled" Value="True"/>
         <Setter Property="MinHeight" Value="{StaticResource Flick.Size.Control}"/>
-        <Setter Property="Padding" Value="10,5"/>
+        <Setter Property="Padding" Value="12,4"/>
         <Setter Property="Background" Value="{DynamicResource Flick.Brush.Raised}"/>
         <Setter Property="Foreground" Value="{DynamicResource Flick.Brush.TextPrimary}"/>
         <Setter Property="CaretBrush" Value="{DynamicResource Flick.Brush.TextPrimary}"/>
         <Setter Property="SelectionBrush" Value="{DynamicResource Flick.Brush.BorderStrong}"/>
         <Setter Property="SelectionTextBrush" Value="{DynamicResource Flick.Brush.TextPrimary}"/>
         <Setter Property="SelectionOpacity" Value=".65"/>
-        <Setter Property="BorderBrush" Value="{DynamicResource Flick.Brush.Border}"/>
-        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource Flick.Brush.BorderStrong}"/>
+        <Setter Property="BorderThickness" Value="{StaticResource Flick.Thickness.Focus}"/>
         <Setter Property="FontFamily" Value="{StaticResource Flick.Font.UI}"/>
         <Setter Property="FontSize" Value="{StaticResource Flick.Font.Body}"/>
         <Setter Property="VerticalContentAlignment" Value="Center"/>
@@ -132,10 +138,10 @@
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsKeyboardFocusWithin" Value="True">
                             <Setter TargetName="TextChrome" Property="BorderBrush" Value="{DynamicResource Flick.Brush.Focus}"/>
-                            <Setter TargetName="TextChrome" Property="BorderThickness" Value="1"/>
                         </Trigger>
                         <Trigger Property="IsEnabled" Value="False">
-                            <Setter Property="Opacity" Value=".45"/>
+                            <Setter Property="Foreground" Value="{DynamicResource Flick.Brush.TextMuted}"/>
+                            <Setter Property="Cursor" Value="Arrow"/>
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -145,15 +151,17 @@
 
 
     <Style x:Key="Flick.Input.Password" TargetType="{x:Type PasswordBox}">
+        <Setter Property="ToolTipService.ShowOnDisabled" Value="True"/>
+        <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
         <Setter Property="services:FlickHoverFeedback.Enabled" Value="True"/>
         <Setter Property="Background" Value="{DynamicResource Flick.Brush.Raised}"/>
         <Setter Property="Foreground" Value="{DynamicResource Flick.Brush.TextPrimary}"/>
         <Setter Property="CaretBrush" Value="{DynamicResource Flick.Brush.TextPrimary}"/>
         <Setter Property="SelectionBrush" Value="{DynamicResource Flick.Brush.BorderStrong}"/>
-        <Setter Property="BorderBrush" Value="{DynamicResource Flick.Brush.Border}"/>
-        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource Flick.Brush.BorderStrong}"/>
+        <Setter Property="BorderThickness" Value="{StaticResource Flick.Thickness.Focus}"/>
         <Setter Property="MinHeight" Value="{StaticResource Flick.Size.Control}"/>
-        <Setter Property="Padding" Value="10,7"/>
+        <Setter Property="Padding" Value="12,4"/>
         <Setter Property="FontFamily" Value="{StaticResource Flick.Font.UI}"/>
         <Setter Property="FontSize" Value="{StaticResource Flick.Font.Body}"/>
         <Setter Property="Template">
@@ -172,7 +180,10 @@
                         <Trigger Property="IsKeyboardFocusWithin" Value="True">
                             <Setter TargetName="PasswordChrome" Property="BorderBrush" Value="{DynamicResource Flick.Brush.Focus}"/>
                         </Trigger>
-                        <Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value=".4"/></Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter Property="Foreground" Value="{DynamicResource Flick.Brush.TextMuted}"/>
+                            <Setter Property="Cursor" Value="Arrow"/>
+                        </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
             </Setter.Value>
@@ -181,18 +192,21 @@
 
     <!-- Native ComboBox behavior retained; only one themed input chrome. -->
     <Style x:Key="Flick.Input.ComboItem" TargetType="{x:Type ComboBoxItem}">
+        <Setter Property="ToolTipService.ShowOnDisabled" Value="True"/>
+        <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
         <Setter Property="Cursor" Value="Hand"/>
         <Setter Property="services:FlickHoverFeedback.Enabled" Value="True"/>
         <Setter Property="Foreground" Value="{DynamicResource Flick.Brush.TextPrimary}"/>
         <Setter Property="FontFamily" Value="{StaticResource Flick.Font.UI}"/>
         <Setter Property="FontSize" Value="{StaticResource Flick.Font.Control}"/>
-        <Setter Property="Padding" Value="10,6"/>
+        <Setter Property="Padding" Value="12,4"/>
         <Setter Property="MinHeight" Value="32"/>
         <Setter Property="Background" Value="Transparent"/>
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="{x:Type ComboBoxItem}">
                     <Border x:Name="ItemSurface" Background="{TemplateBinding Background}"
+                            BorderThickness="{StaticResource Flick.Thickness.Focus}" BorderBrush="Transparent"
                             CornerRadius="{StaticResource Flick.Corner.Control}">
                         <Grid>
                             <Border x:Name="PART_FlickHoverSurface" Background="White" Opacity="0" IsHitTestVisible="False" CornerRadius="{Binding CornerRadius, ElementName=ItemSurface}"/>
@@ -205,9 +219,14 @@
                         <Trigger Property="IsSelected" Value="True">
                             <Setter TargetName="ItemSurface" Property="Background"
                                     Value="{DynamicResource Flick.Brush.Hover}"/>
+                            <Setter TargetName="ItemSurface" Property="BorderBrush" Value="{DynamicResource Flick.Brush.BorderStrong}"/>
+                        </Trigger>
+                        <Trigger Property="IsKeyboardFocusWithin" Value="True">
+                            <Setter TargetName="ItemSurface" Property="BorderBrush" Value="{DynamicResource Flick.Brush.Focus}"/>
                         </Trigger>
                         <Trigger Property="IsEnabled" Value="False">
-                            <Setter Property="Opacity" Value=".4"/>
+                            <Setter Property="Foreground" Value="{DynamicResource Flick.Brush.TextMuted}"/>
+                            <Setter Property="Cursor" Value="Arrow"/>
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -215,6 +234,8 @@
         </Setter>
     </Style>
     <Style x:Key="Flick.Input.Combo" TargetType="{x:Type ComboBox}">
+        <Setter Property="ToolTipService.ShowOnDisabled" Value="True"/>
+        <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
         <Setter Property="services:FlickScrollRouting.PreserveSelectionOnWheel" Value="True"/>
         <Setter Property="Cursor" Value="Hand"/>
         <Setter Property="services:FlickHoverFeedback.Enabled" Value="True"/>
@@ -222,8 +243,8 @@
         <Setter Property="MinWidth" Value="126"/>
         <Setter Property="Background" Value="{DynamicResource Flick.Brush.Raised}"/>
         <Setter Property="Foreground" Value="{DynamicResource Flick.Brush.TextPrimary}"/>
-        <Setter Property="BorderBrush" Value="{DynamicResource Flick.Brush.Border}"/>
-        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource Flick.Brush.BorderStrong}"/>
+        <Setter Property="BorderThickness" Value="{StaticResource Flick.Thickness.Focus}"/>
         <Setter Property="FontFamily" Value="{StaticResource Flick.Font.UI}"/>
         <Setter Property="FontSize" Value="{StaticResource Flick.Font.Control}"/>
         <Setter Property="ItemContainerStyle" Value="{StaticResource Flick.Input.ComboItem}"/>
@@ -257,7 +278,7 @@
                             </ToggleButton.Template>
                         </ToggleButton>
                         <Border x:Name="PART_FlickHoverSurface" Background="White" Opacity="0" IsHitTestVisible="False" CornerRadius="{StaticResource Flick.Corner.Control}"/>
-                        <ContentPresenter Margin="11,0,32,0" VerticalAlignment="Center"
+                        <ContentPresenter Margin="12,0,32,0" VerticalAlignment="Center"
                                           HorizontalAlignment="Stretch" IsHitTestVisible="False"
                                           Content="{TemplateBinding SelectionBoxItem}"
                                           ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}"
@@ -278,7 +299,7 @@
                                IsOpen="{TemplateBinding IsDropDownOpen}" StaysOpen="False"
                                AllowsTransparency="True" Focusable="False">
                             <Border MinWidth="{Binding ActualWidth, ElementName=DropButton}"
-                                    MaxHeight="260" Padding="5"
+                                    MaxHeight="260" Padding="4"
                                     Background="{DynamicResource Flick.Brush.Surface}"
                                     BorderBrush="{DynamicResource Flick.Brush.Border}"
                                     BorderThickness="1" CornerRadius="{StaticResource Flick.Corner.Popover}">
@@ -291,10 +312,10 @@
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsKeyboardFocusWithin" Value="True">
                             <Setter TargetName="DropButton" Property="BorderBrush" Value="{DynamicResource Flick.Brush.Focus}"/>
-                            <Setter TargetName="DropButton" Property="BorderThickness" Value="1"/>
                         </Trigger>
                         <Trigger Property="IsEnabled" Value="False">
-                            <Setter Property="Opacity" Value=".4"/>
+                            <Setter Property="Foreground" Value="{DynamicResource Flick.Brush.TextMuted}"/>
+                            <Setter Property="Cursor" Value="Arrow"/>
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -303,6 +324,8 @@
     </Style>
 
     <Style x:Key="Flick.Toggle" TargetType="{x:Type CheckBox}">
+        <Setter Property="ToolTipService.ShowOnDisabled" Value="True"/>
+        <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
         <Setter Property="services:FlickHoverFeedback.Enabled" Value="True"/>
         <Setter Property="Foreground" Value="{DynamicResource Flick.Brush.TextPrimary}"/>
         <Setter Property="FontFamily" Value="{StaticResource Flick.Font.UI}"/>
@@ -316,7 +339,7 @@
                     <Grid MinHeight="32" Background="Transparent">
                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                             <Grid Width="40" Height="22" VerticalAlignment="Center">
-                                <Border x:Name="ToggleTrack" CornerRadius="11" BorderThickness="1"
+                                <Border x:Name="ToggleTrack" CornerRadius="11" BorderThickness="{StaticResource Flick.Thickness.Focus}"
                                         Background="{DynamicResource Flick.Brush.Raised}"
                                         BorderBrush="{DynamicResource Flick.Brush.Border}">
                                     <Border x:Name="PART_FlickHoverSurface" Background="White" Opacity="0" IsHitTestVisible="False" CornerRadius="{Binding CornerRadius, ElementName=ToggleTrack}"/>
@@ -340,10 +363,10 @@
                         </Trigger>
                         <Trigger Property="IsKeyboardFocused" Value="True">
                             <Setter TargetName="ToggleTrack" Property="BorderBrush" Value="{DynamicResource Flick.Brush.Focus}"/>
-                            <Setter TargetName="ToggleTrack" Property="BorderThickness" Value="1"/>
                         </Trigger>
                         <Trigger Property="IsEnabled" Value="False">
-                            <Setter Property="Opacity" Value=".42"/>
+                            <Setter Property="Foreground" Value="{DynamicResource Flick.Brush.TextMuted}"/>
+                            <Setter Property="Cursor" Value="Arrow"/>
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -354,6 +377,7 @@
     <!-- A conventional compact checkbox for the editor's Mute action. The
          native CheckBox still owns toggling, three-state behavior and access keys. -->
     <Style x:Key="Flick.Input.CheckBox" TargetType="{x:Type CheckBox}">
+        <Setter Property="ToolTipService.ShowOnDisabled" Value="True"/>
         <Setter Property="Cursor" Value="Hand"/>
         <Setter Property="services:FlickHoverFeedback.Enabled" Value="True"/>
         <Setter Property="Foreground" Value="{DynamicResource Flick.Brush.TextPrimary}"/>
@@ -366,7 +390,7 @@
             <Setter.Value>
                 <ControlTemplate TargetType="{x:Type CheckBox}">
                     <Border x:Name="CheckFocus" Background="Transparent" BorderBrush="Transparent"
-                            BorderThickness="1" CornerRadius="4" Padding="3,0" MinHeight="32">
+                            BorderThickness="{StaticResource Flick.Thickness.Focus}" CornerRadius="4" Padding="3,0" MinHeight="32">
                         <Grid>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="14"/>
@@ -412,7 +436,8 @@
                             <Setter TargetName="CheckFocus" Property="BorderBrush" Value="{DynamicResource Flick.Brush.Focus}"/>
                         </Trigger>
                         <Trigger Property="IsEnabled" Value="False">
-                            <Setter Property="Opacity" Value=".4"/>
+                            <Setter Property="Foreground" Value="{DynamicResource Flick.Brush.TextMuted}"/>
+                            <Setter Property="Cursor" Value="Arrow"/>
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -467,6 +492,8 @@
         </Setter>
     </Style>
     <Style x:Key="Flick.Input.Slider" TargetType="{x:Type Slider}">
+        <Setter Property="ToolTipService.ShowOnDisabled" Value="True"/>
+        <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
         <Setter Property="Cursor" Value="Hand"/>
         <Setter Property="services:FlickHoverFeedback.Enabled" Value="True"/>
         <Setter Property="MinHeight" Value="32"/>
@@ -474,7 +501,7 @@
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="{x:Type Slider}">
-                    <Border x:Name="SliderFocus" BorderBrush="Transparent" BorderThickness="1" CornerRadius="4">
+                    <Border x:Name="SliderFocus" BorderBrush="Transparent" BorderThickness="{StaticResource Flick.Thickness.Focus}" CornerRadius="4">
                         <Grid Height="32">
                             <Border x:Name="PART_FlickHoverSurface" Background="White" Opacity="0" Height="3" CornerRadius="2" VerticalAlignment="Center" IsHitTestVisible="False" Panel.ZIndex="1"/>
                             <Track x:Name="PART_Track" VerticalAlignment="Center">
@@ -497,7 +524,8 @@
                             <Setter TargetName="SliderFocus" Property="BorderBrush" Value="{DynamicResource Flick.Brush.Focus}"/>
                         </Trigger>
                         <Trigger Property="IsEnabled" Value="False">
-                            <Setter Property="Opacity" Value=".4"/>
+                            <Setter Property="Foreground" Value="{DynamicResource Flick.Brush.TextMuted}"/>
+                            <Setter Property="Cursor" Value="Arrow"/>
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -546,7 +574,7 @@
                                 <ToggleButton.Template>
                                     <ControlTemplate TargetType="{x:Type ToggleButton}">
                                         <Border x:Name="HeaderChrome" Background="Transparent" BorderBrush="Transparent"
-                                                BorderThickness="1" CornerRadius="4">
+                                                BorderThickness="{StaticResource Flick.Thickness.Focus}" CornerRadius="4">
                                             <Grid>
                                                 <Border x:Name="PART_FlickHoverSurface" Background="White" Opacity="0" IsHitTestVisible="False" CornerRadius="{Binding CornerRadius, ElementName=HeaderChrome}"/>
                                                 <Grid Margin="2,0,4,0">
@@ -584,6 +612,9 @@
                                             <Trigger Property="IsKeyboardFocused" Value="True">
                                                 <Setter TargetName="HeaderChrome" Property="BorderBrush" Value="{DynamicResource Flick.Brush.Focus}"/>
                                             </Trigger>
+                                            <Trigger Property="IsEnabled" Value="False">
+                                                <Setter Property="Cursor" Value="Arrow"/>
+                                            </Trigger>
                                         </ControlTemplate.Triggers>
                                     </ControlTemplate>
                                 </ToggleButton.Template>
@@ -602,7 +633,8 @@
                             <Setter TargetName="ExpandSite" Property="Visibility" Value="Visible"/>
                         </Trigger>
                         <Trigger Property="IsEnabled" Value="False">
-                            <Setter Property="Opacity" Value=".4"/>
+                            <Setter Property="Foreground" Value="{DynamicResource Flick.Brush.TextMuted}"/>
+                            <Setter Property="Cursor" Value="Arrow"/>
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -619,9 +651,11 @@
         <Setter Property="SnapsToDevicePixels" Value="True"/>
     </Style>
     <Style x:Key="Flick.Library.FilterChip" TargetType="{x:Type RadioButton}">
+        <Setter Property="ToolTipService.ShowOnDisabled" Value="True"/>
+        <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
         <Setter Property="services:FlickHoverFeedback.Enabled" Value="True"/>
         <Setter Property="FontFamily" Value="{StaticResource Flick.Font.UI}"/>
-        <Setter Property="FontSize" Value="{StaticResource Flick.Font.Caption}"/>
+        <Setter Property="FontSize" Value="{StaticResource Flick.Font.Dense}"/>
         <Setter Property="FontWeight" Value="Normal"/>
         <Setter Property="Foreground" Value="{DynamicResource Flick.Brush.TextSecondary}"/>
         <Setter Property="Cursor" Value="Hand"/>
@@ -630,11 +664,11 @@
             <Setter.Value>
                 <ControlTemplate TargetType="{x:Type RadioButton}">
                     <Border x:Name="Chip" CornerRadius="4"
-                            BorderThickness="1" BorderBrush="Transparent"
+                            BorderThickness="{StaticResource Flick.Thickness.Focus}" BorderBrush="Transparent"
                             Background="Transparent">
                         <Grid>
                             <Border x:Name="PART_FlickHoverSurface" Background="White" Opacity="0" IsHitTestVisible="False" CornerRadius="{Binding CornerRadius, ElementName=Chip}"/>
-                            <Grid Margin="10,4">
+                            <Grid Margin="8,4">
                                 <ContentPresenter VerticalAlignment="Center"
                                           HorizontalAlignment="Center"
                                           RecognizesAccessKey="True"/>
@@ -645,16 +679,17 @@
                         <Trigger Property="IsChecked" Value="True">
                             <Setter TargetName="Chip" Property="Background"
                                     Value="{DynamicResource Flick.Brush.Hover}"/>
+                            <Setter TargetName="Chip" Property="BorderBrush" Value="{DynamicResource Flick.Brush.BorderStrong}"/>
                             <Setter Property="Foreground"
                                     Value="{DynamicResource Flick.Brush.TextPrimary}"/>
                         </Trigger>
                         <Trigger Property="IsKeyboardFocused" Value="True">
                             <Setter TargetName="Chip" Property="BorderBrush"
                                     Value="{DynamicResource Flick.Brush.Focus}"/>
-                            <Setter TargetName="Chip" Property="BorderThickness" Value="1"/>
                         </Trigger>
                         <Trigger Property="IsEnabled" Value="False">
-                            <Setter Property="Opacity" Value=".4"/>
+                            <Setter Property="Foreground" Value="{DynamicResource Flick.Brush.TextMuted}"/>
+                            <Setter Property="Cursor" Value="Arrow"/>
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -673,6 +708,10 @@
         <Setter Property="VirtualizingPanel.ScrollUnit" Value="Item"/>
     </Style>
     <Style x:Key="Flick.Library.Item" TargetType="{x:Type ListBoxItem}">
+        <Setter Property="MinHeight" Value="{StaticResource Flick.Size.Control}"/>
+        <Setter Property="FontFamily" Value="{StaticResource Flick.Font.UI}"/>
+        <Setter Property="FontSize" Value="{StaticResource Flick.Font.Dense}"/>
+        <Setter Property="ToolTipService.ShowOnDisabled" Value="True"/>
         <Setter Property="Cursor" Value="Hand"/>
         <Setter Property="services:FlickHoverFeedback.Enabled" Value="True"/>
         <Setter Property="Padding" Value="0"/>
@@ -683,7 +722,7 @@
             <Setter.Value>
                 <ControlTemplate TargetType="{x:Type ListBoxItem}">
                     <Border x:Name="ItemChrome"
-                            BorderBrush="Transparent" BorderThickness="1"
+                            BorderBrush="Transparent" BorderThickness="{StaticResource Flick.Thickness.Focus}"
                             Background="Transparent" CornerRadius="6">
                         <Grid>
                             <Border x:Name="PART_FlickHoverSurface" Background="White" Opacity="0" IsHitTestVisible="False" CornerRadius="{Binding CornerRadius, ElementName=ItemChrome}"/>
@@ -697,14 +736,15 @@
                         <Trigger Property="IsSelected" Value="True">
                             <Setter TargetName="ItemChrome" Property="Background"
                                     Value="{DynamicResource Flick.Brush.Hover}"/>
+                            <Setter TargetName="ItemChrome" Property="BorderBrush" Value="{DynamicResource Flick.Brush.BorderStrong}"/>
                         </Trigger>
                         <Trigger Property="IsKeyboardFocused" Value="True">
                             <Setter TargetName="ItemChrome" Property="BorderBrush"
                                     Value="{DynamicResource Flick.Brush.Focus}"/>
-                            <Setter TargetName="ItemChrome" Property="BorderThickness" Value="1"/>
                         </Trigger>
                         <Trigger Property="IsEnabled" Value="False">
-                            <Setter Property="Opacity" Value=".4"/>
+                            <Setter Property="Foreground" Value="{DynamicResource Flick.Brush.TextMuted}"/>
+                            <Setter Property="Cursor" Value="Arrow"/>
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>

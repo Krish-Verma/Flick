@@ -648,6 +648,7 @@ public partial class SettingsStagingTests
                     Assert.Equal(Visibility.Collapsed, healthPanel.Visibility);
                     workspacePage.Visibility = Visibility.Collapsed;
                     OrganizationEditorAssertions.Run(vm);
+                LibraryBrowseAssertions.Run(vm);
                     ThumbnailOperationAssertions.Run(vm);
                     SharePresentationAssertions.AssertStaleNotificationsAndSamePathRepair(window, vm);
                     ResourceSamplingAssertions.RunLastAndDispose(vm);
