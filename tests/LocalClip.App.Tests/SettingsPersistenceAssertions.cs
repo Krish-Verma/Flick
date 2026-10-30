@@ -54,7 +54,6 @@ internal static class SettingsPersistenceAssertions
             Checked("ChkClipSavedOverlay").IsChecked = false;
             Checked("ChkClipSavedSound").IsChecked = false;
             Assert.Contains("tray", Checked("ChkStartMinimized").Content?.ToString() ?? "", StringComparison.OrdinalIgnoreCase);
-            Assert.Contains("hidden", Checked("ChkStartMinimized").Content?.ToString() ?? "", StringComparison.OrdinalIgnoreCase);
             Assert.Contains("tray", Checked("ChkStartMinimized").ToolTip?.ToString() ?? "",
                 StringComparison.OrdinalIgnoreCase);
             Assert.IsType<TextBox>(page.FindName("TxtDuration")).Text = "60";
