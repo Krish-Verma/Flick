@@ -25,6 +25,8 @@ public class AsyncThumbnailTests
             BitmapSource Load(string path) => Assert.IsAssignableFrom<BitmapSource>(Wait(loader.LoadAsync(path)));
             var portrait = Load(first);
             Assert.True(portrait.IsFrozen);
+            Assert.IsNotType<BitmapImage>(portrait); // Cached output owns pixels, no encoded StreamSource dependency.
+            Assert.Equal(PixelFormats.Bgra32, portrait.Format);
             Assert.InRange(portrait.PixelWidth, 1, BoundedThumbnailLoader.MaximumEdge);
             Assert.Equal(256, portrait.PixelHeight);
             Assert.Same(portrait, Load(first));

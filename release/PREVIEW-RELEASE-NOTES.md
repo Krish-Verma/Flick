@@ -1,15 +1,13 @@
 # Flick 1.0.12 Preview 1 — Design Research (UNSIGNED)
 
-- Subtle, smooth highlights across clickable controls, with keyboard focus, high-contrast and reduced-motion support. The purple identity and existing features are preserved.
-- The app, tray and installer use the supplied corrected Flick artwork with consistent placement.
-- Successful Settings Save returns to the clips dashboard. Invalid fields and failed writes keep your changes available.
-- Edit starts shortcut recording directly in its box. A valid shortcut returns to the read-only view automatically; the main Save Settings applies it.
-- Windows startup is repaired and independently verified on every enabled Save, including when the checkbox was already on. Windows-disabled startup is reported without overriding your Windows choices.
-- **Keep replay ready in the tray** starts your saved, available capture source for tray/background and Windows-startup launches. It is enabled by default and can be turned off in General. Ordinary foreground launches still wait for a manual start or an approved game. Microphone and app-audio choices retain their existing opt-ins.
-- Approved-game detection scans immediately, recovers after temporary window loss and no longer treats earlier automatic starts as permanent pauses. Manual Stop pauses automation; Start Replay resumes it. Replay is shown ready only when its buffer can actually save.
-- A memory safety stop also pauses automatic replay until an explicit retry, preventing an immediate restart loop.
-- Opening Flick again restores the tray instance. Tray Settings opens a visible window. Cleaner source/date titles replace internal save IDs in the library; original files, imports and custom names stay intact.
+- Replay and save labels distinguish requests, acceptance, unconfirmed acknowledgement, video checking and verified saves. Checking remains visible when replay stops.
+- Share has a larger original still and a clear ready-MP4 tile. Copy file becomes the primary action when ready; real encoding and validation stages replace generic progress. Drag, Copy, Open folder, size limits and export options remain available in the complete card.
+- Settings show changed/reverted drafts and errors beside the relevant fields. Unchanged valid settings need no save; startup repair and recovered-settings review remain available. Verified Save returns to the dashboard; failed saves retain the draft.
+- Search has Clear, active filters show their count, and Reset restores the full library. Empty and no-match states explain the next action. Clip rows use concise duration/date metadata and retain offline/source information.
+- Library stills load in a bounded background queue and pixel cache. The player shows an explicit Play action; browsing never starts a video decoder.
+- Shared controls use clearer type, stable keyboard focus, meaningful disabled states and the established purple/graphite identity. High Contrast, reduced motion and the approved logo are preserved.
+- Trim handles have larger hit areas and clearer In/Out labels. Leaving an untouched time field no longer rounds its stored precision. Originals remain unchanged.
 
-Install **Flick-Setup.exe** over the current installation after quitting Flick. Portable users should replace the complete extracted folder. Clips and preferences are retained. All previous releases, assets and tags remain available.
+Install **Flick-Setup.exe** over the current installation after quitting Flick. Portable users should replace the complete extracted folder. Clips and preferences are retained. Previous releases, assets and tags remain available.
 
-This is an unsigned preview. Physical gameplay, GPU/audio, Discord and endurance testing remain separate from automated startup, policy, UI and installer checks.
+This is an unsigned preview. Automated Windows/native/media/installer checks, actual WPF render checks and matched synthetic UI diagnostics are recorded with the build. Synthetic diagnostics do not establish normal idle or gameplay performance. Physical GPU/audio/gameplay, real Discord, Narrator and per-monitor DPI acceptance remain separate.

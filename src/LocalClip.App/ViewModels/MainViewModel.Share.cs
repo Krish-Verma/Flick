@@ -27,17 +27,30 @@ public partial class MainViewModel
         : FormatShareDuration(SelectedClip.SelectedDurationSeconds) +
           (IsExportReady ? $" · MP4 · {SelectedClip.ExportedFileSizeBytes / 1_000_000d:0.00} MB" : " · Original preview");
     public string ShareTileStateText => SelectedClip == null ? "No clip selected"
-        : IsExporting ? (_shareCancellationRequested ? "Finishing cancellation…" : "Preparing MP4…")
+        : IsExporting ? (_shareCancellationRequested ? "Finishing cancellation…" : ShareExportStageText)
         : IsExportReady ? "MP4 ready"
         : ExportStatusMessage.StartsWith("Original Video Offline", StringComparison.OrdinalIgnoreCase) ? "Original offline"
         : ExportStatusMessage.StartsWith("Export Failed", StringComparison.OrdinalIgnoreCase) ? "Export failed"
         : ExportStatusMessage.StartsWith("Export Cancelled", StringComparison.OrdinalIgnoreCase) ? "Export cancelled"
         : !string.IsNullOrEmpty(SelectedClip.ExportedFilePath) ? "A new export is needed" : "Prepare your MP4";
     public string ShareTileHint => SelectedClip == null ? "Select a clip from Your clips."
-        : IsExporting ? (_shareCancellationRequested ? "Cancelling export…" : "Preparing on this PC.")
-        : IsExportReady ? "Drag into Discord or use Copy file."
+        : IsExporting ? (_shareCancellationRequested ? "Cancelling export…" : "Your original stays unchanged.")
+        : IsExportReady ? "Drag this MP4 into Discord · Ctrl+C to copy."
         : ShareTileStateText == "Original offline" ? "Reconnect its folder before exporting."
+        : ShareTileStateText == "Export failed" ? "Try export again, or open Details."
+        : ShareTileStateText == "Export cancelled" ? "Export again when you're ready."
         : "Choose a size, then export.";
+    // Project actual exporter stages; encoding percentages are not a promise
+    // about the remaining validation/finalization work.
+    private string ShareExportStageText => ExportStatusMessage switch
+    {
+        string text when text.StartsWith("Calculating bitrate budget", StringComparison.OrdinalIgnoreCase) => "Sizing MP4…",
+        string text when text.StartsWith("Encoding MP4", StringComparison.OrdinalIgnoreCase) => "Encoding MP4…",
+        string text when text.StartsWith("Validating exported streams", StringComparison.OrdinalIgnoreCase) => "Checking MP4 streams…",
+        string text when text.StartsWith("Running full decode", StringComparison.OrdinalIgnoreCase) => "Checking playback…",
+        string text when text.StartsWith("Finalizing share file", StringComparison.OrdinalIgnoreCase) => "Finishing MP4…",
+        _ => "Preparing MP4…"
+    };
     public string ShareFormatHint => (ExportAspectPreset switch
     {
         "Vertical9x16" => "Fit 9:16 · no crop · ",
@@ -49,10 +62,10 @@ public partial class MainViewModel
         get
         {
             string status = ExportStatusMessage;
+            if (IsExporting) return ""; // The tile owns the current stage; Details retains full diagnostics.
             if (IsExportReady && status.StartsWith("Ready to share", StringComparison.OrdinalIgnoreCase))
                 return ""; // The tile already shows readiness and actual size.
             if (status.Length <= 72) return status;
-            if (IsExporting) return ShareCanCancel ? "Preparing your local MP4…" : "Finishing cancellation…";
             if (status.StartsWith("Export Failed", StringComparison.OrdinalIgnoreCase))
                 return "Export failed. Open Details.";
             if (status.StartsWith("Post failed", StringComparison.OrdinalIgnoreCase))

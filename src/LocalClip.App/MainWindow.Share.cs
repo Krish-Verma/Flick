@@ -12,7 +12,7 @@ public partial class MainWindow
 {
     private static readonly string[] SharePaletteKeys = ["ShareSurface", "ShareTile", "SharePreview", "Canvas",
         "Surface", "Raised", "Hover", "TextPrimary", "TextSecondary", "TextMuted", "Accent", "Border", "Divider",
-        "BorderStrong", "Focus", "OnAccent", "PrimaryGradient", "PrimaryGradientHover"];
+        "BorderStrong", "Focus", "OnAccent", "PrimaryGradient", "PrimaryGradientHover", "Warning", "Danger"];
 
     private void ShareSystemParametersChanged(object? sender, PropertyChangedEventArgs args)
     {
@@ -34,7 +34,7 @@ public partial class MainWindow
         {
             Brush brush = key switch
             {
-                "TextPrimary" or "TextSecondary" or "TextMuted" or "Accent" or "Border" or "Divider" or "BorderStrong" => SystemColors.WindowTextBrush,
+                "TextPrimary" or "TextSecondary" or "TextMuted" or "Accent" or "Border" or "Divider" or "BorderStrong" or "Warning" or "Danger" => SystemColors.WindowTextBrush,
                 "Focus" or "PrimaryGradient" or "PrimaryGradientHover" => SystemColors.HighlightBrush,
                 "OnAccent" => SystemColors.HighlightTextBrush,
                 _ => SystemColors.WindowBrush
@@ -60,7 +60,7 @@ public partial class MainWindow
         Grid.SetRow(EditorContextLayer, useEditorArea ? 0 : 1);
         Grid.SetRowSpan(EditorContextLayer, useEditorArea ? 5 : 1);
         double available = useEditorArea ? ClipEditorPanel.ActualHeight : PreviewSurface.ActualHeight;
-        EditorContextLayer.Width = share ? Math.Min(600, Math.Max(280, ClipEditorPanel.ActualWidth - 24)) : double.NaN;
+        EditorContextLayer.Width = share ? Math.Min(640, Math.Max(280, ClipEditorPanel.ActualWidth - 24)) : double.NaN;
         EditorContextLayer.MaxHeight = Math.Max(100, available - 24);
         if (!share) EditorContextScroll.MaxHeight = Math.Max(32, available - 100);
     }
@@ -79,7 +79,18 @@ public partial class MainWindow
             "Export details", MessageBoxButton.OK, MessageBoxImage.Information);
     }
 
-    private void ShareFooter_SizeChanged(object sender, SizeChangedEventArgs args) => UpdateEditorContextHeight();
+    private void ShareFooter_SizeChanged(object sender, SizeChangedEventArgs args)
+    {
+        UpdateEditorContextHeight();
+    }
+
+    private void UpdateShareActionStyles()
+    {
+        if (_vm == null || BtnShareCopyFile == null || BtnExport == null) return;
+        bool ready = _vm.ShareCanCopy;
+        BtnShareCopyFile.SetResourceReference(StyleProperty, ready ? "Flick.Button.Primary" : "Flick.Button.Secondary");
+        BtnExport.SetResourceReference(StyleProperty, ready ? "Flick.Button.Secondary" : "Flick.Button.Primary");
+    }
 
     private void ShareTile_PreviewKeyDown(object sender, KeyEventArgs args)
     {

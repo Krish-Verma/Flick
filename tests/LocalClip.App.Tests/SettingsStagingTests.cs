@@ -48,6 +48,7 @@ public partial class SettingsStagingTests
                 ResourceUsageSettingsAssertions.Run();
                 SettingsPersistenceAssertions.Run();
                 ShortcutCaptureAssertions.Run();
+                TrimHandleAssertions.Run();
                 FlickHoverStyleAssertions.Run();
                 ScrollRoutingAssertions.Run();
                 var settings = AppSettings.CreateDefault();
@@ -648,7 +649,8 @@ public partial class SettingsStagingTests
                     Assert.Equal(Visibility.Collapsed, healthPanel.Visibility);
                     workspacePage.Visibility = Visibility.Collapsed;
                     OrganizationEditorAssertions.Run(vm);
-                LibraryBrowseAssertions.Run(vm);
+                    LibraryBrowseAssertions.Run(vm);
+                    ResearchPresentationAssertions.Run(window, vm);
                     ThumbnailOperationAssertions.Run(vm);
                     SharePresentationAssertions.AssertStaleNotificationsAndSamePathRepair(window, vm);
                     ResourceSamplingAssertions.RunLastAndDispose(vm);

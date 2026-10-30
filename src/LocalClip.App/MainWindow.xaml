@@ -124,7 +124,8 @@
                             <Button Grid.Column="1" Content="Import folder" ContentTemplate="{StaticResource Flick.IconText.Add}" Style="{StaticResource Flick.Button.Secondary}" FontSize="12" Padding="9,0" MinWidth="0" MinHeight="32" Click="BtnImportFolder_Click" ToolTip="Link clips already saved by other recording software"/>
                         </Grid>
                         <Grid Margin="0,0,0,10">
-                            <TextBox x:Name="TxtClipSearch" AutomationProperties.Name="Search clips" AutomationProperties.HelpText="Search titles, games and tags. Ctrl+F focuses search." Style="{StaticResource Flick.Input.Text}" Text="{Binding SearchQuery, UpdateSourceTrigger=PropertyChanged, Delay=180}" ToolTip="Search titles, games, source names and tags; use #tag"/>
+                            <TextBox x:Name="TxtClipSearch" AutomationProperties.Name="Search clips" AutomationProperties.HelpText="Search titles, games and tags. Ctrl+F focuses search." Style="{StaticResource Flick.Input.Text}" Padding="10,0,52,0" Text="{Binding SearchQuery, UpdateSourceTrigger=PropertyChanged, Delay=180}" ToolTip="Search titles, games, source names and tags; use #tag"/>
+                            <Button x:Name="BtnClearClipSearch" Content="Clear" Click="ClearClipSearch_Click" HorizontalAlignment="Right" VerticalAlignment="Center" Width="44" FontSize="13" MinHeight="32" Padding="4,0" Margin="0,0,2,0" AutomationProperties.Name="Clear clip search" Visibility="{Binding LibraryHasSearch, Converter={StaticResource BoolToVis}}" Style="{StaticResource Flick.Button.Ghost}"/>
                             <TextBlock Text="Search clips…" Foreground="{DynamicResource Flick.Brush.TextSecondary}" Margin="11,0,0,0" VerticalAlignment="Center" IsHitTestVisible="False">
                                 <TextBlock.Style>
                                     <Style TargetType="TextBlock">
@@ -139,7 +140,7 @@
                             </TextBlock>
                         </Grid>
                         <DockPanel LastChildFill="True">
-                            <Button x:Name="BtnLibraryFilters" DockPanel.Dock="Right" Content="Filters" Tag="Filters" Click="LibraryPanel_Click" Style="{StaticResource Flick.Button.Ghost}" MinHeight="30" Padding="6,0" Margin="4,0,0,0" AutomationProperties.Name="Clip filters"/>
+                            <Button x:Name="BtnLibraryFilters" DockPanel.Dock="Right" Content="{Binding LibraryFilterLabel}" Tag="Filters" Click="LibraryPanel_Click" Style="{StaticResource Flick.Button.Ghost}" MinHeight="30" Padding="6,0" Margin="4,0,0,0" AutomationProperties.Name="Clip filters" ToolTip="Filter clips or reset active filters"/>
                         <Border Style="{StaticResource Flick.Library.FilterTrack}" HorizontalAlignment="Left">
                             <StackPanel Orientation="Horizontal">
                                 <RadioButton x:Name="RadioAllClips" Content="All clips" Style="{StaticResource Flick.Library.FilterChip}" GroupName="LibrarySources" Checked="LibraryFilter_Checked"/>
@@ -178,17 +179,28 @@
                                             <ColumnDefinition Width="*"/>
                                         </Grid.ColumnDefinitions>
                                         <Border Grid.Column="0" Width="74" Height="48" Background="{DynamicResource Flick.Brush.Raised}" CornerRadius="7" ClipToBounds="True" VerticalAlignment="Center">
-                                            <Image Source="{Binding ThumbnailPath, Converter={StaticResource Flick.ThumbnailDecoder}}" Stretch="UniformToFill" SnapsToDevicePixels="True"/>
+                                            <Image services:AsyncThumbnail.Path="{Binding ThumbnailPath}" Stretch="UniformToFill" SnapsToDevicePixels="True"/>
                                         </Border>
                                         <StackPanel Grid.Column="1" Margin="9,0,0,0" VerticalAlignment="Center" MinWidth="0">
                                             <TextBlock Text="{Binding DisplayTitle}" Style="{StaticResource Flick.Text.Control}" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" ToolTip="{Binding DisplayTitle}"/>
-                                            <TextBlock Text="{Binding OrganizationSummary}" Style="{StaticResource Flick.Text.Caption}" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" Margin="0,2,0,0" ToolTip="{Binding TagsText}"/>
+                                            <TextBlock TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" Margin="0,2,0,0" ToolTip="{Binding TagsText}">
+                                                <TextBlock.Style><Style TargetType="TextBlock" BasedOn="{StaticResource Flick.Text.Caption}">
+                                                    <Setter Property="Text" Value="{Binding OrganizationSummary}"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding OrganizationSummary}" Value="Ungrouped"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger>
+                                                        <DataTrigger Binding="{Binding OrganizationSummary}" Value="Favorite · Ungrouped"><Setter Property="Text" Value="Favorite"/></DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style></TextBlock.Style>
+                                            </TextBlock>
                                             <DockPanel Margin="0,3,0,0" LastChildFill="False">
-                                                <TextBlock Text="{Binding FormattedDuration}" Style="{StaticResource Flick.Text.Caption}"/>
+                                                <TextBlock Style="{StaticResource Flick.Text.Numeric}" ToolTip="{Binding CreatedAt, StringFormat={}{0:f}}">
+                                                    <TextBlock.Text><MultiBinding StringFormat="{}{0} · {1:MMM d}"><Binding Path="FormattedDuration"/><Binding Path="CreatedAt"/></MultiBinding></TextBlock.Text>
+                                                </TextBlock>
                                                 <TextBlock Text="{Binding LibraryStatus}" HorizontalAlignment="Right" DockPanel.Dock="Right">
                                                     <TextBlock.Style>
                                                         <Style TargetType="TextBlock" BasedOn="{StaticResource Flick.Text.Caption}">
                                                             <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding LibraryStatus}" Value="Flick"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger>
                                                                 <DataTrigger Binding="{Binding IsAvailable}" Value="False">
                                                                     <Setter Property="Foreground" Value="{DynamicResource Flick.Brush.Warning}"/>
                                                                 </DataTrigger>
@@ -203,18 +215,17 @@
                                 </DataTemplate>
                             </ListBox.ItemTemplate>
                         </ListBox>
-                        <TextBlock Text="No clips yet" ToolTip="Save a replay or import a folder." TextWrapping="Wrap" HorizontalAlignment="Center" VerticalAlignment="Center" TextAlignment="Center" Margin="20" IsHitTestVisible="False">
-                            <TextBlock.Style>
-                                <Style TargetType="TextBlock" BasedOn="{StaticResource Flick.Text.Caption}">
-                                    <Setter Property="Visibility" Value="Collapsed"/>
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding FilteredClips.Count}" Value="0">
-                                            <Setter Property="Visibility" Value="Visible"/>
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </TextBlock.Style>
-                        </TextBlock>
+                        <StackPanel x:Name="LibraryEmptyState" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="18" Visibility="{Binding LibraryIsEmpty, Converter={StaticResource BoolToVis}}">
+                            <TextBlock Text="{Binding LibraryEmptyTitle}" Style="{StaticResource Flick.Text.Control}" TextWrapping="Wrap" TextAlignment="Center"/>
+                            <TextBlock Text="{Binding LibraryEmptyHint}" Style="{StaticResource Flick.Text.Caption}" TextWrapping="Wrap" TextAlignment="Center" Margin="0,6,0,8"/>
+                            <WrapPanel HorizontalAlignment="Center">
+                                <Button Content="Clear search" Click="ClearClipSearch_Click" Style="{StaticResource Flick.Button.Secondary}" Margin="3" Visibility="{Binding LibraryHasSearch, Converter={StaticResource BoolToVis}}"/>
+                                <Button Content="Reset filters" Click="ClearLibraryFilters_Click" Style="{StaticResource Flick.Button.Secondary}" Margin="3" Visibility="{Binding LibraryHasFilters, Converter={StaticResource BoolToVis}}"/>
+                            </WrapPanel>
+                            <Button Content="Choose source" Click="ChooseCaptureSource_Click" HorizontalAlignment="Center">
+                                <Button.Style><Style TargetType="Button" BasedOn="{StaticResource Flick.Button.Secondary}"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding LibraryHasClips}" Value="False"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></Button.Style>
+                            </Button>
+                        </StackPanel>
                     </Grid>
 
                     <StackPanel Grid.Row="2" Margin="0,8,0,0">
@@ -235,6 +246,7 @@
                         <StackPanel>
                             <DockPanel LastChildFill="True">
                                 <Button x:Name="BtnCloseLibraryFiltersPanel" DockPanel.Dock="Right" Content="Close" Click="CloseLibraryPanel_Click" Style="{StaticResource Flick.Button.Ghost}" MinHeight="32" Padding="8,0" AutomationProperties.Name="Close filters"/>
+                                <Button DockPanel.Dock="Right" Content="Reset" Click="ClearLibraryFilters_Click" Style="{StaticResource Flick.Button.Ghost}" MinHeight="32" Padding="8,0" AutomationProperties.Name="Reset clip filters" Visibility="{Binding LibraryHasFilters, Converter={StaticResource BoolToVis}}"/>
                                 <TextBlock Text="Filters" Style="{StaticResource Flick.Text.Section}" VerticalAlignment="Center"/>
                             </DockPanel>
                         <Grid Margin="0,10,0,0">
@@ -324,14 +336,15 @@
                                 <MediaElement x:Name="VideoPlayer" LoadedBehavior="Manual" UnloadedBehavior="Stop" ScrubbingEnabled="True" Stretch="Uniform" MediaOpened="VideoPlayer_MediaOpened" MediaEnded="VideoPlayer_MediaEnded" MediaFailed="VideoPlayer_MediaFailed"/>
                                 <!-- Poster stays cheap while browsing; WPF does not open the
                                      video decoder until Play or explicit preview. -->
-                                <Image x:Name="PlayerPoster" Source="{Binding SelectedClip.ThumbnailPath, Converter={StaticResource Flick.ThumbnailDecoder}}" Stretch="Uniform" Visibility="Collapsed" IsHitTestVisible="False"/>
-                                <TextBlock x:Name="PlayerPosterHint" Text="Press Play to preview" Style="{StaticResource Flick.Text.Caption}" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,14" Visibility="Collapsed" IsHitTestVisible="False"/>
+                                <Image x:Name="PlayerPoster" services:AsyncThumbnail.Path="{Binding SelectedClip.ThumbnailPath}" Stretch="Uniform" Visibility="Collapsed" IsHitTestVisible="False"/>
+                                <Button x:Name="BtnPlayPoster" Content="Play clip" ContentTemplate="{StaticResource Flick.IconText.Playback}" Click="BtnPlayPause_Click" Style="{StaticResource Flick.Button.Primary}" HorizontalAlignment="Center" VerticalAlignment="Center" MinWidth="116" Height="40" Visibility="{Binding Visibility, ElementName=PlayerPosterHint}" ToolTip="Play original video (Space)" AutomationProperties.Name="Play selected clip"/>
+                                <TextBlock x:Name="PlayerPosterHint" Text="{Binding SelectedClip.FormattedDuration, StringFormat=Original · {0}}" Style="{StaticResource Flick.Text.Status}" Background="{DynamicResource Flick.Brush.Canvas}" Padding="8,3" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,14" Visibility="Collapsed" IsHitTestVisible="False"/>
                                 <StackPanel x:Name="PreviewFallbackPanel" VerticalAlignment="Center" HorizontalAlignment="Center" Width="310" Visibility="Collapsed" Margin="20">
                                     <TextBlock x:Name="TxtPreviewIssue" Text="Windows couldn't play this video" Style="{StaticResource Flick.Text.Section}" TextAlignment="Center" TextWrapping="Wrap" Margin="0,0,0,7"/>
-                                    <TextBlock Text="Create a preview or open your player." ToolTip="The original video stays unchanged." Style="{StaticResource Flick.Text.Caption}" TextWrapping="Wrap" TextAlignment="Center" Margin="0,0,0,12"/>
+                                    <TextBlock x:Name="TxtPreviewFallbackHint" Text="Create a preview or open your player." ToolTip="The original video stays unchanged." Style="{StaticResource Flick.Text.Caption}" TextWrapping="Wrap" TextAlignment="Center" Margin="0,0,0,12"/>
                                     <WrapPanel HorizontalAlignment="Center">
                                         <Button x:Name="BtnBuildPreview" Content="Create preview" Click="BuildPlayablePreview_Click" Style="{StaticResource Flick.Button.Primary}" Margin="0,0,8,0"/>
-                                        <Button Content="Open player" Click="OpenInPlayer_Click" Style="{StaticResource Flick.Button.Secondary}"/>
+                                        <Button Content="Open player" Click="OpenInPlayer_Click" Style="{StaticResource Flick.Button.Secondary}" IsEnabled="{Binding SelectedClip.IsAvailable, FallbackValue=False, TargetNullValue=False}"/>
                                     </WrapPanel>
                                 </StackPanel>
                             </Grid>
@@ -432,7 +445,7 @@
                                     </TextBlock>
                                 </DockPanel>
                                 <WrapPanel x:Name="ShareActionFooter" SizeChanged="ShareFooter_SizeChanged" DockPanel.Dock="Bottom" Margin="0,6,0,0" Visibility="{Binding Visibility, ElementName=SharePanel}">
-                                    <Button x:Name="BtnExport" Content="Export clip" Click="BtnExport_Click" Style="{StaticResource Flick.Button.Primary}" IsEnabled="{Binding CanStartExport}" MinWidth="105" Padding="12,0" Margin="0,0,8,0"/>
+                                    <Button x:Name="BtnExport" Content="Export MP4" Click="BtnExport_Click" Style="{StaticResource Flick.Button.Primary}" IsEnabled="{Binding CanStartExport}" MinWidth="105" Padding="12,0" Margin="0,0,8,0" AutomationProperties.Name="Export local MP4"/>
                                     <Button x:Name="BtnShareCopyFile" Content="Copy file" Click="BtnCopyFile_Click" Style="{StaticResource Flick.Button.Secondary}" IsEnabled="{Binding ShareCanCopy}" MinWidth="84" Margin="0,0,6,0" ToolTip="Copy the actual MP4 file, then paste it into Discord"/>
                                     <Button x:Name="BtnShareOpenFolder" Content="Open folder" Click="BtnOpenExportFolder_Click" Style="{StaticResource Flick.Button.Ghost}" IsEnabled="{Binding ShareCanCopy}" MinWidth="85" Padding="8,0"/>
                                     <Button x:Name="BtnShareCancel" Content="Cancel export" Click="BtnCancelExport_Click" Style="{StaticResource Flick.Button.Secondary}" Visibility="{Binding IsExporting, Converter={StaticResource BoolToVis}}" IsEnabled="{Binding ShareCanCancel}" Margin="6,0,0,0"/>
@@ -535,21 +548,26 @@
                                         </Style>
                                     </Border.Style>
                                     <Grid>
-                                        <Grid.ColumnDefinitions><ColumnDefinition Width="104"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                        <Grid.ColumnDefinitions><ColumnDefinition Width="144"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                                         <Border x:Name="ShareHoverSurface" Grid.ColumnSpan="2" Background="White" Opacity="0" CornerRadius="9" IsHitTestVisible="False"/>
                                         <StackPanel Margin="0,0,12,0" VerticalAlignment="Center">
-                                            <Border Height="60" Background="{DynamicResource Flick.Brush.SharePreview}" CornerRadius="6" ClipToBounds="True">
+                                            <Border Height="74" Background="{DynamicResource Flick.Brush.SharePreview}" CornerRadius="6" ClipToBounds="True">
                                                 <Grid>
                                                     <Path Style="{StaticResource Flick.Icon.Symbol}" Data="{StaticResource Flick.Icon.Geometry.Original}" Width="24" Height="24" HorizontalAlignment="Center" VerticalAlignment="Center" IsHitTestVisible="False"/>
                                                     <Image x:Name="ShareThumbnail" Source="{Binding SharePreview}" Stretch="Uniform" RenderOptions.BitmapScalingMode="HighQuality"/>
                                                 </Grid>
                                             </Border>
-                                            <TextBlock x:Name="ShareOriginalLabel" Text="Original still" Style="{StaticResource Flick.Text.Muted}" Foreground="{DynamicResource Flick.Brush.TextSecondary}" TextWrapping="NoWrap" Margin="0,2,0,0" HorizontalAlignment="Center"/>
+                                            <TextBlock x:Name="ShareOriginalLabel" Text="Original still" Style="{StaticResource Flick.Text.Dense}" Foreground="{DynamicResource Flick.Brush.TextSecondary}" TextWrapping="NoWrap" Margin="0,2,0,0" HorizontalAlignment="Center"/>
                                         </StackPanel>
                                         <StackPanel Grid.Column="1" VerticalAlignment="Center">
                                             <TextBlock x:Name="ShareTileTitle" Text="{Binding ShareClipTitle}" FontSize="16" FontWeight="SemiBold" LineHeight="20" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" ToolTip="{Binding ShareClipTitle}"/>
-                                            <TextBlock x:Name="ShareTileDetails" Text="{Binding ShareClipDetails}" Style="{StaticResource Flick.Text.Caption}" Margin="0,3,0,0" TextWrapping="NoWrap"/>
-                                            <TextBlock x:Name="TxtShareTileState" Text="{Binding ShareTileStateText}" Style="{StaticResource Flick.Text.Control}" Foreground="{DynamicResource Flick.Brush.Accent}" Margin="0,2,0,0" TextWrapping="NoWrap" AutomationProperties.LiveSetting="Polite"/>
+                                            <TextBlock x:Name="ShareTileDetails" Text="{Binding ShareClipDetails}" Style="{StaticResource Flick.Text.Numeric}" Margin="0,3,0,0" TextWrapping="NoWrap"/>
+                                            <TextBlock x:Name="TxtShareTileState" Text="{Binding ShareTileStateText}" Margin="0,2,0,0" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" ToolTip="{Binding ExportStatusMessage}" AutomationProperties.LiveSetting="Polite">
+                                                <TextBlock.Style><Style TargetType="TextBlock" BasedOn="{StaticResource Flick.Text.Control}"><Setter Property="Foreground" Value="{DynamicResource Flick.Brush.Accent}"/><Style.Triggers>
+                                                    <DataTrigger Binding="{Binding ShareTileStateText}" Value="Export failed"><Setter Property="Foreground" Value="{DynamicResource Flick.Brush.Danger}"/></DataTrigger>
+                                                    <DataTrigger Binding="{Binding ShareTileStateText}" Value="Original offline"><Setter Property="Foreground" Value="{DynamicResource Flick.Brush.Warning}"/></DataTrigger>
+                                                </Style.Triggers></Style></TextBlock.Style>
+                                            </TextBlock>
                                             <TextBlock x:Name="ShareTileHint" Text="{Binding ShareTileHint}" Style="{StaticResource Flick.Text.Caption}" Margin="0,3,0,0" TextWrapping="Wrap"/>
                                         </StackPanel>
                                     </Grid>

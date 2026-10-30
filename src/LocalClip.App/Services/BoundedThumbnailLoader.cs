@@ -94,7 +94,16 @@ public sealed class BoundedThumbnailLoader
             if (frame.PixelWidth >= frame.PixelHeight) image.DecodePixelWidth = Math.Min(MaximumEdge, frame.PixelWidth);
             else image.DecodePixelHeight = Math.Min(MaximumEdge, frame.PixelHeight);
             image.EndInit();
-            image.Freeze();
+            // BitmapImage.StreamSource retains its stream dependency even after
+            // OnLoad closes decoding. Copy only the bounded BGRA pixels so an
+            // LRU entry cannot retain the up-to-8MiB encoded MemoryStream buffer.
+            var converted = new FormatConvertedBitmap(image, System.Windows.Media.PixelFormats.Bgra32, null, 0);
+            int stride = checked(converted.PixelWidth * 4);
+            var pixels = new byte[checked(stride * converted.PixelHeight)];
+            converted.CopyPixels(pixels, stride, 0);
+            var result = BitmapSource.Create(converted.PixelWidth, converted.PixelHeight, 96, 96,
+                System.Windows.Media.PixelFormats.Bgra32, null, pixels, stride);
+            result.Freeze();
             cancellationToken.ThrowIfCancellationRequested();
             // Do not retain a result read across an overwrite or deletion.
             info.Refresh();
@@ -104,12 +113,12 @@ public sealed class BoundedThumbnailLoader
                 cancellationToken.ThrowIfCancellationRequested();
                 if (_maximumCacheEntries > 0)
                 {
-                    _cache[path] = new(length, modified, image, ++_access);
+                    _cache[path] = new(length, modified, result, ++_access);
                     while (_cache.Count > _maximumCacheEntries)
                         _cache.Remove(_cache.MinBy(item => item.Value.Access).Key);
                 }
             }
-            return image;
+            return result;
         }
         catch (Exception error) when (error is IOException or UnauthorizedAccessException or ArgumentException
             or FormatException or NotSupportedException or InvalidOperationException

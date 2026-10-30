@@ -183,6 +183,10 @@ public partial class MainWindow : Window
                     SuspendPlayback(clearSource: true);
                 }
             }
+            else if (ev.PropertyName == nameof(MainViewModel.ShareCanCopy))
+            {
+                UpdateShareActionStyles();
+            }
             else if (ev.PropertyName == nameof(MainViewModel.AudioMixRevision))
             {
                 CancelPendingPreview();
@@ -202,6 +206,7 @@ public partial class MainWindow : Window
             }
         };
         UpdateStatusBadgeColor();
+        UpdateShareActionStyles();
         UpdateSharePresetSelection();
         RadioAllClips.IsChecked = true;
         ResetPlayerForSelection();
@@ -1052,18 +1057,17 @@ public partial class MainWindow : Window
     {
         if (_posterCacheDetached) return;
         System.Windows.Data.BindingOperations.ClearBinding(
-            PlayerPoster, System.Windows.Controls.Image.SourceProperty);
-        PlayerPoster.Source = null; // Drop decoded poster pixels; keep clip model.
+            PlayerPoster, AsyncThumbnail.PathProperty);
+        AsyncThumbnail.SetPath(PlayerPoster, ""); // Cancels and releases only decoded still pixels.
         _posterCacheDetached = true;
     }
 
     private void RestorePosterAfterShow()
     {
         if (!_posterCacheDetached) return;
-        var converter = (System.Windows.Data.IValueConverter)FindResource("Flick.ThumbnailDecoder");
         System.Windows.Data.BindingOperations.SetBinding(
-            PlayerPoster, System.Windows.Controls.Image.SourceProperty,
-            new System.Windows.Data.Binding("SelectedClip.ThumbnailPath") { Converter = converter });
+            PlayerPoster, AsyncThumbnail.PathProperty,
+            new System.Windows.Data.Binding("SelectedClip.ThumbnailPath"));
         _posterCacheDetached = false;
     }
 
@@ -1115,8 +1119,11 @@ public partial class MainWindow : Window
         {
             PreviewFallbackPanel.Visibility = Visibility.Visible;
             TxtPreviewIssue.Text = clip is null
-                ? "Select a Clip to Preview"
+                ? "Choose a clip"
                 : "Original video is offline";
+            TxtPreviewFallbackHint.Text = clip is null
+                ? "Save a replay or import a folder."
+                : "Reconnect its folder to preview it.";
             BtnBuildPreview.Visibility = Visibility.Collapsed;
             return;
         }
@@ -1357,6 +1364,7 @@ public partial class MainWindow : Window
             PlayerView.Exported => "Windows couldn't preview the MP4",
             PlayerView.AudioMix => "Windows couldn't play the audio mix",
             _ => "Windows couldn't play this video" };
+        TxtPreviewFallbackHint.Text = "Create a preview or open your player.";
         _vm.StatusDetails = _playerView switch {
             PlayerView.Exported => "Export preview unavailable. Open the validated MP4 externally.",
             PlayerView.AudioMix => "Mix playback unavailable. The original remains unchanged; export the mix to hear it in another player.",

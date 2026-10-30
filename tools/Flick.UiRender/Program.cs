@@ -451,6 +451,7 @@ internal static partial class Program
             // same work when compact/wide labels change their desired size.
             // Drain bindings/layout only; the unshown Window never runs Loaded.
             SettleLayout();
+            CompleteSnapshotThumbnails(root);
             var saveButton = Find<Button>("BtnSaveReplay");
             var presenter = FindVisualDescendant<ContentPresenter>(saveButton)
                 ?? throw new InvalidOperationException("The real Save button has no content presenter.");
@@ -584,6 +585,33 @@ internal static partial class Program
         for (int i = 0; i < VisualTreeHelper.GetChildrenCount(visual); i++)
             InvalidateVisualMeasure(VisualTreeHelper.GetChild(visual, i));
         if (visual is UIElement element) element.InvalidateMeasure();
+    }
+
+    private static void CompleteSnapshotThumbnails(FrameworkElement root)
+    {
+        var loads = new List<Task>();
+        void Visit(DependencyObject visual)
+        {
+            if (visual is System.Windows.Controls.Image image && image.Visibility == Visibility.Visible &&
+                image.ActualWidth > 0 && !string.IsNullOrWhiteSpace(LocalClip.App.Services.AsyncThumbnail.GetPath(image)))
+                loads.Add(LocalClip.App.Services.AsyncThumbnail.LoadForSnapshotAsync(image));
+            for (int index = 0; index < VisualTreeHelper.GetChildrenCount(visual); index++)
+                Visit(VisualTreeHelper.GetChild(visual, index));
+        }
+        Visit(root);
+        Task completed = Task.WhenAll(loads);
+        var elapsed = System.Diagnostics.Stopwatch.StartNew();
+        // The production loader marshals frozen stills back to this dispatcher.
+        // Pump it rather than synchronously blocking its completion continuation.
+        while (!completed.IsCompleted)
+        {
+            if (elapsed.Elapsed > TimeSpan.FromSeconds(10))
+                throw new TimeoutException("Bounded fixture still images did not finish loading.");
+            root.Dispatcher.Invoke(() => { }, DispatcherPriority.ContextIdle);
+            Thread.Sleep(1);
+        }
+        completed.GetAwaiter().GetResult();
+        root.UpdateLayout();
     }
 
     private static T? FindVisualDescendant<T>(DependencyObject visual) where T : DependencyObject

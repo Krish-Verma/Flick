@@ -1,5 +1,5 @@
 using System.Windows;
-using System.Windows.Controls;
+using Image = System.Windows.Controls.Image;
 
 namespace LocalClip.App.Services;
 

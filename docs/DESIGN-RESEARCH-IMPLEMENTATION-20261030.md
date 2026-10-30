@@ -27,12 +27,12 @@ Impeccable 4.8.0 guidance is applied in Operate mode. Keep the established Graph
 | UX-06 | 12, 17-18 | Preserve bounded 125ms hover; distinguish selection/focus/disabled/busy | Reduced-motion/HC paths work; no permanent animation or sampler |
 | UX-07 | 14, 24 | Fixed 16:9 thumbnails, concise contextual metadata, clear filters/offline states | Virtualization/recycling retained; no imported/original data mutation |
 | UX-08 | 15-16 | Surface actual named export/validation stages and actionable stale/offline/error/cap state | No fake percent/ETA/Ready; export and transfer validity remain authoritative |
-| UX-09 | 14, 25 | Preserve precise fields/keyboard/undo; improve In/Out/duration labels and handle hit areas | Exact frame constraints, no crossed handles; original hashes unchanged |
+| UX-09 | 14, 25 | Preserve precise fields/keyboard/undo; improve In/Out/duration labels and handle hit areas | Exact stored timestamps are not rounded by untouched display fields; bounded 0.1s/1s keyboard steps, no crossed handles; original hashes unchanged. Frame snapping is not claimed |
 | UX-10 | 14, 16 | Clear real track/device roles, mute/preview/export context and remembered device recovery | Mic opt-in and mix exclusion retained; no unsupported isolation claims |
 | UX-11 | 10, 23 | Already shipped supplied fixed artwork; preserve exact bytes and mapping, bound display decoding | App/tray/installer renders and source identity remain correct |
 | UX-12 | 9, 20, 23 | Preserve one-step shortcut capture/native suspension; add missing action names/help and keyboard paths | Real current shortcuts shown; Escape/focus and missing-registration reporting retained |
 | UX-13 | 14, 18, 23 | Existing on-demand six-frame filmstrip satisfies optional feature; verify bounds/cancellation rather than duplicate | Hidden/tray/capture work does not start a decoder or filmstrip |
-| UX-14 | 17, 23 | Evaluate existing Health last-save/operation history for a compact on-demand activity disclosure | Bounded data, no permanent sidebar, no extra idle polling |
+| UX-14 | 17, 23 | Existing on-demand Health last validated save and bounded issues satisfy the low-cost activity disclosure; no duplicate history surface | Bounded data, no permanent sidebar, no extra idle polling |
 | UX-15 | 23, 27 | Explicitly deferred by report: multiple themes/custom skins | Existing appearance/options preserved; no new theme engine |
 | UX-16 | 23, 27-28 | Explicit report anti-goal: social feed/auto-upload/AI overlays | No forced account, upload, capture permission or unrelated feature expansion |
 
