@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <!-- Canonical vector mark. All shipped bitmap/ICO sizes are rendered from this SVG at build time. -->
+  <defs>
+    <linearGradient id="sunset" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0" stop-color="#FFB866"/>
+      <stop offset="0.23" stop-color="#F36D96"/>
+      <stop offset="0.48" stop-color="#DB35C4"/>
+      <stop offset="0.69" stop-color="#8A2FE4"/>
+      <stop offset="0.86" stop-color="#443BEF"/>
+      <stop offset="1" stop-color="#3379FC"/>
+    </linearGradient>
+    <clipPath id="inner-disk"><circle cx="64" cy="64" r="58.5"/></clipPath>
+  </defs>
+  <circle id="rim" cx="64" cy="64" r="62" fill="#090611"/>
+  <circle id="face" cx="64" cy="64" r="58.5" fill="url(#sunset)"/>
+  <g id="mark" clip-path="url(#inner-disk)">
+    <g id="stripes" fill="#0B0718">
+      <rect x="4" y="27" width="120" height="3"/>
+      <rect x="4" y="40" width="120" height="3"/>
+      <rect x="4" y="53" width="120" height="3"/>
+      <rect x="4" y="66" width="120" height="3"/>
+      <rect x="4" y="79" width="120" height="3"/>
+      <rect x="4" y="92" width="120" height="3"/>
+      <rect x="4" y="105" width="120" height="3"/>
+    </g>
+    <polygon id="letter" fill="#090611" points="53,34 108,34 95,50 65,50 56,65 94,65 80,80 47,80 31,105 19,105 43,61"/>
+  </g>
+</svg>
