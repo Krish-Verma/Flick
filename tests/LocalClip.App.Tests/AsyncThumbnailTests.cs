@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.IO;
 using System.Runtime.ExceptionServices;
 using System.Windows;
@@ -12,6 +13,54 @@ namespace LocalClip.App.Tests;
 
 public class AsyncThumbnailTests
 {
+    [Fact]
+    public void ReusedAndPoisonedScratchBuffersCannotChangeFrozenImages()
+    {
+        InSta(() =>
+        {
+            using var files = new Images();
+            string firstPath = files.Write("pooled-first.png", 256, 144, 17);
+            string secondPath = files.Write("pooled-second.png", 256, 144, 217);
+            var pool = new PoisoningPool();
+            var loader = new BoundedThumbnailLoader(maximumCacheEntries: 0, maximumConcurrency: 1, scratchPool: pool);
+            var first = Assert.IsAssignableFrom<BitmapSource>(Wait(loader.LoadAsync(firstPath)));
+            Assert.Equal(17, Blue(first)); // Return has already poisoned the entire source pixel buffer.
+            var second = Assert.IsAssignableFrom<BitmapSource>(Wait(loader.LoadAsync(secondPath)));
+            Assert.Equal(17, Blue(first));
+            Assert.Equal(217, Blue(second));
+            Assert.True(first.IsFrozen && second.IsFrozen);
+            Assert.Equal(2, pool.ArraysAllocated); // One 16KiB chunk and one 256KiB pixel bucket, reused for both files.
+            Assert.Equal(4, pool.Returns);
+            Assert.Equal(2, pool.PixelRents.Count);
+            Assert.Same(pool.PixelRents[0], pool.PixelRents[1]);
+            Assert.All(pool.PixelRents[0], value => Assert.Equal((byte)238, value));
+            Assert.Equal(0, loader.CacheEntryCount);
+        });
+    }
+
+    [Fact]
+    public void CancellationAfterPixelRentalReturnsScratchAndReleasesTheWorker()
+    {
+        InSta(() =>
+        {
+            using var files = new Images();
+            string path = files.Write("pooled-cancel.png", 256, 144, 57);
+            using var cancel = new CancellationTokenSource();
+            var pool = new PoisoningPool { OnRent = length => { if (length > 16384) cancel.Cancel(); } };
+            var loader = new BoundedThumbnailLoader(maximumCacheEntries: 0, maximumConcurrency: 1, scratchPool: pool);
+            Assert.ThrowsAny<OperationCanceledException>(() => Wait(loader.LoadAsync(path, cancel.Token)));
+            Assert.Equal(2, pool.Returns);
+            Assert.Equal(0, loader.CacheEntryCount);
+            pool.OnRent = null;
+            var recovered = Assert.IsAssignableFrom<BitmapSource>(Wait(loader.LoadAsync(path)));
+            Assert.Equal(57, Blue(recovered));
+            Assert.True(recovered.IsFrozen);
+            Assert.Equal(2, pool.ArraysAllocated);
+            Assert.Equal(4, pool.Returns);
+            Assert.Same(pool.PixelRents[0], pool.PixelRents[1]);
+        });
+    }
+
     [Fact]
     public void LocalStillsAreFrozenBoundedCachedAndInvalidatedAfterReplacement()
     {
@@ -153,5 +202,32 @@ public class AsyncThumbnailTests
             return path;
         }
         public void Dispose() { try { Directory.Delete(Root, true); } catch { } }
+    }
+
+    private sealed class PoisoningPool : ArrayPool<byte>
+    {
+        private readonly Dictionary<int, byte[]> _returned = [];
+        public int ArraysAllocated { get; private set; }
+        public int Returns { get; private set; }
+        public List<byte[]> PixelRents { get; } = [];
+        public Action<int>? OnRent { get; set; }
+        public override byte[] Rent(int minimumLength)
+        {
+            int bucket = minimumLength <= 16384 ? 16384 : 256 * 256 * 4;
+            byte[] buffer;
+            if (_returned.Remove(bucket, out var returned)) buffer = returned;
+            else { buffer = new byte[bucket]; ArraysAllocated++; }
+            if (minimumLength > 16384) PixelRents.Add(buffer);
+            OnRent?.Invoke(minimumLength);
+            return buffer;
+        }
+        public override void Return(byte[] array, bool clearArray = false)
+        {
+            // Deliberately mutate all bytes after production BitmapSource.Create
+            // returns, then give that same storage to a different image decode.
+            Array.Fill(array, (byte)238);
+            _returned.Add(array.Length, array);
+            Returns++;
+        }
     }
 }

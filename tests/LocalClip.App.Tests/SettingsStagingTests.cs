@@ -652,6 +652,8 @@ public partial class SettingsStagingTests
                     LibraryBrowseAssertions.Run(vm);
                     LibraryObservationAssertions.Run(vm);
                     ResearchPresentationAssertions.Run(window, vm);
+                    PreviewEligibilityAssertions.Run(window, vm);
+                    LibraryLifecycleAssertions.Run(window, vm);
                     ThumbnailOperationAssertions.Run(vm);
                     SharePresentationAssertions.AssertStaleNotificationsAndSamePathRepair(window, vm);
                     ResourceSamplingAssertions.RunLastAndDispose(vm);

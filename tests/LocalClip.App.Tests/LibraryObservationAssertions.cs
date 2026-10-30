@@ -110,7 +110,7 @@ internal static class LibraryObservationAssertions
         }
     }
 
-    private static void Pump(Task task)
+    internal static void Pump(Task task)
     {
         var dispatcher = Dispatcher.CurrentDispatcher;
         if (!task.IsCompleted)
@@ -126,7 +126,7 @@ internal static class LibraryObservationAssertions
         Assert.True(task.IsCompleted, "Read-only library presentation did not settle while pumping the dispatcher.");
         task.GetAwaiter().GetResult();
     }
-    private static void PumpUntil(Func<bool> done, Dispatcher dispatcher)
+    internal static void PumpUntil(Func<bool> done, Dispatcher dispatcher)
     {
         var elapsed = Stopwatch.StartNew();
         while (!done() && elapsed.Elapsed < TimeSpan.FromSeconds(3))

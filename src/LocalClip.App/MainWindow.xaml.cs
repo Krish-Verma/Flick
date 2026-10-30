@@ -1108,6 +1108,7 @@ public partial class MainWindow : Window
             BtnBuildPreview.Content = "Create preview";
             BtnBuildPreview.IsEnabled = _vm.SelectedClip?.IsAvailableForUi == true;
         }
+        UpdateSelectedAvailabilityUi(refreshPoster: false);
     }
 
     private void ResetPlayerForSelection()
@@ -1139,6 +1140,7 @@ public partial class MainWindow : Window
 
     private void SetPreviewSource(string path, PlayerView mode, bool startPlaying)
     {
+        if (!NativePreviewAllowed) return;
         if (!File.Exists(path))
         {
             _vm.StatusDetails = "Preview unavailable · reconnect the original";
@@ -1208,7 +1210,7 @@ public partial class MainWindow : Window
 
     private void BtnPlayPause_Click(object sender, RoutedEventArgs e)
     {
-        if (_vm.SelectedClip?.IsAvailableForUi != true) return;
+        if (!NativePreviewAllowed || _previewCancellation != null) return;
         if (_playerIsPlaying)
         {
             VideoPlayer.Pause();
@@ -1414,6 +1416,7 @@ public partial class MainWindow : Window
                 _previewCancellation = null;
                 BtnBuildPreview.IsEnabled = true;
                 BtnBuildPreview.Content = "Create preview";
+                UpdateSelectedAvailabilityUi(refreshPoster: false);
             }
             cancellation.Dispose();
         }

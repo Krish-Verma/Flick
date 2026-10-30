@@ -53,6 +53,7 @@ internal static class SettingsDraftAssertions
         Assert.False(page.CanSaveDraft);
         Assert.Equal(Visibility.Visible, Find<TextBlock>(page, "TxtDurationError").Visibility);
         Assert.Contains("15–120", Find<TextBlock>(page, "TxtDurationError").Text);
+        Assert.Equal("Not saved", Find<TextBlock>(page, "TxtSaveStatus").Text);
         Assert.Empty(Find<TextBlock>(page, "TxtBufferWarning").Text);
         Assert.Null(Find<TextBlock>(page, "TxtBufferWarning").ToolTip);
         Assert.Equal(source.AllowSoftwareFallback, Find<CheckBox>(page, "ChkSoftwareFallback").IsChecked);
@@ -104,6 +105,7 @@ internal static class SettingsDraftAssertions
         Assert.Equal(Visibility.Collapsed, Find<StackPanel>(page, "PanelGeneral").Visibility);
         Assert.Same(duration, FocusManager.GetFocusedElement(FocusManager.GetFocusScope(duration)));
         Assert.Equal("invalid draft", duration.Text);
+        Assert.Equal("Not saved", Find<TextBlock>(page, "TxtSaveStatus").Text);
         Assert.Equal(Visibility.Visible, Find<TextBlock>(page, "TxtDurationError").Visibility);
         Assert.True(page.HasUnsavedChanges);
         Assert.False(page.CanSaveDraft);

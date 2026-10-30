@@ -227,7 +227,7 @@ internal static class ResearchPresentationAssertions
         Drain(dispatcher);
     }
 
-    private sealed class OwnedLibrary : IDisposable
+    internal sealed class OwnedLibrary : IDisposable
     {
         private readonly MainWindow _window;
         private readonly MainViewModel _vm;
@@ -245,7 +245,7 @@ internal static class ResearchPresentationAssertions
             _window = window; _vm = vm;
             string[] fields = ["_storage", "_allClips", "_selectedClip", "_searchQuery", "_clipSourceFilter", "_favoritesOnly", "_gameFilter",
                 "_libraryPeriod", "_librarySort", "_targetSizeMb", "_isExportReady", "_readyExportFilePath", "_exportStatusMessage", "_isExporting",
-                "_shareCancellationRequested", "_sharePresentationActive", "_shareObservedClip", "_sharePreview", "_exportCancellation", "_exportProgress",
+                "_shareCancellationRequested", "_sharePresentationActive", "_shareObservedClip", "_sharePreview", "_exportCancellation", "_exportProgress", "_exportingClipId",
                 "_tagsDraft", "_gameDraft", "_editorSaveState"];
             _before = fields.ToDictionary(name => name, Get);
             Assert.False(vm.IsExporting);

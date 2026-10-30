@@ -38,11 +38,11 @@ public partial class MainViewModel
 
     private static ShareRead SnapshotShareRead(ClipMetadata clip)
     {
-        string signature = JsonSerializer.Serialize(clip); // Availability/computed IO properties are JsonIgnore.
-        return new(clip, JsonSerializer.Deserialize<ClipMetadata>(signature)!, signature);
+        string metadata = JsonSerializer.Serialize(clip); // Availability/computed IO properties are JsonIgnore.
+        return new(clip, JsonSerializer.Deserialize<ClipMetadata>(metadata)!, ExportReadinessIdentity.Capture(clip));
     }
     private static bool Matches(ShareRead read) => read.Clip.OriginalFilePath == read.Snapshot.OriginalFilePath &&
-        JsonSerializer.Serialize(read.Clip) == read.Signature;
+        ExportReadinessIdentity.Capture(read.Clip) == read.Signature;
 
     private Task OnLibraryDispatcherAsync(Action apply)
     {
@@ -167,7 +167,8 @@ public partial class MainViewModel
                 ReadyExportFilePath = result.Ready ? result.ReadyPath : "";
                 ExportStatusMessage = result.Ready ? $"Ready to share · {read.Snapshot.ExportedFileSizeBytes / 1_000_000d:F2} MB"
                     : "Export to prepare an MP4.";
-                if (allowThumbnail && !result.ThumbnailExists && CanGenerateSelectedThumbnail) _ = EnsureSelectedThumbnailAsync(read.Clip);
+                if (read.Clip.ThumbnailPath == read.Snapshot.ThumbnailPath && allowThumbnail &&
+                    !result.ThumbnailExists && CanGenerateSelectedThumbnail) _ = EnsureSelectedThumbnailAsync(read.Clip);
             }).ConfigureAwait(false);
         }
         catch (OperationCanceledException) { }
@@ -239,5 +240,13 @@ public partial class MainViewModel
         _libraryAvailabilityGeneration++; _selectedLibraryGeneration++; _recentLibraryGeneration++;
         _libraryAvailabilityCancellation?.Cancel(); _selectedLibraryCancellation?.Cancel(); _recentLibraryCancellation?.Cancel();
         if (disposing) { _libraryObservationsDisposed = true; _libraryReader.Dispose(); }
+    }
+
+    private void ResumeLibraryObservationsAfterRefusedQuit()
+    {
+        if (_libraryObservationsDisposed) return;
+        StartSelectedLibraryRead();
+        StartRecentExportsRead();
+        StartLibraryAvailabilityRefresh();
     }
 }

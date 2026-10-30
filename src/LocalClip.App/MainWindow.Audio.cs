@@ -38,6 +38,7 @@ public partial class MainWindow
             if (ReferenceEquals(_previewCancellation, cancellation)) _previewCancellation = null;
             cancellation.Dispose();
             BtnAudioMixPreview.IsEnabled = true;
+            UpdateSelectedAvailabilityUi(refreshPoster: false);
         }
     }
 }

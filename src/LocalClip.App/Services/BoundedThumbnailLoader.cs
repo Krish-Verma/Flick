@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.IO;
 using System.Windows.Media.Imaging;
 
@@ -12,18 +13,22 @@ public sealed class BoundedThumbnailLoader
     private const long MaximumSourcePixels = 16L * 1024 * 1024;
     private readonly SemaphoreSlim _workers;
     private readonly int _maximumCacheEntries;
+    private readonly ArrayPool<byte> _scratchPool;
     private readonly object _cacheGate = new();
     private readonly Dictionary<string, CacheEntry> _cache = new(StringComparer.OrdinalIgnoreCase);
     private long _access;
     private int _pending;
     private sealed record CacheEntry(long Length, long ModifiedTicks, BitmapSource Image, long Access);
 
-    public BoundedThumbnailLoader(int maximumCacheEntries = 32, int maximumConcurrency = 2)
+    public BoundedThumbnailLoader(int maximumCacheEntries = 32, int maximumConcurrency = 2, ArrayPool<byte>? scratchPool = null)
     {
         if (maximumCacheEntries is < 0 or > 32) throw new ArgumentOutOfRangeException(nameof(maximumCacheEntries));
         if (maximumConcurrency is < 1 or > 2) throw new ArgumentOutOfRangeException(nameof(maximumConcurrency));
         _maximumCacheEntries = maximumCacheEntries;
         _workers = new SemaphoreSlim(maximumConcurrency, maximumConcurrency);
+        // Two workers and finite per-size buckets. Shared's thread-local pools
+        // could retain additional LOH arrays as decoder work moves between threads.
+        _scratchPool = scratchPool ?? ArrayPool<byte>.Create(MaximumEdge * MaximumEdge * 4, 2);
     }
 
     public int CacheEntryCount { get { lock (_cacheGate) return _cache.Count; } }
@@ -72,14 +77,18 @@ public sealed class BoundedThumbnailLoader
             }
             using var file = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
             using var bytes = new MemoryStream((int)length);
-            byte[] chunk = new byte[16384];
-            int read;
-            while ((read = file.Read(chunk, 0, chunk.Length)) != 0)
+            byte[] chunk = _scratchPool.Rent(16384);
+            try
             {
-                cancellationToken.ThrowIfCancellationRequested();
-                if (bytes.Length + read > MaximumEncodedBytes) return null;
-                bytes.Write(chunk, 0, read);
+                int read;
+                while ((read = file.Read(chunk, 0, Math.Min(16384, chunk.Length))) != 0)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    if (bytes.Length + read > MaximumEncodedBytes) return null;
+                    bytes.Write(chunk, 0, read);
+                }
             }
+            finally { _scratchPool.Return(chunk, clearArray: true); }
             cancellationToken.ThrowIfCancellationRequested();
             bytes.Position = 0;
             var metadata = BitmapDecoder.Create(bytes, BitmapCreateOptions.DelayCreation, BitmapCacheOption.None);
@@ -99,11 +108,19 @@ public sealed class BoundedThumbnailLoader
             // LRU entry cannot retain the up-to-8MiB encoded MemoryStream buffer.
             var converted = new FormatConvertedBitmap(image, System.Windows.Media.PixelFormats.Bgra32, null, 0);
             int stride = checked(converted.PixelWidth * 4);
-            var pixels = new byte[checked(stride * converted.PixelHeight)];
-            converted.CopyPixels(pixels, stride, 0);
-            var result = BitmapSource.Create(converted.PixelWidth, converted.PixelHeight, 96, 96,
-                System.Windows.Media.PixelFormats.Bgra32, null, pixels, stride);
-            result.Freeze();
+            var pixels = _scratchPool.Rent(checked(stride * converted.PixelHeight));
+            BitmapSource result;
+            try
+            {
+                converted.CopyPixels(pixels, stride, 0);
+                // .NET 10 WPF CachedBitmap's Array constructor pins only during
+                // InitFromMemoryPtr/CreateBitmapFromMemory, then owns a native
+                // OnLoad copy. It retains neither this array nor its address.
+                result = BitmapSource.Create(converted.PixelWidth, converted.PixelHeight, 96, 96,
+                    System.Windows.Media.PixelFormats.Bgra32, null, pixels, stride);
+                result.Freeze();
+            }
+            finally { _scratchPool.Return(pixels, clearArray: true); }
             cancellationToken.ThrowIfCancellationRequested();
             // Do not retain a result read across an overwrite or deletion.
             info.Refresh();

@@ -197,6 +197,9 @@ internal static partial class Program
             var play = Main<Button>("BtnPlayPoster");
             Check(vm.SelectedClip != null && Main<MediaElement>("VideoPlayer").Source == null &&
                 IsInRenderedPath(play, root) && play.IsEnabled, "A selected clip lacked a usable poster Play action or opened media before Play.");
+            if (vm.SelectedClip != null && File.Exists(vm.SelectedClip.ThumbnailPath))
+                Check(Main<System.Windows.Controls.Image>("PlayerPoster").Source is System.Windows.Media.Imaging.BitmapSource,
+                    "An available owned still was not decoded into the actual selected-clip poster.");
             observations.Add(new { Image = "167-report-selected-poster-minimum.png", Kind = "Actual selected-clip poster controls",
                 HasSelection = vm.SelectedClip != null, MediaSourceOpened = Main<MediaElement>("VideoPlayer").Source != null,
                 PlayVisible = IsInRenderedPath(play, root), PlayEnabled = play.IsEnabled });

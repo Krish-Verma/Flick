@@ -22,12 +22,14 @@ public partial class MainViewModel
     public bool ShareHasPreview => _sharePreview != null;
     public bool ShareCanCopy => SelectedClip != null && IsExportReady && !IsExporting;
     public bool ShareCanCancel => IsExporting && !_shareCancellationRequested;
+    private bool ShareExportBelongsElsewhere => IsExporting && ExportingClipId != null && SelectedClip?.Id != ExportingClipId;
     public string ShareClipTitle => SelectedClip?.DisplayTitle ?? "Choose a clip to share";
     public string ShareClipDetails => SelectedClip == null ? "Your originals stay unchanged."
         : FormatShareDuration(SelectedClip.SelectedDurationSeconds) +
           (IsExportReady ? $" · MP4 · {SelectedClip.ExportedFileSizeBytes / 1_000_000d:0.00} MB" : " · Original preview");
     public string ShareTileStateText => SelectedClip == null ? "No clip selected"
-        : IsExporting ? (_shareCancellationRequested ? "Finishing cancellation…" : ShareExportStageText)
+        : IsExporting ? (_shareCancellationRequested ? "Finishing cancellation…" :
+            ShareExportBelongsElsewhere ? "Another clip is exporting" : ShareExportStageText)
         : IsExportReady ? "MP4 ready"
         : ExportStatusMessage.StartsWith("Checking ", StringComparison.OrdinalIgnoreCase)
             ? (SelectedClip.HasKnownAvailability && SelectedClip.IsAvailableForUi ? "Checking MP4…" : "Checking original…")
@@ -36,7 +38,8 @@ public partial class MainViewModel
         : ExportStatusMessage.StartsWith("Export Cancelled", StringComparison.OrdinalIgnoreCase) ? "Export cancelled"
         : !string.IsNullOrEmpty(SelectedClip.ExportedFilePath) ? "A new export is needed" : "Prepare your MP4";
     public string ShareTileHint => SelectedClip == null ? "Select a clip from Your clips."
-        : IsExporting ? (_shareCancellationRequested ? "Cancelling export…" : "Your original stays unchanged.")
+        : IsExporting ? (_shareCancellationRequested ? "Cancelling export…" :
+            ShareExportBelongsElsewhere ? "Finish or cancel that export first." : "Your original stays unchanged.")
         : IsExportReady ? "Drag this MP4 into Discord · Ctrl+C to copy."
         : ShareTileStateText.StartsWith("Checking ", StringComparison.Ordinal) ? "You can keep browsing."
         : ShareTileStateText == "Original offline" ? "Reconnect its folder before exporting."

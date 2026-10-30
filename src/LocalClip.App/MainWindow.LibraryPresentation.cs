@@ -26,16 +26,21 @@ public partial class MainWindow
         CmbTargets.IsDropDownOpen = true;
     }
 
+    private bool NativePreviewAllowed => _vm.SelectedClip?.IsAvailableForUi == true &&
+        !_vm.IsRecordingDiagnosticRunning && _vm.CaptureStatus != "Starting" && !_quitInProgress && !_updateInstallInProgress;
+
     private void UpdateSelectedAvailabilityUi(bool refreshPoster)
     {
         var clip = _vm.SelectedClip;
         bool available = clip?.IsAvailableForUi == true;
-        bool canPreview = available && !_vm.IsCaptureActive && !_vm.IsImporting && !_vm.IsExporting &&
+        bool canBuildPreview = available && !_vm.IsCaptureActive && !_vm.IsImporting && !_vm.IsExporting &&
             !_vm.IsBackgroundWorkActive && !_vm.IsRecordingDiagnosticRunning && _previewCancellation == null;
-        BtnPlayPause.IsEnabled = BtnPlayPoster.IsEnabled = BtnBuildPreview.IsEnabled = canPreview;
-        BtnPreviewMode.IsEnabled = available; // Switching back also cancels a pending compatibility preview.
-        BtnPlayPoster.ToolTip = _vm.IsCaptureActive ? "Stop replay to preview" :
-            canPreview ? "Play original video (Space)" : available ? "Preview is paused during other work" : "Original video is unavailable";
+        bool canPlay = NativePreviewAllowed && _previewCancellation == null;
+        BtnPlayPause.IsEnabled = BtnPlayPoster.IsEnabled = canPlay;
+        BtnBuildPreview.IsEnabled = canBuildPreview;
+        BtnPreviewMode.IsEnabled = NativePreviewAllowed; // Switching back also cancels a pending compatibility preview.
+        BtnPlayPoster.ToolTip = canPlay ? "Play original video (Space)" :
+            available ? "Preview is paused during other work" : "Original video is unavailable";
         if (!refreshPoster) return;
 
         if (!available)
@@ -53,7 +58,8 @@ public partial class MainWindow
         {
             PreviewFallbackPanel.Visibility = Visibility.Collapsed;
             BtnBuildPreview.Visibility = Visibility.Visible;
-            PlayerPoster.Visibility = PlayerPosterHint.Visibility = Visibility.Visible;
+            PlayerPoster.Visibility = Visibility.Visible;
+            PlayerPosterHint.Visibility = Visibility.Visible;
         }
         // Availability does not close Share/Trim/Audio or start a decoder.
     }

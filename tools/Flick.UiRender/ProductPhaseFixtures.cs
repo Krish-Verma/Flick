@@ -147,8 +147,8 @@ internal static partial class Program
         vm.SelectedClip = vm.FilteredClips.Single(clip => clip.Id == media.Id);
         Invoke("ResetPlayerForSelection");
         // Never imply that the synthetic poster is decoded gameplay/playback.
-        Find<Image>("PlayerPoster").Visibility = Visibility.Collapsed;
-        Find<TextBlock>("PlayerPosterHint").Text = "Synthetic media fixture · press Play to preview";
+        // Keep the production lazy poster and caption bindings. The owned
+        // generated-media still is synthetic; no video decoder is opened here.
         void Split()
         {
             typeof(MainWindow).GetField("_layoutMode", Private)!.SetValue(window, WorkspaceLayoutMode.Split);

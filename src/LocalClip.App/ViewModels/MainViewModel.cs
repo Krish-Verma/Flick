@@ -816,6 +816,13 @@ public partial class MainViewModel : INotifyPropertyChanged, IDisposable
         set { _isExporting = value; OnPropertyChanged(); OnPropertyChanged(nameof(CanEditClip)); OnPropertyChanged(nameof(CanStartExport)); }
     }
 
+    private string? _exportingClipId;
+    public string? ExportingClipId
+    {
+        get => _exportingClipId;
+        private set { if (_exportingClipId == value) return; _exportingClipId = value; OnPropertyChanged(); }
+    }
+
     public double ExportProgress
     {
         get => _exportProgress;
@@ -1204,7 +1211,12 @@ public partial class MainViewModel : INotifyPropertyChanged, IDisposable
         }
         finally
         {
-            if (!ready) { _isPreparingToQuit = false; ResumeResourceSampling(); _pollTimer.Start(); UpdateAutomaticReplayTimer(); PublishDiagnosticTest(); }
+            if (!ready)
+            {
+                _isPreparingToQuit = false;
+                ResumeResourceSampling(); _pollTimer.Start(); UpdateAutomaticReplayTimer(); PublishDiagnosticTest();
+                ResumeLibraryObservationsAfterRefusedQuit();
+            }
         }
     }
 
@@ -1903,6 +1915,7 @@ public partial class MainViewModel : INotifyPropertyChanged, IDisposable
         _exportCancellation = cancellation;
         int generation = ++_exportGeneration;
         InvalidateExportReady();
+        ExportingClipId = clip.Id;
         IsExporting = true;
         ExportProgress = 0;
         ExportStatusMessage = "Preparing MP4…";
@@ -1945,7 +1958,6 @@ public partial class MainViewModel : INotifyPropertyChanged, IDisposable
                 else
                 {
                     ExportStatusMessage = $"Exported {clip.DisplayTitle} · Select to share";
-                    OnSelectedClipChanged();
                 }
             }
             else
@@ -1969,8 +1981,17 @@ public partial class MainViewModel : INotifyPropertyChanged, IDisposable
             if (ReferenceEquals(_exportCancellation, cancellation))
                 _exportCancellation = null;
             cancellation.Dispose();
-            IsExporting = false;
+            CompleteExportPresentation(clip.Id);
         }
+    }
+
+    private void CompleteExportPresentation(string clipId)
+    {
+        IsExporting = false;
+        ExportingClipId = null;
+        // Success/failure/cancellation belongs to the exported clip. A different
+        // current selection needs its own readiness after the global worker stops.
+        if (SelectedClip?.Id != clipId) OnSelectedClipChanged();
     }
 
     public void CopyExportedFileToClipboard()

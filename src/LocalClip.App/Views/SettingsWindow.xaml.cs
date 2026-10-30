@@ -783,7 +783,7 @@ public partial class SettingsWindow : UserControl
         SelectCategory(category);
         if (ReferenceEquals(field, TxtWebhookUrl)) WebhookExpander.IsExpanded = true;
         SetFieldValidation(category, message, field);
-        TxtSaveStatus.Text = HasUnsavedChanges ? "Unsaved changes" : "Review " + category.ToLowerInvariant() + ".";
+        TxtSaveStatus.Text = "Not saved";
         TxtSaveStatus.ToolTip = message;
         FocusManager.SetFocusedElement(FocusManager.GetFocusScope(field), field);
         field.Focus();
@@ -928,7 +928,7 @@ public partial class SettingsWindow : UserControl
             WindowsStartupRegistrationState.MissingOrStale or WindowsStartupRegistrationState.Unavailable;
         CanSaveDraft = invalid == null && (HasUnsavedChanges || _settings.RequiresExplicitSettingsSave || repair);
         BtnSaveSettings.IsEnabled = CanSaveDraft;
-        TxtSaveStatus.Text = HasUnsavedChanges ? "Unsaved changes" : invalid != null ? "Review " + invalid.Category.ToLowerInvariant() + "."
+        TxtSaveStatus.Text = invalid != null ? "Not saved" : HasUnsavedChanges ? "Unsaved changes"
             : _settings.RequiresExplicitSettingsSave ? "Review recovered settings" : repair ? "Save to repair startup" : "";
         TxtSaveStatus.ToolTip = invalid?.Message ?? TxtSaveStatus.Text;
         BtnSaveSettings.ToolTip = invalid?.Message ?? (repair ? "Save to repair Windows startup." :
