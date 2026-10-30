@@ -1,0 +1,274 @@
+[
+  {
+    "id": 422177395,
+    "tag_name": "v1.0.5-preview.1",
+    "name": "Flick 1.0.5 — UNSIGNED COMPATIBILITY PREVIEW",
+    "target_commitish": "a6d2cd880c9716e96e9957279b4848eb8d3ca076",
+    "draft": true,
+    "prerelease": false,
+    "assets": [
+      {
+        "id": 670003275,
+        "name": "Flick-Setup.exe",
+        "size": 243801757,
+        "digest": "sha256:b2e42a2d6a81c78b3ac62356a452d8993782761531a305cef7dd55d3a856d7c6",
+        "state": "uploaded",
+        "browser_download_url": "https://github.com/Krish-Verma/Flick/releases/download/untagged-7c407b3bbee2ead00424/Flick-Setup.exe"
+      },
+      {
+        "id": 670003272,
+        "name": "Flick-v1.0.5-win-x64.zip",
+        "size": 355588299,
+        "digest": "sha256:0c2ad4cc74f99674e60f42c272128936c76fc6c0d02e6718d9c016c67bd23a33",
+        "state": "uploaded",
+        "browser_download_url": "https://github.com/Krish-Verma/Flick/releases/download/untagged-7c407b3bbee2ead00424/Flick-v1.0.5-win-x64.zip"
+      },
+      {
+        "id": 670003274,
+        "name": "SHA256SUMS.txt",
+        "size": 425,
+        "digest": "sha256:509a66c27123b5eafe9d1880c90744d920549e4aa2d8aea6884eac7192ff15c1",
+        "state": "uploaded",
+        "browser_download_url": "https://github.com/Krish-Verma/Flick/releases/download/untagged-7c407b3bbee2ead00424/SHA256SUMS.txt"
+      }
+    ]
+  },
+  {
+    "id": 422126500,
+    "tag_name": "v1.0.4-preview.1",
+    "name": "Flick 1.0.4 — UNSIGNED PREVIEW",
+    "target_commitish": "f5e701cdacfd57e477a2cced7dcf1e9f3bd835db",
+    "draft": true,
+    "prerelease": false,
+    "assets": [
+      {
+        "id": 669859579,
+        "name": "Flick-Setup.exe",
+        "size": 241947803,
+        "digest": "sha256:da1a0bbfb6b1d5803fc0d54387682c24f43d6039bae6a2c999822628e7828a5f",
+        "state": "uploaded",
+        "browser_download_url": "https://github.com/Krish-Verma/Flick/releases/download/untagged-c8ee11aacbb7b0166c37/Flick-Setup.exe"
+      },
+      {
+        "id": 669859568,
+        "name": "Flick-v1.0.4-win-x64.zip",
+        "size": 353057887,
+        "digest": "sha256:64ad4c0c755ed3364032acbdbb940125c988b02efbcba599d8ecc5a4d11207da",
+        "state": "uploaded",
+        "browser_download_url": "https://github.com/Krish-Verma/Flick/releases/download/untagged-c8ee11aacbb7b0166c37/Flick-v1.0.4-win-x64.zip"
+      },
+      {
+        "id": 669859576,
+        "name": "SHA256SUMS.txt",
+        "size": 415,
+        "digest": "sha256:fa3fd419cec8821b6f8ac8f32797c70c548f0041096619a52c32ccb012c9630a",
+        "state": "uploaded",
+        "browser_download_url": "https://github.com/Krish-Verma/Flick/releases/download/untagged-c8ee11aacbb7b0166c37/SHA256SUMS.txt"
+      }
+    ]
+  },
+  {
+    "id": 429427584,
+    "tag_name": "v1.0.11-preview.1",
+    "name": "Flick 1.0.11 — UNSIGNED REPLAY AND UX PREVIEW",
+    "target_commitish": "49844256bf5f160b4777d0fa057cd79ddcf27eaf",
+    "draft": false,
+    "prerelease": false,
+    "assets": [
+      {
+        "id": 693226915,
+        "name": "Flick-Setup.exe",
+        "size": 246210784,
+        "digest": "sha256:ebc2ee4a550b5d94bf50b7c0bb0eddccaa752f0a836d021c625ca70061619a2b",
+        "state": "uploaded",
+        "browser_download_url": "https://github.com/Krish-Verma/Flick/releases/download/v1.0.11-preview.1/Flick-Setup.exe"
+      },
+      {
+        "id": 693226908,
+        "name": "Flick-v1.0.11-win-x64.zip",
+        "size": 357964127,
+        "digest": "sha256:d376b39df21cd37924f747a0bf64e4772933b518ea7ee7305235a1feac3d8110",
+        "state": "uploaded",
+        "browser_download_url": "https://github.com/Krish-Verma/Flick/releases/download/v1.0.11-preview.1/Flick-v1.0.11-win-x64.zip"
+      },
+      {
+        "id": 693226914,
+        "name": "SHA256SUMS.txt",
+        "size": 436,
+        "digest": "sha256:0f950d68fd81ab9d3b7504f00d4819e4765476c541db49c78980f90144455219",
+        "state": "uploaded",
+        "browser_download_url": "https://github.com/Krish-Verma/Flick/releases/download/v1.0.11-preview.1/SHA256SUMS.txt"
+      }
+    ]
+  },
+  {
+    "id": 424856459,
+    "tag_name": "v1.0.10-preview.1",
+    "name": "Flick 1.0.10 — UNSIGNED CAPTURE RUNTIME FIX",
+    "target_commitish": "444c90893a1d9eab22c644adbc1a18ef7af46e13",
+    "draft": false,
+    "prerelease": false,
+    "assets": [
+      {
+        "id": 679742864,
+        "name": "Flick-Setup.exe",
+        "size": 244026426,
+        "digest": "sha256:aae3ca8eba616fd4eb46ecf08c817cf4073d642735b8a7e9d9d755907c628ba2",
+        "state": "uploaded",
+        "browser_download_url": "https://github.com/Krish-Verma/Flick/releases/download/v1.0.10-preview.1/Flick-Setup.exe"
+      },
+      {
+        "id": 679742861,
+        "name": "Flick-v1.0.10-win-x64.zip",
+        "size": 355894548,
+        "digest": "sha256:f57e223877102052ba0f9054f0394bb6687b685259ce84530871d10f7367b24e",
+        "state": "uploaded",
+        "browser_download_url": "https://github.com/Krish-Verma/Flick/releases/download/v1.0.10-preview.1/Flick-v1.0.10-win-x64.zip"
+      },
+      {
+        "id": 679742866,
+        "name": "SHA256SUMS.txt",
+        "size": 442,
+        "digest": "sha256:062e6f24df5429d62dc9346e49e0d8d5e4124d1771337306c76640eb973efdce",
+        "state": "uploaded",
+        "browser_download_url": "https://github.com/Krish-Verma/Flick/releases/download/v1.0.10-preview.1/SHA256SUMS.txt"
+      }
+    ]
+  },
+  {
+    "id": 424830445,
+    "tag_name": "v1.0.9-preview.1",
+    "name": "Flick 1.0.9 — UNSIGNED SETTINGS AND UI PREVIEW",
+    "target_commitish": "6dc06b484ab25930375eac80b744e4563a16ea19",
+    "draft": false,
+    "prerelease": false,
+    "assets": [
+      {
+        "id": 679653403,
+        "name": "Flick-Setup.exe",
+        "size": 244034363,
+        "digest": "sha256:31159e44be199377070e83421d07bfed918ee830f0f239e02798f4e0202fcd26",
+        "state": "uploaded",
+        "browser_download_url": "https://github.com/Krish-Verma/Flick/releases/download/v1.0.9-preview.1/Flick-Setup.exe"
+      },
+      {
+        "id": 679653402,
+        "name": "Flick-v1.0.9-win-x64.zip",
+        "size": 355887329,
+        "digest": "sha256:6d1a2d50d870a53b90a6a7c8f218484f8bf4dc634741124fa22a3cc4f6fd0374",
+        "state": "uploaded",
+        "browser_download_url": "https://github.com/Krish-Verma/Flick/releases/download/v1.0.9-preview.1/Flick-v1.0.9-win-x64.zip"
+      },
+      {
+        "id": 679653404,
+        "name": "SHA256SUMS.txt",
+        "size": 451,
+        "digest": "sha256:cb0b3b3411be0a2849c1c305cb6cfa2698421ce197e462320fa3e6c59ee4c744",
+        "state": "uploaded",
+        "browser_download_url": "https://github.com/Krish-Verma/Flick/releases/download/v1.0.9-preview.1/SHA256SUMS.txt"
+      }
+    ]
+  },
+  {
+    "id": 423084461,
+    "tag_name": "v1.0.8-preview.1",
+    "name": "Flick 1.0.8 — UNSIGNED SETTINGS & UX PREVIEW",
+    "target_commitish": "dc656115274472ce0f7ecf01feb9a736ea8ffd3e",
+    "draft": false,
+    "prerelease": false,
+    "assets": [
+      {
+        "id": 673788457,
+        "name": "Flick-Setup.exe",
+        "size": 244035799,
+        "digest": "sha256:00321f1a766362bdf3058b0dd4c2cb971946b1d744251b47e77eba0da921713d",
+        "state": "uploaded",
+        "browser_download_url": "https://github.com/Krish-Verma/Flick/releases/download/v1.0.8-preview.1/Flick-Setup.exe"
+      },
+      {
+        "id": 673788460,
+        "name": "Flick-v1.0.8-win-x64.zip",
+        "size": 355886247,
+        "digest": "sha256:ebba53d20c8f022fbb35fbd1d428f88487acf865f123b1f7edba1de20cf81c2d",
+        "state": "uploaded",
+        "browser_download_url": "https://github.com/Krish-Verma/Flick/releases/download/v1.0.8-preview.1/Flick-v1.0.8-win-x64.zip"
+      },
+      {
+        "id": 673788458,
+        "name": "SHA256SUMS.txt",
+        "size": 452,
+        "digest": "sha256:d9e6b8b2b333c5d1ac1ac37e314fc895120297266e356c3bfdd72751a4152bfa",
+        "state": "uploaded",
+        "browser_download_url": "https://github.com/Krish-Verma/Flick/releases/download/v1.0.8-preview.1/SHA256SUMS.txt"
+      }
+    ]
+  },
+  {
+    "id": 422913955,
+    "tag_name": "v1.0.7-preview.1",
+    "name": "Flick 1.0.7 — UNSIGNED PRODUCT FEATURES PREVIEW",
+    "target_commitish": "cd4ad99867da9c5c6e5a828d95667159aac4b306",
+    "draft": false,
+    "prerelease": false,
+    "assets": [
+      {
+        "id": 673014001,
+        "name": "Flick-Setup.exe",
+        "size": 244029400,
+        "digest": "sha256:9d2b4574cff0515ae464459a02d7eb8c8b041734d40c2fb1ac5d1c29fc3a8703",
+        "state": "uploaded",
+        "browser_download_url": "https://github.com/Krish-Verma/Flick/releases/download/v1.0.7-preview.1/Flick-Setup.exe"
+      },
+      {
+        "id": 673014005,
+        "name": "Flick-v1.0.7-win-x64.zip",
+        "size": 355870738,
+        "digest": "sha256:9b9ca7fc0b071ee902dcec350b98c6c0eee2461a69722c189dc1b7feb0cda9a1",
+        "state": "uploaded",
+        "browser_download_url": "https://github.com/Krish-Verma/Flick/releases/download/v1.0.7-preview.1/Flick-v1.0.7-win-x64.zip"
+      },
+      {
+        "id": 673014002,
+        "name": "SHA256SUMS.txt",
+        "size": 448,
+        "digest": "sha256:f76fbfb4a5d8be17d570aeb80ba5e367f5e1fbab262d80d7cb0325eeab997a74",
+        "state": "uploaded",
+        "browser_download_url": "https://github.com/Krish-Verma/Flick/releases/download/v1.0.7-preview.1/SHA256SUMS.txt"
+      }
+    ]
+  },
+  {
+    "id": 422658187,
+    "tag_name": "v1.0.6-preview.1",
+    "name": "Flick 1.0.6 — UNSIGNED REPLAY FIX PREVIEW",
+    "target_commitish": "d63043519eb7348d32efd129835cad9c2bb26fe7",
+    "draft": false,
+    "prerelease": false,
+    "assets": [
+      {
+        "id": 671943862,
+        "name": "Flick-Setup.exe",
+        "size": 243838281,
+        "digest": "sha256:884b5b784d3da046696c1097d36ce7bee6917cd40fca0153a2333511bbc6b4a5",
+        "state": "uploaded",
+        "browser_download_url": "https://github.com/Krish-Verma/Flick/releases/download/v1.0.6-preview.1/Flick-Setup.exe"
+      },
+      {
+        "id": 671943863,
+        "name": "Flick-v1.0.6-win-x64.zip",
+        "size": 355592615,
+        "digest": "sha256:61a14f70f8361d6f30c82a7e3a54ddccd150020db0704d7d073a835de5f7b0e9",
+        "state": "uploaded",
+        "browser_download_url": "https://github.com/Krish-Verma/Flick/releases/download/v1.0.6-preview.1/Flick-v1.0.6-win-x64.zip"
+      },
+      {
+        "id": 671943861,
+        "name": "SHA256SUMS.txt",
+        "size": 431,
+        "digest": "sha256:921b0594f5c2235b9d6e7623f9eafdc422fc490ffda5462656f3a543f537af0c",
+        "state": "uploaded",
+        "browser_download_url": "https://github.com/Krish-Verma/Flick/releases/download/v1.0.6-preview.1/SHA256SUMS.txt"
+      }
+    ]
+  }
+]
