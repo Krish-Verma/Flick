@@ -1210,7 +1210,8 @@ public partial class MainWindow : Window
 
     private void BtnPlayPause_Click(object sender, RoutedEventArgs e)
     {
-        if (!NativePreviewAllowed || _previewCancellation != null) return;
+        var clip = _vm.SelectedClip;
+        if (clip == null || !NativePreviewAllowed || _previewCancellation != null) return;
         if (_playerIsPlaying)
         {
             VideoPlayer.Pause();
@@ -1221,7 +1222,7 @@ public partial class MainWindow : Window
         }
         if (PreviewFallbackPanel.Visibility == Visibility.Visible) return;
         if (VideoPlayer.Source == null)
-            SetPreviewSource(_vm.SelectedClip.OriginalFilePath, PlayerView.Original, false);
+            SetPreviewSource(clip.OriginalFilePath, PlayerView.Original, false);
         if (VideoPlayer.Source == null) return;
         VideoPlayer.Play();
         _playerIsPlaying = true;

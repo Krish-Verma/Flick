@@ -609,7 +609,7 @@ internal static partial class Program
         void Visit(DependencyObject visual)
         {
             if (visual is System.Windows.Controls.Image image && image.Visibility == Visibility.Visible &&
-                image.ActualWidth > 0 && !string.IsNullOrWhiteSpace(LocalClip.App.Services.AsyncThumbnail.GetPath(image)))
+                !string.IsNullOrWhiteSpace(LocalClip.App.Services.AsyncThumbnail.GetPath(image)))
                 loads.Add(LocalClip.App.Services.AsyncThumbnail.LoadForSnapshotAsync(image));
             for (int index = 0; index < VisualTreeHelper.GetChildrenCount(visual); index++)
                 Visit(VisualTreeHelper.GetChild(visual, index));
