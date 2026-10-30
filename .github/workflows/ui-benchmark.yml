@@ -4,6 +4,7 @@ on:
     paths:
       - 'src/LocalClip.App/**'
       - 'src/LocalClip.Core/**'
+      - 'tests/**'
       - 'tools/Flick.UiBenchmark/**'
       - 'scripts/run_ui_benchmark.ps1'
       - '.github/workflows/ui-benchmark.yml'

@@ -1,8 +1,10 @@
 using System.IO;
 using System.Reflection;
+using System.Text.Json;
 using System.Threading;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using System.Windows.Threading;
 using LocalClip.App.Views;
 using LocalClip.Core.Audio;
@@ -122,6 +124,7 @@ internal static class SettingsAudioPersistenceAssertions
     {
         var source = Preferences(root);
         string file = Path.Combine(root, "invalid-audio-choice.json");
+        string originalPreferences = JsonSerializer.Serialize(source);
         var page = Page(source, file, _ => Array.Empty<AudioEndpoint>());
         var output = Find<ComboBox>(page, "CmbSystemAudioDevice");
         output.ItemsSource = new[] { new AudioEndpointChoice("new-unavailable-output", "Unavailable", false) };
@@ -135,16 +138,29 @@ internal static class SettingsAudioPersistenceAssertions
         Invoke(page, "Save_Click", page, new RoutedEventArgs());
         Assert.False(closed);
         Assert.Equal(Visibility.Visible, Find<StackPanel>(page, "PanelAudio").Visibility);
-        Assert.Contains("available audio output", Find<TextBlock>(page, "TxtSaveStatus").Text);
+        AssertInvalidRecovery(page, "Audio", "TxtOutputError", "CmbSystemAudioDevice", "available audio output");
+        Assert.Equal("new-unavailable-output", Choice(page, "CmbSystemAudioDevice").Id);
+        Assert.Equal(originalPreferences, JsonSerializer.Serialize(source));
+        Assert.False(closed);
         Assert.False(File.Exists(file));
 
         source.MicrophoneDeviceId = "remembered-but-off";
+        originalPreferences = JsonSerializer.Serialize(source);
         page = Page(source, file, _ => Array.Empty<AudioEndpoint>());
         Assert.False(Choice(page, "CmbMicrophoneDevice").IsAvailable);
         Find<CheckBox>(page, "ChkMicrophone").IsChecked = true;
         failure = Assert.Throws<TargetInvocationException>(() => StageAudio(page, AppSettings.CreateDefault()));
         Assert.Contains("available microphone", Assert.IsType<ArgumentException>(failure.InnerException).Message);
+        closed = false;
+        page.CloseRequested += _ => closed = true;
+        Invoke(page, "Save_Click", page, new RoutedEventArgs());
+        Assert.False(closed);
+        AssertInvalidRecovery(page, "Audio", "TxtMicrophoneError", "CmbMicrophoneDevice", "available microphone");
+        Assert.True(Find<CheckBox>(page, "ChkMicrophone").IsChecked);
+        Assert.Equal("remembered-but-off", Choice(page, "CmbMicrophoneDevice").Id);
         Assert.False(source.EnableMicrophone);
+        Assert.Equal(originalPreferences, JsonSerializer.Serialize(source));
+        Assert.False(closed);
         Assert.False(File.Exists(file));
     }
 
@@ -188,7 +204,9 @@ internal static class SettingsAudioPersistenceAssertions
     private static void InvalidInputAndWriteFailuresKeepTheDraft(string root)
     {
         var source = Preferences(root);
-        var page = Page(source, Path.Combine(root, "invalid-duration.json"), _ => Array.Empty<AudioEndpoint>());
+        string invalidFile = Path.Combine(root, "invalid-duration.json");
+        string originalPreferences = JsonSerializer.Serialize(source);
+        var page = Page(source, invalidFile, _ => Array.Empty<AudioEndpoint>());
         Find<TextBox>(page, "TxtDuration").Text = "0";
         bool closed = false;
         page.CloseRequested += _ => closed = true;
@@ -196,7 +214,11 @@ internal static class SettingsAudioPersistenceAssertions
         Assert.False(closed);
         Assert.Equal(30, source.ReplayDurationSeconds);
         Assert.Equal("0", Find<TextBox>(page, "TxtDuration").Text);
-        Assert.Equal("Choose 15–120 seconds.", Find<TextBlock>(page, "TxtSaveStatus").Text);
+        AssertInvalidRecovery(page, "Recording", "TxtDurationError", "TxtDuration", "Choose 15–120 seconds.");
+        Assert.False(closed);
+        Assert.Equal("0", Find<TextBox>(page, "TxtDuration").Text);
+        Assert.Equal(originalPreferences, JsonSerializer.Serialize(source));
+        Assert.False(File.Exists(invalidFile));
 
         Find<TextBox>(page, "TxtDuration").Text = "30";
         Find<CheckBox>(page, "ChkGameDetectionEnabled").IsChecked = true;
@@ -204,7 +226,11 @@ internal static class SettingsAudioPersistenceAssertions
         Assert.False(closed);
         Assert.False(source.GameDetectionEnabled);
         Assert.Equal(Visibility.Visible, Find<StackPanel>(page, "PanelGames").Visibility);
-        Assert.Equal("Review your game settings.", Find<TextBlock>(page, "TxtSaveStatus").Text);
+        AssertInvalidRecovery(page, "Games", "TxtGameValidation", "ChkGameDetectionEnabled", "Approve and enable at least one game first.");
+        Assert.False(closed);
+        Assert.True(Find<CheckBox>(page, "ChkGameDetectionEnabled").IsChecked);
+        Assert.Equal(originalPreferences, JsonSerializer.Serialize(source));
+        Assert.False(File.Exists(invalidFile));
 
         string file = Path.Combine(root, "write-failure.json");
         source.SaveReviewedToFile(file);
@@ -223,6 +249,36 @@ internal static class SettingsAudioPersistenceAssertions
         Assert.False(Find<CheckBox>(page, "ChkShowResourceUsage").IsChecked);
         Assert.Contains("changes are still here", Find<TextBlock>(page, "TxtSaveStatus").Text);
         Assert.Contains("Synthetic denied settings write", Find<TextBlock>(page, "TxtSaveStatus").ToolTip?.ToString());
+    }
+
+    private static void AssertInvalidRecovery(SettingsWindow page, string category, string errorName, string fieldName, string message)
+    {
+        // The concise footer reports outcome. Recovery details stay adjacent to
+        // the field, and the real Review action remains reachable on another page.
+        Assert.Equal("Not saved", Find<TextBlock>(page, "TxtSaveStatus").Text);
+        Assert.True(page.HasUnsavedChanges);
+        Assert.False(page.CanSaveDraft);
+        Assert.False(Find<Button>(page, "BtnSaveSettings").IsEnabled);
+        var error = Find<TextBlock>(page, errorName);
+        Assert.Equal(Visibility.Visible, error.Visibility);
+        Assert.Contains(message, error.Text);
+        Find<Button>(page, "NavGeneral").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Assert.Equal(Visibility.Visible, Find<StackPanel>(page, "PanelGeneral").Visibility);
+        var review = Find<Button>(page, "BtnReviewSettings");
+        Assert.Equal(Visibility.Visible, review.Visibility);
+        Assert.True(review.IsEnabled);
+        Assert.Equal("Review " + category.ToLowerInvariant(), review.Content);
+        Assert.False(Find<Button>(page, "BtnSaveSettings").IsEnabled);
+        review.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Assert.Equal(Visibility.Visible, Find<StackPanel>(page, "Panel" + category).Visibility);
+        Assert.Equal(Visibility.Collapsed, Find<StackPanel>(page, "PanelGeneral").Visibility);
+        var field = Assert.IsAssignableFrom<FrameworkElement>(page.FindName(fieldName));
+        Assert.Equal(Visibility.Visible, field.Visibility);
+        Assert.Same(field, FocusManager.GetFocusedElement(FocusManager.GetFocusScope(field)));
+        Assert.Equal(Visibility.Visible, error.Visibility);
+        Assert.Contains(message, error.Text);
+        Assert.Equal("Not saved", Find<TextBlock>(page, "TxtSaveStatus").Text);
+        Assert.False(page.CanSaveDraft);
     }
 
     private static AppSettings Preferences(string root)
