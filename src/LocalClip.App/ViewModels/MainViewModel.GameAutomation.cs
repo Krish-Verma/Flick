@@ -40,7 +40,7 @@ public partial class MainViewModel
         PublishDiagnosticTest();
     }
 
-    public async Task ApplyGameDetectionPreferencesAsync()
+    public async Task ApplyGameDetectionPreferencesAsync(bool allowResourceRetry = false)
     {
         if (_settings.RequiresExplicitSettingsSave)
         {
@@ -48,11 +48,15 @@ public partial class MainViewModel
             PublishGameAutomation("Review Settings before starting automatic replay.");
             return;
         }
+        // Only explicit reviewed Settings Save may clear a resource cutoff;
+        // initialization and ordinary activation must retain that suspension.
+        if (allowResourceRetry) _automaticReplaySession.AllowResourceRetry();
         _automaticReplaySession.RetryFailedGames();
         _gameReplayWaitingHint = "";
         string preferences = JsonSerializer.Serialize(new { _settings.GameDetectionEnabled, _settings.ApprovedGameProfiles });
         if (_appliedGamePreferences == preferences && !_gameStateUnavailable)
         {
+            UpdateAutomaticReplayTimer();
             await RunAutomaticReplayTickAsync();
             return;
         }
@@ -111,7 +115,7 @@ public partial class MainViewModel
 
     private async Task RunAutomaticReplayTickAsync()
     {
-        if (_settings.RequiresExplicitSettingsSave || _automaticReplayResumeInProgress || _backgroundReplayStarting || _gameOperationTask != null || _gameAutomationDisposed || _isPreparingToQuit || _gameStateUnavailable ||
+        if (_automaticReplaySession.ResourceLimitSuspended || _settings.RequiresExplicitSettingsSave || _automaticReplayResumeInProgress || _backgroundReplayStarting || _gameOperationTask != null || _gameAutomationDisposed || _isPreparingToQuit || _gameStateUnavailable ||
             _isRecordingDiagnosticRunning || _diagnosticCleanupUnconfirmed || _refreshingTargets || _pollInProgress || _manualStopOperation != null ||
             DiagnosticReservationAllowed?.Invoke() == false) return;
         // A failed manual attempt must not retain recording ownership forever.

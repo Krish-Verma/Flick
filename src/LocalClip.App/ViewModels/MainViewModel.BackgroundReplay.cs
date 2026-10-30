@@ -22,9 +22,10 @@ public partial class MainViewModel
     public bool IsAutomaticReplayPaused => _automaticReplaySession.BackgroundPaused ||
         (HasBlockingGamePause && (_automaticReplaySession.BackgroundEnabled ||
             _lastGameDetectionReason == GameDetectionReason.Suppressed));
-    public bool HasAutomaticReplayStartFailure => _gameStateUnavailable || _backgroundReplayStartFailed ||
+    public bool HasAutomaticReplayStartFailure => _automaticReplaySession.ResourceLimitSuspended || _gameStateUnavailable || _backgroundReplayStartFailed ||
         _gameReplayWaitingHint == "Start replay to retry";
     public string ReplayWaitingText => CaptureActive ? "" : _settings.RequiresExplicitSettingsSave ? "Review Settings" :
+        _automaticReplaySession.ResourceLimitSuspended ? "Replay paused for memory" :
         _gameStateUnavailable ? "Automatic replay unavailable" :
         IsAutomaticReplayPaused ? "Replay paused" :
         _backgroundReplayStartFailed ? "Start replay to retry" :
@@ -74,6 +75,18 @@ public partial class MainViewModel
         }
         finally { _automaticReplayIntentGate.Release(); }
         _backgroundReplayOwned = false;
+    }
+
+    // The shared VM memory cutoff calls this before stopping its recorder.
+    // A safety shutdown must not be undone by a timer or background fallback.
+    private void SuspendAutomaticReplayForResourceLimit()
+    {
+        Interlocked.Increment(ref _automaticReplayIntentRevision); // A pending explicit resume cannot undo this stop.
+        _automaticReplaySession.SuspendForResourceLimit();
+        if (_automaticGame is { } active) _automaticReplaySession.RecordGameFailure(active.Process);
+        _gameTimer?.Stop();
+        _gameOperationCancellation?.Cancel();
+        PublishGameAutomation("Replay paused for memory. Review recording settings before restarting.");
     }
 
     /// <summary>Explicit Start updates pause intent only. The caller starts manual replay separately.</summary>
@@ -130,6 +143,7 @@ public partial class MainViewModel
             _automaticReplaySession.ResumeBackground();
             _automaticReplaySession.ResetBackgroundAttempt();
             _automaticReplaySession.RetryFailedGames();
+            _automaticReplaySession.AllowResourceRetry();
             _backgroundReplayStartFailed = false;
             _gameStateUnavailable = false;
             _gameReplayWaitingHint = "";
@@ -205,6 +219,7 @@ public partial class MainViewModel
         _gameTimer.Tick -= GameTimerTick;
         _gameTimer.Tick += GameTimerTick;
         if (!_gameAutomationDisposed && !_isPreparingToQuit && !_gameStateUnavailable && !_settings.RequiresExplicitSettingsSave &&
+            !_automaticReplaySession.ResourceLimitSuspended &&
             (_automaticReplaySession.BackgroundEnabled ||
              GameDetectionPolicy.ShouldScan(_settings.GameDetectionEnabled, _settings.ApprovedGameProfiles)))
             _gameTimer.Start();

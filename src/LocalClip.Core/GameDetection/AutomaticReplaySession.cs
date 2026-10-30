@@ -7,6 +7,7 @@ public sealed class AutomaticReplaySession
     private string? _lastBackgroundAttempt;
     public bool BackgroundEnabled { get; private set; }
     public bool BackgroundPaused { get; private set; }
+    public bool ResourceLimitSuspended { get; private set; }
     public IReadOnlyList<GameProcessIdentity> FailedGames => _failedGames.Values.ToArray();
 
     public void ConfigureBackground(bool enabled)
@@ -23,7 +24,7 @@ public sealed class AutomaticReplaySession
     public void ResumeBackground() => BackgroundPaused = false;
 
     public bool CanTryBackground(string? sourceKey, bool captureActive, bool blocked, bool requiresSettingsReview = false) =>
-        BackgroundEnabled && !BackgroundPaused && !captureActive && !blocked && !requiresSettingsReview &&
+        BackgroundEnabled && !BackgroundPaused && !ResourceLimitSuspended && !captureActive && !blocked && !requiresSettingsReview &&
         !string.IsNullOrWhiteSpace(sourceKey) &&
         !string.Equals(sourceKey, _lastBackgroundAttempt, StringComparison.Ordinal);
 
@@ -31,8 +32,10 @@ public sealed class AutomaticReplaySession
     public void ResetBackgroundAttempt() => _lastBackgroundAttempt = null;
     public void RetryFailedGames() => _failedGames.Clear();
 
-    public bool CanTryGame(GameProcessIdentity process) => process.IsComplete &&
+    public bool CanTryGame(GameProcessIdentity process) => !ResourceLimitSuspended && process.IsComplete &&
         _failedGames.Count < GameSuppressionStore.MaximumEntries && !_failedGames.ContainsKey(process.Key);
+    public void SuspendForResourceLimit() => ResourceLimitSuspended = true;
+    public void AllowResourceRetry() => ResourceLimitSuspended = false;
 
     public void RecordGameFailure(GameProcessIdentity process)
     {

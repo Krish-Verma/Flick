@@ -91,6 +91,14 @@ public partial class MainWindow : Window
         { if (!_updateInstallInProgress && !_quitInProgress) await _vm.ToggleCaptureAsync(DiagnosticControlOrigin.GlobalHotkey); };
         _hotkeyManager.OnSaveReplayHotkeyPressed += async () =>
         { if (!_updateInstallInProgress && !_quitInProgress) await _vm.SaveReplayAsync(DiagnosticControlOrigin.GlobalHotkey); };
+        _hotkeyManager.ShortcutRestoreFailed += error =>
+        {
+            _vm.ReportHotkeyHealth("Toggle replay", _vm.Settings.CaptureToggleHotkey,
+                _hotkeyManager.RegisteredToggleHotkey, error);
+            _vm.ReportHotkeyHealth("Save replay", _vm.Settings.SaveReplayHotkey,
+                _hotkeyManager.RegisteredSaveHotkey, error);
+            _vm.StatusDetails = "A shortcut is unavailable. Open Settings to retry.";
+        };
 
         _playerTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(200) };
         _playerTimer.Tick += PlayerTimer_Tick;
@@ -904,7 +912,7 @@ public partial class MainWindow : Window
         _vm.StatusDetails = "Settings saved.";
         try
         {
-            await _vm.ApplyGameDetectionPreferencesAsync();
+            await _vm.ApplyGameDetectionPreferencesAsync(allowResourceRetry: true);
             await ApplyBackgroundReplayIntentAsync();
         }
         catch (Exception) { _vm.StatusDetails = "Settings saved. Check recording health to resume replay."; }
@@ -1293,7 +1301,8 @@ public partial class MainWindow : Window
         {
             double seconds = Math.Clamp(PlayerSlider.Value, 0,
                 Math.Max(0, PlayerSlider.Maximum));
-            TxtPlayerTime.Text = TimeSpan.FromSeconds(seconds).ToString(@"m\:ss") +
+            var position = TimeSpan.FromSeconds(seconds);
+            TxtPlayerTime.Text = position.ToString(position.TotalHours >= 1 ? @"h\:mm\:ss" : @"m\:ss") +
                 " / " + (_vm.SelectedClip?.FormattedDuration ?? "0:00");
         }
     }

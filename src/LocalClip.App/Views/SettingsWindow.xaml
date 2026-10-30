@@ -183,23 +183,21 @@
                     <TextBlock Text="Shortcuts" Style="{StaticResource Flick.Text.PageTitle}" Margin="0,0,0,24"/>
                     <TextBlock Text="Start / stop replay" Style="{StaticResource Flick.Text.Control}" Margin="0,0,0,7"/>
                     <DockPanel Margin="0,0,0,20">
-                        <Button DockPanel.Dock="Right" Content="Change" Tag="Toggle" Click="ChangeShortcut_Click" Style="{StaticResource Flick.Button.Secondary}" Margin="12,0,0,0"/>
-                        <TextBox x:Name="TxtToggleHotkey" IsReadOnly="True" Foreground="{DynamicResource Flick.Brush.TextMuted}" Style="{StaticResource Flick.Input.Text}" PreviewKeyDown="Shortcut_PreviewKeyDown" AutomationProperties.Name="Start or stop replay shortcut"/>
+                        <Button x:Name="BtnEditToggleHotkey" DockPanel.Dock="Right" Content="Edit" Tag="Toggle" Click="ChangeShortcut_Click" Style="{StaticResource Flick.Button.Secondary}" Margin="12,0,0,0" AutomationProperties.Name="Edit start or stop replay shortcut"/>
+                        <TextBox x:Name="TxtToggleHotkey" IsReadOnly="True" Foreground="{DynamicResource Flick.Brush.TextSecondary}" Style="{StaticResource Flick.Input.Text}" PreviewKeyDown="Shortcut_PreviewKeyDown" LostKeyboardFocus="Shortcut_LostKeyboardFocus" AutomationProperties.Name="Start or stop replay shortcut" AutomationProperties.HelpText="Choose Edit to change this shortcut."/>
                     </DockPanel>
                     <TextBlock x:Name="SaveShortcutLabel" Text="Save last 30s" Style="{StaticResource Flick.Text.Control}" Margin="0,0,0,7"/>
                     <DockPanel Margin="0,0,0,20">
-                        <Button DockPanel.Dock="Right" Content="Change" Tag="Save" Click="ChangeShortcut_Click" Style="{StaticResource Flick.Button.Secondary}" Margin="12,0,0,0"/>
-                        <TextBox x:Name="TxtSaveHotkey" IsReadOnly="True" Foreground="{DynamicResource Flick.Brush.TextMuted}" Style="{StaticResource Flick.Input.Text}" PreviewKeyDown="Shortcut_PreviewKeyDown" AutomationProperties.Name="Save last replay shortcut"/>
+                        <Button x:Name="BtnEditSaveHotkey" DockPanel.Dock="Right" Content="Edit" Tag="Save" Click="ChangeShortcut_Click" Style="{StaticResource Flick.Button.Secondary}" Margin="12,0,0,0" AutomationProperties.Name="Edit save last replay shortcut"/>
+                        <TextBox x:Name="TxtSaveHotkey" IsReadOnly="True" Foreground="{DynamicResource Flick.Brush.TextSecondary}" Style="{StaticResource Flick.Input.Text}" PreviewKeyDown="Shortcut_PreviewKeyDown" LostKeyboardFocus="Shortcut_LostKeyboardFocus" AutomationProperties.Name="Save last replay shortcut" AutomationProperties.HelpText="Choose Edit to change this shortcut."/>
                     </DockPanel>
                     <StackPanel x:Name="ShortcutEditor" Visibility="Collapsed">
-                        <TextBlock x:Name="ShortcutHint" TextWrapping="Wrap" Style="{StaticResource Flick.Text.Caption}" Margin="0,0,0,12"/>
-                        <WrapPanel>
-                            <Button Content="Record shortcut" Click="RecordShortcut_Click" Style="{StaticResource Flick.Button.Secondary}" Margin="0,0,12,8"/>
-                            <Button x:Name="SaveShortcutButton" Content="Use shortcut" Click="SaveShortcut_Click" IsEnabled="False" Style="{StaticResource Flick.Button.Primary}" Margin="0,0,12,8"/>
-                            <Button Content="Cancel" Click="CancelShortcut_Click" Style="{StaticResource Flick.Button.Ghost}" Margin="0,0,0,8"/>
-                        </WrapPanel>
+                        <DockPanel>
+                            <Button DockPanel.Dock="Right" Content="Cancel" Click="CancelShortcut_Click" Style="{StaticResource Flick.Button.Ghost}" Margin="12,0,0,0"/>
+                            <TextBlock x:Name="ShortcutHint" TextWrapping="Wrap" Style="{StaticResource Flick.Text.Caption}" VerticalAlignment="Center"/>
+                        </DockPanel>
                     </StackPanel>
-                    <TextBlock Text="Choose Change to record a shortcut. Save applies your changes."
+                    <TextBlock Text="Save settings to apply your changes."
                                Style="{StaticResource Flick.Text.Muted}" TextWrapping="Wrap" Margin="0,20,0,0"/>
                 </StackPanel>
 

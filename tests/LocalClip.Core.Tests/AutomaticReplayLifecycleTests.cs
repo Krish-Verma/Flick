@@ -215,4 +215,28 @@ public sealed class AutomaticReplayLifecycleTests
         Assert.False(session.CanTryBackground("Monitor|0", false,
             AutomaticReplaySession.HasBlockingGamePause(false, [Profile], [Window().Process])));
     }
+
+    [Fact]
+    public void ResourceSafetyStopBlocksGameRestartAndBackgroundFallbackUntilExplicitRetry()
+    {
+        var session = new AutomaticReplaySession();
+        session.ConfigureBackground(true);
+        Assert.True(session.CanTryGame(Window().Process));
+        Assert.True(session.CanTryBackground("Monitor|0", false, false));
+        session.SuspendForResourceLimit();
+        session.RecordGameFailure(Window().Process);
+        Assert.False(session.BackgroundPaused); // A resource stop is not user Stop intent.
+        Assert.False(session.CanTryGame(Window().Process));
+        Assert.False(session.CanTryGame(Window(21, 101).Process));
+        Assert.False(session.CanTryBackground("Monitor|0", false, false));
+        session.ResetBackgroundAttempt();
+        session.RetryFailedGames();
+        session.ConfigureBackground(false);
+        session.ConfigureBackground(true);
+        Assert.False(session.CanTryBackground("Monitor|1", false, false));
+        Assert.False(session.CanTryGame(Window().Process));
+        session.AllowResourceRetry();
+        Assert.True(session.CanTryGame(Window().Process));
+        Assert.True(session.CanTryBackground("Monitor|0", false, false));
+    }
 }

@@ -1057,6 +1057,10 @@ public partial class MainViewModel : INotifyPropertyChanged, IDisposable
                 sourceOptions = new(ExpectedWindow: new(SelectedTarget.WindowHwnd, SelectedTarget.WindowPid,
                     SelectedTarget.Title, SelectedTarget.Exe, SelectedTarget.ExecutablePath, SelectedTarget.ProcessCreationFileTime));
             }
+            else if (SelectedTarget.Type == "Monitor" && !string.IsNullOrWhiteSpace(SelectedTarget.MonitorDevice))
+            {
+                sourceOptions = new(ExpectedMonitorId: SelectedTarget.MonitorDevice);
+            }
             bool started = await _captureHost.StartCaptureAsync(_settings, sourceOptions);
 
             if (startingEpoch != _captureEpoch || startingSession != _healthSession) return;
@@ -1198,7 +1202,7 @@ public partial class MainViewModel : INotifyPropertyChanged, IDisposable
         }
         finally
         {
-            if (!ready) { _isPreparingToQuit = false; ResumeResourceSampling(); _pollTimer.Start(); if (_settings.GameDetectionEnabled) _gameTimer?.Start(); PublishDiagnosticTest(); }
+            if (!ready) { _isPreparingToQuit = false; ResumeResourceSampling(); _pollTimer.Start(); UpdateAutomaticReplayTimer(); PublishDiagnosticTest(); }
         }
     }
 
@@ -1499,6 +1503,7 @@ public partial class MainViewModel : INotifyPropertyChanged, IDisposable
             }
             if (st.PrivateBytes > 805_306_368L)
             {
+                SuspendAutomaticReplayForResourceLimit();
                 await StopCaptureAsync();
                 RecordCaptureFailure("host-memory-limit", "Capture stopped: native host exceeded the 768 MiB safety limit.", false);
                 return;

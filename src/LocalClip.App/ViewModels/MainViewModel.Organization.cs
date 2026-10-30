@@ -90,7 +90,7 @@ public partial class MainViewModel
                      .OrderByDescending(c => c.LastExportedAtUtc).Take(40))
             if (ReadyShareFile.TryGet(clip, clip.LastExportTargetMb, out var path, _settings.ExportsFolder))
             {
-                RecentExports.Add(new(clip.Id, clip.Title, path, clip.ExportedFileSizeBytes, clip.LastExportedAtUtc!.Value,
+                RecentExports.Add(new(clip.Id, clip.DisplayTitle, path, clip.ExportedFileSizeBytes, clip.LastExportedAtUtc!.Value,
                     clip.ExportAspectPreset, clip.LastExportTargetMb));
                 _recentExportIds.Add(clip.Id);
                 if (RecentExports.Count == 20) break;

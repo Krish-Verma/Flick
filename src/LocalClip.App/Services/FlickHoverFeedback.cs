@@ -6,6 +6,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media.Animation;
 using Brushes = System.Windows.Media.Brushes;
+using SystemColors = System.Windows.SystemColors;
 
 namespace LocalClip.App.Services;
 

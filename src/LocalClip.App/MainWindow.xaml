@@ -125,7 +125,7 @@
                         </Grid>
                         <Grid Margin="0,0,0,10">
                             <TextBox x:Name="TxtClipSearch" Style="{StaticResource Flick.Input.Text}" Text="{Binding SearchQuery, UpdateSourceTrigger=PropertyChanged, Delay=180}" ToolTip="Search titles, games, source names and tags; use #tag"/>
-                            <TextBlock Text="Search clips…" Foreground="{DynamicResource Flick.Brush.TextMuted}" Margin="11,0,0,0" VerticalAlignment="Center" IsHitTestVisible="False">
+                            <TextBlock Text="Search clips…" Foreground="{DynamicResource Flick.Brush.TextSecondary}" Margin="11,0,0,0" VerticalAlignment="Center" IsHitTestVisible="False">
                                 <TextBlock.Style>
                                     <Style TargetType="TextBlock">
                                         <Setter Property="Visibility" Value="Collapsed"/>
@@ -544,7 +544,7 @@
                                                     <Image x:Name="ShareThumbnail" Source="{Binding SharePreview}" Stretch="Uniform" RenderOptions.BitmapScalingMode="HighQuality"/>
                                                 </Grid>
                                             </Border>
-                                            <TextBlock x:Name="ShareOriginalLabel" Text="Original still" Style="{StaticResource Flick.Text.Muted}" TextWrapping="NoWrap" Margin="0,2,0,0" HorizontalAlignment="Center"/>
+                                            <TextBlock x:Name="ShareOriginalLabel" Text="Original still" Style="{StaticResource Flick.Text.Muted}" Foreground="{DynamicResource Flick.Brush.TextSecondary}" TextWrapping="NoWrap" Margin="0,2,0,0" HorizontalAlignment="Center"/>
                                         </StackPanel>
                                         <StackPanel Grid.Column="1" VerticalAlignment="Center">
                                             <TextBlock x:Name="ShareTileTitle" Text="{Binding ShareClipTitle}" FontSize="16" FontWeight="SemiBold" LineHeight="20" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" ToolTip="{Binding ShareClipTitle}"/>
