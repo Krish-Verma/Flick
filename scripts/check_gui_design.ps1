@@ -59,21 +59,41 @@ foreach ($match in $refs) {
 }
 
 $project = Get-Content -LiteralPath (Join-Path $root "src/LocalClip.App/LocalClip.App.csproj") -Raw
-if ($project -notlike '*<Resource Include="Assets\Brand\FlickLogo.png"*') {
-    throw "The logo must be embedded as a WPF Resource for portable distribution."
+if ($project -notmatch 'Resource Include="\$\(GeneratedFlickLogo\)"' -or
+    $project -notmatch '<LogicalName>Assets/Brand/FlickLogo.png</LogicalName>' -or
+    $project -notmatch 'GenerateFlickIcon') {
+    throw "The SVG-derived circular PNG must be generated into obj/ and embedded as a WPF Resource."
 }
-$logo = Join-Path $root "src/LocalClip.App/Assets/Brand/FlickLogo.png"
-if (-not (Test-Path -LiteralPath $logo -PathType Leaf)) { throw "Flick full-logo image missing" }
-$bytes = [System.IO.File]::ReadAllBytes($logo)
-if ($bytes.Length -lt 1000 -or $bytes[0] -ne 137 -or $bytes[1] -ne 80 -or
-    $bytes[2] -ne 78 -or $bytes[3] -ne 71) {
-    throw "Flick branding image is not a valid PNG asset"
+$svgPath = Join-Path $root "src/LocalClip.App/Assets/Brand/FlickMark.svg"
+if (-not (Test-Path -LiteralPath $svgPath -PathType Leaf)) { throw "Canonical Flick circular SVG missing" }
+[xml]$svg = Get-Content -LiteralPath $svgPath -Raw
+$namespace = [Xml.XmlNamespaceManager]::new($svg.NameTable)
+$namespace.AddNamespace("s", "http://www.w3.org/2000/svg")
+$circle = $svg.SelectSingleNode("//s:circle[@id='rim']", $namespace)
+$face = $svg.SelectSingleNode("//s:circle[@id='face']", $namespace)
+$stripes = @($svg.SelectNodes("//s:g[@id='stripes']/s:rect", $namespace))
+$stops = @($svg.SelectNodes("//s:linearGradient[@id='sunset']/s:stop", $namespace))
+$letter = $svg.SelectSingleNode("//s:polygon[@id='letter']", $namespace)
+if ($svg.DocumentElement.GetAttribute('viewBox') -cne '0 0 128 128' -or
+    $null -eq $circle -or $null -eq $face -or
+    $circle.GetAttribute('r') -cne '62' -or $face.GetAttribute('r') -cne '58.5' -or
+    $stripes.Count -ne 7 -or $stops.Count -lt 5 -or $null -eq $letter) {
+    throw "Flick mark must be a full circular gradient with even horizontal stripes and an angular F."
+}
+$assetBuilder = Get-Content -LiteralPath (Join-Path $root 'scripts/build_flick_icon.ps1') -Raw
+if ($assetBuilder -notmatch 'InputSvg' -or $assetBuilder -notmatch 'OutputPng' -or
+    $assetBuilder -notmatch 'OutputIco' -or $assetBuilder -notmatch 'Format32bppArgb') {
+    throw "App and installer must be generated from the same SVG, with transparent corners."
+}
+$typography = Get-Content -LiteralPath (Join-Path $themeRoot 'Flick.Typography.xaml') -Raw
+if ($typography -notmatch 'Rect="0,0,38,38"' -or $typography -match 'Rect="1,1,38,38"') {
+    throw "All app/notification logo images must be centered, without the old offset."
 }
 
 $toast = Get-Content -LiteralPath (Join-Path $root "src/LocalClip.App/Views/Components/FlickClipToast.xaml") -Raw
 if ($toast -match '<Ellipse|<Ellipse\s' -or
     $toast -notmatch 'Flick.Image.BrandMark') {
-    throw "Toast must use the whole original squircle logo; no nested circular badge."
+    throw "Toast must reuse the new circular logo without adding a second round badge."
 }
 if ($toast -match 'GradientStop|LinearGradientBrush') {
     throw "Toast chrome must not add a full-width decorative gradient separator."
@@ -83,4 +103,4 @@ if ($preview -notmatch '<components:FlickClipToast' -or
     $preview -notmatch 'Flick.Input.Combo') {
     throw "Design preview must exercise branded toast and reusable controls."
 }
-Write-Host "Flick GUI resources validated: $($keys.Count) unique tokens, full-logo asset, reusable toast and preview." -ForegroundColor Green
+Write-Host "Flick GUI resources validated: $($keys.Count) tokens, canonical circular SVG, shared generated logo, toast and preview." -ForegroundColor Green
