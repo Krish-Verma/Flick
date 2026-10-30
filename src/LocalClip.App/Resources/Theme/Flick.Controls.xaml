@@ -130,9 +130,9 @@
                             CornerRadius="{StaticResource Flick.Corner.Control}">
                         <Grid>
                             <Border x:Name="PART_FlickHoverSurface" Background="White" Opacity="0" IsHitTestVisible="False" CornerRadius="{Binding CornerRadius, ElementName=TextChrome}"/>
-                            <Grid Margin="{TemplateBinding Padding}">
-                                <ScrollViewer x:Name="PART_ContentHost" Focusable="False"/>
-                            </Grid>
+                            <!-- TextBoxBase forwards Padding to this native host.
+                                 Applying it as an outer margin doubles the inset. -->
+                            <ScrollViewer x:Name="PART_ContentHost" Focusable="False"/>
                         </Grid>
                     </Border>
                     <ControlTemplate.Triggers>
@@ -173,7 +173,8 @@
                         <Grid>
                             <Border x:Name="PART_FlickHoverSurface" Background="White" Opacity="0" IsHitTestVisible="False"
                                     CornerRadius="{StaticResource Flick.Corner.Control}"/>
-                            <ScrollViewer x:Name="PART_ContentHost" Margin="{TemplateBinding Padding}" Focusable="False"/>
+                            <!-- PasswordBox forwards Padding to the native host too. -->
+                            <ScrollViewer x:Name="PART_ContentHost" Focusable="False"/>
                         </Grid>
                     </Border>
                     <ControlTemplate.Triggers>

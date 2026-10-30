@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Windows;
 using System.Windows.Automation.Peers;
@@ -86,6 +88,7 @@ internal static class FlickThemeAccessibilityAssertions
         var primary = new Button { Content = "Copy file", Style = Style("Flick.Button.Primary") };
         var secondary = new Button { Content = "Open folder", Style = Style("Flick.Button.Secondary") };
         var text = new TextBox { Text = "Clip title", Style = Style("Flick.Input.Text") };
+        var password = new PasswordBox { Password = "Fixture only", Style = Style("Flick.Input.Password") };
         var combo = new ComboBox { Style = Style("Flick.Input.Combo"), ItemsSource = new[] { "Original", "Export" }, SelectedIndex = 0 };
         var toggle = new CheckBox { Content = "Launch with Windows", Style = Style("Flick.Toggle") };
         var check = new CheckBox { Content = "Mute", Style = Style("Flick.Input.CheckBox") };
@@ -95,7 +98,7 @@ internal static class FlickThemeAccessibilityAssertions
         var menu = new MenuItem { Header = "Open folder", Style = Assert.IsType<Style>(app.FindResource(typeof(MenuItem))) };
         (Control Control, string Part)[] controls =
         [
-            (primary, "Chrome"), (secondary, "Chrome"), (text, "TextChrome"),
+            (primary, "Chrome"), (secondary, "Chrome"), (text, "TextChrome"), (password, "PasswordChrome"),
             (combo, "DropButton"), (toggle, "ToggleTrack"), (check, "CheckFocus"),
             (slider, "SliderFocus"), (filter, "Chip"), (row, "ItemChrome"), (menu, "ActionRow")
         ];
@@ -110,7 +113,16 @@ internal static class FlickThemeAccessibilityAssertions
                 _ => throw new InvalidOperationException("Unknown focus boundary")
             };
             Assert.Equal(new Thickness(2), thickness);
-            Assert.InRange(control.ActualHeight, 32, 36);
+            // These are minimum pointer targets in DIPs, not a maximum text
+            // height. Font fallback and pixel rounding may grow natural size.
+            Assert.InRange(control.MinHeight, 32, 36);
+            double tolerance = .5 / VisualTreeHelper.GetDpi(control).DpiScaleY;
+            Assert.True(control.ActualHeight + tolerance >= control.MinHeight,
+                $"{part}: {control.ActualHeight} DIP is below its {control.MinHeight} DIP target");
+            Assert.True(double.IsNaN(control.Height), $"{part} must retain a content-sized height");
+            AssertLabelsFit(control);
+            if (control is TextBox or PasswordBox)
+                AssertEditorFits(control);
             // A future focus trigger must not resize the reserved boundary.
             foreach (var trigger in control.Template.Triggers.OfType<Trigger>().Where(t =>
                 t.Property == UIElement.IsKeyboardFocusedProperty || t.Property == UIElement.IsKeyboardFocusWithinProperty))
@@ -163,6 +175,59 @@ internal static class FlickThemeAccessibilityAssertions
         control.Measure(new Size(300, double.PositiveInfinity));
         control.Arrange(new Rect(new Point(), control.DesiredSize));
         control.UpdateLayout();
+    }
+
+    private static void AssertEditorFits(Control control)
+    {
+        var host = Assert.IsType<ScrollViewer>(control.Template.FindName("PART_ContentHost", control));
+        Assert.Equal(new Thickness(12, 4), control.Padding);
+        Assert.Equal(control.Padding, host.Padding); // Native WPF padding forwarding.
+        Assert.Equal(new Thickness(0), host.Margin);
+        var hostParent = Assert.IsType<Grid>(VisualTreeHelper.GetParent(host));
+        Assert.Equal(new Thickness(0), hostParent.Margin);
+        Assert.Equal(14, control.FontSize);
+        double tolerance = .5 / VisualTreeHelper.GetDpi(control).DpiScaleY;
+        Assert.True(host.ExtentHeight > 0, "Populated editor must have measured text");
+        Assert.True(host.ViewportHeight + tolerance >= host.ExtentHeight,
+            $"{control.GetType().Name}: line {host.ExtentHeight} DIP exceeds viewport {host.ViewportHeight} DIP");
+        // This pins the actual single-inset geometry, rather than merely raising
+        // a height limit to accommodate a duplicated padding regression.
+        double expected = Math.Max(control.MinHeight,
+            host.DesiredSize.Height +
+            control.BorderThickness.Top + control.BorderThickness.Bottom);
+        Assert.InRange(control.ActualHeight, expected - tolerance, expected + tolerance);
+    }
+
+    private static void AssertLabelsFit(Control control)
+    {
+        foreach (var label in Descendants(control).OfType<TextBlock>().Where(t => !string.IsNullOrEmpty(t.Text)))
+        {
+            // Exercise Windows font metrics at the requested raster scales. This
+            // is not a physical per-monitor DPI session or OS text-scale test.
+            foreach (double scale in new[] { 1d, 1.25, 1.5, 2 })
+            {
+                var metrics = new FormattedText(label.Text, CultureInfo.CurrentUICulture, label.FlowDirection,
+                    new Typeface(label.FontFamily, label.FontStyle, label.FontWeight, label.FontStretch),
+                    label.FontSize, label.Foreground ?? Brushes.White, scale);
+                double tolerance = .5 / scale;
+                Assert.True(label.ActualHeight + tolerance >= metrics.Height,
+                    $"{control.GetType().Name} label '{label.Text}' at {scale * 100}%: " +
+                    $"line {metrics.Height} DIP exceeds {label.ActualHeight} DIP");
+                Assert.True(label.ActualWidth + tolerance >= metrics.WidthIncludingTrailingWhitespace,
+                    $"{control.GetType().Name} fixture label '{label.Text}' is clipped at {scale * 100}%");
+            }
+        }
+    }
+
+    private static IEnumerable<DependencyObject> Descendants(DependencyObject parent)
+    {
+        for (int i = 0; i < VisualTreeHelper.GetChildrenCount(parent); i++)
+        {
+            var child = VisualTreeHelper.GetChild(parent, i);
+            yield return child;
+            foreach (var descendant in Descendants(child))
+                yield return descendant;
+        }
     }
 
     private static Color Blend(Color first, Color second, double amount) => Color.FromRgb(
