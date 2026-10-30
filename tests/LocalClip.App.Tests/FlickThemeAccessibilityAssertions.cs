@@ -180,7 +180,7 @@ internal static class FlickThemeAccessibilityAssertions
     private static void AssertEditorFits(Control control)
     {
         var host = Assert.IsType<ScrollViewer>(control.Template.FindName("PART_ContentHost", control));
-        Assert.Equal(new Thickness(12, 4), control.Padding);
+        Assert.Equal(new Thickness(12, 4, 12, 4), control.Padding);
         Assert.Equal(control.Padding, host.Padding); // Native WPF padding forwarding.
         Assert.Equal(new Thickness(0), host.Margin);
         var hostParent = Assert.IsType<Grid>(VisualTreeHelper.GetParent(host));
