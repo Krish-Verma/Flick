@@ -72,8 +72,12 @@ internal static class ShortcutCaptureAssertions
             Assert.True(editing);
             Capture(Key.K, ModifierKeys.Control | ModifierKeys.Windows);
             Assert.Contains("reserved", Find<TextBlock>("ShortcutHint").Text);
+            Layout();
+            Assert.Equal(restingEditX, Find<Button>("BtnEditToggleHotkey").TranslatePoint(new Point(), page).X);
             Capture(Key.F8, ModifierKeys.Control | ModifierKeys.Shift);
             Assert.Contains("other shortcut", Find<TextBlock>("ShortcutHint").Text);
+            Layout();
+            Assert.Equal(restingEditX, Find<Button>("BtnEditToggleHotkey").TranslatePoint(new Point(), page).X);
             Assert.Equal("Press a shortcut…", toggle.Text);
 
             // Every modifier combination allowed by the shared policy is

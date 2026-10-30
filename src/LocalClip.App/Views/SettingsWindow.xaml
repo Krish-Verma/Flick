@@ -191,7 +191,7 @@
                         <Button x:Name="BtnEditSaveHotkey" DockPanel.Dock="Right" Content="Edit" Tag="Save" Click="ChangeShortcut_Click" Style="{StaticResource Flick.Button.Secondary}" Margin="12,0,0,0" AutomationProperties.Name="Edit save last replay shortcut"/>
                         <TextBox x:Name="TxtSaveHotkey" Width="220" ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}" IsReadOnly="True" Foreground="{DynamicResource Flick.Brush.TextSecondary}" Style="{StaticResource Flick.Input.Text}" PreviewKeyDown="Shortcut_PreviewKeyDown" LostKeyboardFocus="Shortcut_LostKeyboardFocus" AutomationProperties.Name="Save last replay shortcut" AutomationProperties.HelpText="Choose Edit to change this shortcut."/>
                     </DockPanel>
-                    <StackPanel x:Name="ShortcutEditor" Visibility="Collapsed">
+                    <StackPanel x:Name="ShortcutEditor" MaxWidth="300" Visibility="Collapsed">
                         <DockPanel>
                             <Button DockPanel.Dock="Right" Content="Cancel" Click="CancelShortcut_Click" Style="{StaticResource Flick.Button.Ghost}" Margin="12,0,0,0"/>
                             <TextBlock x:Name="ShortcutHint" TextWrapping="Wrap" Style="{StaticResource Flick.Text.Caption}" VerticalAlignment="Center"/>

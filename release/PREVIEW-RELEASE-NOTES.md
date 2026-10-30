@@ -1,6 +1,7 @@
 # Flick 1.0.11 Preview 1 — Replay and UX (UNSIGNED)
 
 - Subtle, smooth highlights across clickable controls, with keyboard focus, high-contrast and reduced-motion support. The purple identity and existing features are preserved.
+- The app, tray and installer use the supplied corrected Flick artwork with consistent placement.
 - Successful Settings Save returns to the clips dashboard. Invalid fields and failed writes keep your changes available.
 - Edit starts shortcut recording directly in its box. A valid shortcut returns to the read-only view automatically; the main Save Settings applies it.
 - Windows startup is repaired and independently verified on every enabled Save, including when the checkbox was already on. Windows-disabled startup is reported without overriding your Windows choices.

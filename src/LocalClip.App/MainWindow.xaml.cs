@@ -303,14 +303,14 @@ public partial class MainWindow : Window
         if (asset == null) throw new IOException("The embedded Flick brand artwork was not found.");
         using var stream = asset.Stream;
         using var source = new System.Drawing.Bitmap(stream);
-        // Match the WPF brand source and packaged ICO: keep a fixed dark
-        // circle, and move only its original artwork by 1/38 of the canvas.
+        // Match the shared WPF/ICO viewport using the approved full-canvas
+        // artwork; its placement replaces the old bitmap's optical offset.
         const int size = 128;
         using var bitmap = new System.Drawing.Bitmap(size, size,
             System.Drawing.Imaging.PixelFormat.Format32bppArgb);
         using (var graphics = System.Drawing.Graphics.FromImage(bitmap))
         using (var clip = new System.Drawing.Drawing2D.GraphicsPath())
-        using (var canvas = new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(255, 6, 3, 13)))
+        using (var canvas = new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(255, 0, 0, 0)))
         {
             graphics.Clear(System.Drawing.Color.Transparent);
             graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
@@ -320,8 +320,7 @@ public partial class MainWindow : Window
             graphics.FillEllipse(canvas, viewport);
             clip.AddEllipse(viewport);
             graphics.SetClip(clip);
-            float offset = size / 38f;
-            graphics.DrawImage(source, new System.Drawing.RectangleF(offset, offset, size, size));
+            graphics.DrawImage(source, viewport, 0, 0, source.Width, source.Height, System.Drawing.GraphicsUnit.Pixel);
         }
         IntPtr native = bitmap.GetHicon();
         try
