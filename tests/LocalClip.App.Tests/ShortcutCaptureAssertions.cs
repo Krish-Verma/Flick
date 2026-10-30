@@ -43,11 +43,23 @@ internal static class ShortcutCaptureAssertions
         void Capture(Key key, ModifierKeys modifiers) => Call("CaptureShortcut", key, modifiers);
         var toggle = Find<TextBox>("TxtToggleHotkey");
         var save = Find<TextBox>("TxtSaveHotkey");
+        void Layout()
+        {
+            page.Measure(new Size(660, 400));
+            page.Arrange(new Rect(0, 0, 660, 400));
+            page.UpdateLayout();
+        }
         try
         {
             Call("SelectCategory", "Shortcuts");
             FocusManager.SetIsFocusScope(page, true);
+            Layout();
+            double restingWidth = toggle.ActualWidth;
+            double restingEditX = Find<Button>("BtnEditToggleHotkey").TranslatePoint(new Point(), page).X;
             Begin();
+            Layout();
+            Assert.Equal(restingWidth, toggle.ActualWidth);
+            Assert.Equal(restingEditX, Find<Button>("BtnEditToggleHotkey").TranslatePoint(new Point(), page).X);
             Assert.True(editing);
             Assert.Equal("Press a shortcut…", toggle.Text);
             Assert.True(toggle.IsReadOnly); // Prevent free text/paste; keys are captured instead.
@@ -80,6 +92,9 @@ internal static class ShortcutCaptureAssertions
                 Assert.True(HotkeyManager.IsValidHotkey(toggle.Text));
                 Assert.False(editing);
                 Assert.True(toggle.IsReadOnly);
+                Layout();
+                Assert.Equal(restingWidth, toggle.ActualWidth);
+                Assert.Equal(restingEditX, Find<Button>("BtnEditToggleHotkey").TranslatePoint(new Point(), page).X);
                 Assert.Equal(((SolidColorBrush)page.FindResource("Flick.Brush.TextSecondary")).Color,
                     Assert.IsType<SolidColorBrush>(toggle.Foreground).Color);
                 Assert.Equal(originalToggle, settings.CaptureToggleHotkey);

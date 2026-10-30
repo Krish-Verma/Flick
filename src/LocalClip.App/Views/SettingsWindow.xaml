@@ -184,12 +184,12 @@
                     <TextBlock Text="Start / stop replay" Style="{StaticResource Flick.Text.Control}" Margin="0,0,0,7"/>
                     <DockPanel Margin="0,0,0,20">
                         <Button x:Name="BtnEditToggleHotkey" DockPanel.Dock="Right" Content="Edit" Tag="Toggle" Click="ChangeShortcut_Click" Style="{StaticResource Flick.Button.Secondary}" Margin="12,0,0,0" AutomationProperties.Name="Edit start or stop replay shortcut"/>
-                        <TextBox x:Name="TxtToggleHotkey" IsReadOnly="True" Foreground="{DynamicResource Flick.Brush.TextSecondary}" Style="{StaticResource Flick.Input.Text}" PreviewKeyDown="Shortcut_PreviewKeyDown" LostKeyboardFocus="Shortcut_LostKeyboardFocus" AutomationProperties.Name="Start or stop replay shortcut" AutomationProperties.HelpText="Choose Edit to change this shortcut."/>
+                        <TextBox x:Name="TxtToggleHotkey" Width="220" ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}" IsReadOnly="True" Foreground="{DynamicResource Flick.Brush.TextSecondary}" Style="{StaticResource Flick.Input.Text}" PreviewKeyDown="Shortcut_PreviewKeyDown" LostKeyboardFocus="Shortcut_LostKeyboardFocus" AutomationProperties.Name="Start or stop replay shortcut" AutomationProperties.HelpText="Choose Edit to change this shortcut."/>
                     </DockPanel>
                     <TextBlock x:Name="SaveShortcutLabel" Text="Save last 30s" Style="{StaticResource Flick.Text.Control}" Margin="0,0,0,7"/>
                     <DockPanel Margin="0,0,0,20">
                         <Button x:Name="BtnEditSaveHotkey" DockPanel.Dock="Right" Content="Edit" Tag="Save" Click="ChangeShortcut_Click" Style="{StaticResource Flick.Button.Secondary}" Margin="12,0,0,0" AutomationProperties.Name="Edit save last replay shortcut"/>
-                        <TextBox x:Name="TxtSaveHotkey" IsReadOnly="True" Foreground="{DynamicResource Flick.Brush.TextSecondary}" Style="{StaticResource Flick.Input.Text}" PreviewKeyDown="Shortcut_PreviewKeyDown" LostKeyboardFocus="Shortcut_LostKeyboardFocus" AutomationProperties.Name="Save last replay shortcut" AutomationProperties.HelpText="Choose Edit to change this shortcut."/>
+                        <TextBox x:Name="TxtSaveHotkey" Width="220" ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}" IsReadOnly="True" Foreground="{DynamicResource Flick.Brush.TextSecondary}" Style="{StaticResource Flick.Input.Text}" PreviewKeyDown="Shortcut_PreviewKeyDown" LostKeyboardFocus="Shortcut_LostKeyboardFocus" AutomationProperties.Name="Save last replay shortcut" AutomationProperties.HelpText="Choose Edit to change this shortcut."/>
                     </DockPanel>
                     <StackPanel x:Name="ShortcutEditor" Visibility="Collapsed">
                         <DockPanel>
