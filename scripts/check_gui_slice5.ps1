@@ -67,7 +67,8 @@ Require (Repo "src/LocalClip.Core/Models/Settings.cs") 'SaveReviewedToFile\(' "U
 Require $settingsCs '_settings.DiscordTargetSizeMb = staged.DiscordTargetSizeMb;' "Share default must persist"
 Require $settingsCs '_settings.ExportsFolder = staged.ExportsFolder;' "Export path must persist"
 Require $settingsCs '_applyWindowsStartup = applyWindowsStartup \?\? WindowsStartupRegistration\.Apply;' "Windows startup preference must remain an explicit per-user operation"
-Require $settingsCs 'if \(startupChanged\)' "Unrelated settings must save without reapplying Windows startup"
+Require $settingsCs 'if \(staged.StartWithWindows \|\| staged.StartWithWindows != originalStartup\)' "Enabled Saves must repair startup; disabled unrelated Saves must not touch it"
+Require $settingsCs '_readWindowsStartupStatus\(staged.StartMinimizedToTray\)' "Startup must be independently checked after applying its command"
 Require $settingsCs 'Shortcut_PreviewKeyDown' "Shortcut capture must work without typing JSON"
 Require $tests 'StaleOrMissingFilesNeverBecomeDraggable' "Stale-share regression test missing"
 Write-Host "Flick GUI Slice 5 static contract PASS; Windows interaction and Discord composer still require hardware QA." -ForegroundColor Green

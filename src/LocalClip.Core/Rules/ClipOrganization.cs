@@ -61,6 +61,7 @@ public static class ClipLibraryQuery
             (createdAfter == null || clip.CreatedAt >= createdAfter) &&
             (!favoritesOnly || clip.IsFavorite) && (game == "All Games" || string.Equals(clip.GameGroup, game, StringComparison.OrdinalIgnoreCase)) &&
             terms.All(term => clip.Title.Contains(term, StringComparison.OrdinalIgnoreCase) ||
+                clip.DisplayTitle.Contains(term, StringComparison.OrdinalIgnoreCase) ||
                 clip.GameGroup.Contains(term, StringComparison.OrdinalIgnoreCase) || clip.LibrarySource.Contains(term, StringComparison.OrdinalIgnoreCase) ||
                 clip.CreatedAt.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture).Contains(term, StringComparison.OrdinalIgnoreCase) ||
                 clip.Tags.Any(tag => tag.Contains(term.TrimStart('#'), StringComparison.OrdinalIgnoreCase))));
@@ -68,7 +69,7 @@ public static class ClipLibraryQuery
         {
             "Oldest" => filtered.OrderBy(c => c.CreatedAt).ThenBy(c => c.Id, StringComparer.Ordinal).ToList(),
             "Game" => filtered.OrderBy(c => c.GameGroup, StringComparer.OrdinalIgnoreCase).ThenByDescending(c => c.CreatedAt).ToList(),
-            "Title" => filtered.OrderBy(c => c.Title, StringComparer.OrdinalIgnoreCase).ThenByDescending(c => c.CreatedAt).ToList(),
+            "Title" => filtered.OrderBy(c => c.DisplayTitle, StringComparer.OrdinalIgnoreCase).ThenByDescending(c => c.CreatedAt).ToList(),
             "Recently Exported" => filtered.Where(c => c.LastExportedAtUtc != null).OrderByDescending(c => c.LastExportedAtUtc).ToList(),
             _ => filtered.OrderByDescending(c => c.CreatedAt).ThenBy(c => c.Id, StringComparer.Ordinal).ToList()
         };

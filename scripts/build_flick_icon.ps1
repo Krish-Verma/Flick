@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-Build ICO from the original Flick squircle PNG. Never swap the brand artwork.
+Build ICO from the approved Flick PNG without altering its artwork or alignment.
 #>
 param(
     [Parameter(Mandatory=$true)][string]$InputPng,
@@ -18,21 +18,22 @@ try {
         $bmp = [Drawing.Bitmap]::new($size, $size, [Drawing.Imaging.PixelFormat]::Format32bppArgb)
         $graphics = [Drawing.Graphics]::FromImage($bmp)
         $clip = [Drawing.Drawing2D.GraphicsPath]::new()
-        $canvas = [Drawing.SolidBrush]::new([Drawing.Color]::FromArgb(255, 6, 3, 13))
+        $canvas = [Drawing.SolidBrush]::new([Drawing.Color]::FromArgb(255, 0, 0, 0))
         try {
             $graphics.Clear([Drawing.Color]::Transparent)
             $graphics.SmoothingMode = [Drawing.Drawing2D.SmoothingMode]::AntiAlias
             $graphics.InterpolationMode = [Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
             $graphics.PixelOffsetMode = [Drawing.Drawing2D.PixelOffsetMode]::HighQuality
-            # Match Flick.Image.BrandMark: a fixed dark circular viewport with
-            # the original bitmap shifted by 1 DIP in its 38-DIP design space.
-            # Never move the circle or alter the original asset's pixels.
+            # Match Flick.Image.BrandMark: sample the complete approved canvas
+            # into a centered circular viewport. The supplied 2026-10-30 artwork
+            # does not use the legacy bitmap's size/38 offset.
             $viewport = [Drawing.RectangleF]::new(0, 0, $size, $size)
             $graphics.FillEllipse($canvas, $viewport)
             $clip.AddEllipse($viewport)
             $graphics.SetClip($clip)
-            $offset = [single]($size / 38.0)
-            $graphics.DrawImage($source, [Drawing.RectangleF]::new($offset, $offset, $size, $size))
+            # The two-argument overload samples the full source and avoids
+            # Windows PowerShell selecting an integer-source Rectangle overload.
+            $graphics.DrawImage($source, $viewport)
             $buffer = [IO.MemoryStream]::new()
             try {
                 $bmp.Save($buffer, [Drawing.Imaging.ImageFormat]::Png)

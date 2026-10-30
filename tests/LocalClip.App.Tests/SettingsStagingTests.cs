@@ -47,6 +47,7 @@ public partial class SettingsStagingTests
                     });
                 ResourceUsageSettingsAssertions.Run();
                 SettingsPersistenceAssertions.Run();
+                ShortcutCaptureAssertions.Run();
                 FlickHoverStyleAssertions.Run();
                 ScrollRoutingAssertions.Run();
                 var settings = AppSettings.CreateDefault();
@@ -125,9 +126,6 @@ public partial class SettingsStagingTests
                 bool editing = false;
                 page.ShortcutEditingChanged += value => editing = value;
                 Invoke("ChangeShortcut_Click", new Button { Tag = "Toggle" });
-                Assert.True(editing);
-                Assert.Equal(Visibility.Visible, Find<StackPanel>("ShortcutEditor").Visibility);
-                Invoke("Save_Click", page); // Incomplete shortcut must not write settings/startup.
                 Assert.True(editing);
                 Assert.Equal(Visibility.Visible, Find<StackPanel>("ShortcutEditor").Visibility);
                 Invoke("CancelShortcut_Click", page);

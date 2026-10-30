@@ -15,7 +15,28 @@ public class HotkeyManager : IDisposable
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool UnregisterHotKey(IntPtr hWnd, int id);
 
-    public bool IsShortcutEditing { get; set; }
+    private bool _isShortcutEditing;
+    private bool _disposed;
+
+    public bool IsShortcutEditing
+    {
+        get => _isShortcutEditing;
+        set
+        {
+            if (_disposed || value == _isShortcutEditing) return;
+            _isShortcutEditing = value;
+            if (value)
+            {
+                // Dropping WM_HOTKEY is insufficient: Windows still consumes
+                // the registered chord before the shortcut field can see it.
+                ClearRegistrations(clearConfiguration: false);
+                return;
+            }
+
+            if (!RestoreConfiguredHotkeys())
+                ShortcutRestoreFailed?.Invoke("Some shortcuts are unavailable. Choose another shortcut in Settings.");
+        }
+    }
 
     private const int WM_HOTKEY = 0x0312;
 
@@ -31,6 +52,7 @@ public class HotkeyManager : IDisposable
 
     public event Action? OnCaptureToggleHotkeyPressed;
     public event Action? OnSaveReplayHotkeyPressed;
+    public event Action<string>? ShortcutRestoreFailed;
 
     private int _toggleId = 0;
     private int _saveId = 0;
@@ -39,6 +61,7 @@ public class HotkeyManager : IDisposable
 
     public void Initialize(IntPtr hwnd)
     {
+        ObjectDisposedException.ThrowIf(_disposed, this);
         _hwnd = hwnd;
         _source = HwndSource.FromHwnd(hwnd);
         _source?.AddHook(HwndHook);
@@ -53,19 +76,21 @@ public class HotkeyManager : IDisposable
     private bool Register(ref int currentId, ref string? previous, string requested, out string errorMessage)
     {
         errorMessage = "";
+        if (!CanChangeRegistrations(out errorMessage)) return false;
         if (!ParseHotkey(requested, out uint modifiers, out uint vk))
         {
             errorMessage = $"Invalid hotkey: {requested}";
             return false;
         }
-        if (previous != null && AreEquivalentHotkeys(previous, requested))
+        if (currentId != 0 && previous != null && AreEquivalentHotkeys(previous, requested))
             return true;
 
         // Register replacement before removing the prior working shortcut.
         int candidate = ++_currentId;
         if (!RegisterHotKey(_hwnd, candidate, modifiers | MOD_NOREPEAT, vk))
         {
-            errorMessage = $"Unable to register '{requested}' (Windows error {Marshal.GetLastWin32Error()}); old shortcut remains active.";
+            errorMessage = $"Unable to register '{requested}' (Windows error {Marshal.GetLastWin32Error()}).";
+            if (currentId != 0) errorMessage += " The previous shortcut remains active.";
             return false;
         }
         if (currentId != 0) UnregisterHotKey(_hwnd, currentId);
@@ -74,19 +99,22 @@ public class HotkeyManager : IDisposable
         return true;
     }
 
-    public string? RegisteredToggleHotkey => _toggleHotkey;
-    public string? RegisteredSaveHotkey => _saveHotkey;
+    // Configuration survives editing and a failed restore. These properties
+    // describe actual native registrations, so callers can report lost keys.
+    public string? RegisteredToggleHotkey => _toggleId != 0 ? _toggleHotkey : null;
+    public string? RegisteredSaveHotkey => _saveId != 0 ? _saveHotkey : null;
 
     public bool TryConfigure(string toggle, string save, out string error)
     {
         error = "";
+        if (!CanChangeRegistrations(out error)) return false;
         if (!IsValidHotkey(toggle) || !IsValidHotkey(save) ||
             AreEquivalentHotkeys(toggle, save))
         {
             error = "Use two distinct, valid hotkeys.";
             return false;
         }
-        if (_toggleHotkey != null && _saveHotkey != null &&
+        if (_toggleId != 0 && _saveId != 0 && _toggleHotkey != null && _saveHotkey != null &&
             AreEquivalentHotkeys(toggle, _toggleHotkey) &&
             AreEquivalentHotkeys(save, _saveHotkey))
             return true;
@@ -102,17 +130,34 @@ public class HotkeyManager : IDisposable
         // behind a generic message when the save shortcut is unavailable.
         error = toggleOk ? saveError : toggleError;
         ClearRegistrations();
-        if (oldToggle != null) RegisterToggleHotkey(oldToggle, out _);
-        if (oldSave != null) RegisterSaveHotkey(oldSave, out _);
+        _toggleHotkey = oldToggle;
+        _saveHotkey = oldSave;
+        if (!RestoreConfiguredHotkeys()) error += " Previous shortcuts could not all be restored.";
         return false;
     }
 
-    private void ClearRegistrations()
+    private bool CanChangeRegistrations(out string error)
+    {
+        error = _disposed ? "Flick is closing." :
+            _isShortcutEditing ? "Finish editing the shortcut first." : "";
+        return error.Length == 0;
+    }
+
+    private bool RestoreConfiguredHotkeys()
+    {
+        string? toggle = _toggleHotkey, save = _saveHotkey;
+        bool toggleRestored = toggle == null || RegisterToggleHotkey(toggle, out _);
+        // Restore the other key even when one was claimed by another app.
+        bool saveRestored = save == null || RegisterSaveHotkey(save, out _);
+        return toggleRestored && saveRestored;
+    }
+
+    private void ClearRegistrations(bool clearConfiguration = true)
     {
         if (_toggleId != 0) UnregisterHotKey(_hwnd, _toggleId);
         if (_saveId != 0) UnregisterHotKey(_hwnd, _saveId);
         _toggleId = _saveId = 0;
-        _toggleHotkey = _saveHotkey = null;
+        if (clearConfiguration) _toggleHotkey = _saveHotkey = null;
     }
 
     public static bool AreEquivalentHotkeys(string left, string right) =>
@@ -185,9 +230,13 @@ public class HotkeyManager : IDisposable
 
     public void Dispose()
     {
-        if (_hwnd != IntPtr.Zero) ClearRegistrations();
+        if (_disposed) return;
+        _disposed = true;
+        _isShortcutEditing = false;
+        ClearRegistrations();
         _source?.RemoveHook(HwndHook);
         _source = null;
+        _hwnd = IntPtr.Zero;
         GC.SuppressFinalize(this);
     }
 }

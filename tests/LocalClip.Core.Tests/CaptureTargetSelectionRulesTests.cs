@@ -7,6 +7,15 @@ namespace LocalClip.Core.Tests;
 public sealed class CaptureTargetSelectionRulesTests
 {
     [Fact]
+    public void SavedMonitorDeviceSurvivesIndexReorderingWithoutChoosingAnotherDisplay()
+    {
+        var saved = new AppSettings { TargetType = "Monitor", MonitorIndex = 0, MonitorDevice = @"\\.\DISPLAY2" };
+        Assert.True(CaptureTargetSelectionRules.MatchesSavedPreference(saved, "Monitor", 1, "", "", @"\\.\display2"));
+        Assert.False(CaptureTargetSelectionRules.MatchesSavedPreference(saved, "Monitor", 0, "", "", @"\\.\DISPLAY1"));
+        Assert.False(CaptureTargetSelectionRules.MatchesSavedPreference(saved, "Monitor", 0, "", ""));
+    }
+
+    [Fact]
     public void MissingSavedWindowNeverFallsBackToMonitor()
     {
         var saved = AppSettings.CreateDefault();

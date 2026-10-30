@@ -33,12 +33,12 @@ public partial class SettingsWindow : UserControl
     // actual-profile write and per-user Windows startup registration.
     private readonly Action<AppSettings> _saveReviewedSettings;
     private readonly Action<bool, bool> _applyWindowsStartup;
+    private readonly Func<bool, WindowsStartupStatus> _readWindowsStartupStatus;
     public string LastSaveWarning { get; private set; } = "";
     private string _customSoundPath = "";
     private bool _loading;
     private TextBox? _editingShortcut;
-    private string _shortcutCandidate = "";
-    private bool _recordingShortcut;
+    private string _shortcutBeforeEdit = "";
     public event Action<bool>? ShortcutEditingChanged;
     private string _activeCategory = "Recording";
 
@@ -59,7 +59,8 @@ public partial class SettingsWindow : UserControl
 
     public SettingsWindow(AppSettings settings, Func<bool> isCaptureActive, Func<Task<TargetList>>? loadAudioSources = null,
         Func<AudioEndpointFlow, IReadOnlyList<AudioEndpoint>>? loadAudioEndpoints = null,
-        Action<AppSettings>? saveReviewedSettings = null, Action<bool, bool>? applyWindowsStartup = null)
+        Action<AppSettings>? saveReviewedSettings = null, Action<bool, bool>? applyWindowsStartup = null,
+        Func<bool, WindowsStartupStatus>? readWindowsStartupStatus = null)
     {
         InitializeComponent();
         _settings = settings;
@@ -69,6 +70,9 @@ public partial class SettingsWindow : UserControl
         _saveReviewedSettings = saveReviewedSettings ??
             (reviewed => reviewed.SaveReviewedToFile(AppSettings.GetSettingsFilePath()));
         _applyWindowsStartup = applyWindowsStartup ?? WindowsStartupRegistration.Apply;
+        _readWindowsStartupStatus = readWindowsStartupStatus ?? (applyWindowsStartup == null
+            ? WindowsStartupRegistration.ReadStatus
+            : _ => new WindowsStartupStatus(WindowsStartupRegistrationState.Registered, "Registered for Windows startup."));
         Populate(settings);
         SelectCategory("Recording");
         TxtCurrentVersion.Text = "Version " + FlickUpdateService.CurrentVersion;
@@ -85,6 +89,7 @@ public partial class SettingsWindow : UserControl
     /// <summary>Leaving Settings cancels network work and removes this page's staged installer.</summary>
     public void LeavePage()
     {
+        CancelShortcutEdit();
         // Discard an in-flight read-only endpoint enumeration when leaving.
         _audioDevicesEpoch++;
         _gameApprovalCancellation?.Cancel();
@@ -298,6 +303,7 @@ public partial class SettingsWindow : UserControl
             ChkSoftwareFallback.IsChecked = settings.AllowSoftwareFallback;
             ChkStartWithWindows.IsChecked = settings.StartWithWindows;
             ChkStartMinimized.IsChecked = settings.StartMinimizedToTray;
+            ChkKeepReplayReadyInBackground.IsChecked = settings.KeepReplayReadyInBackground;
             ChkShowResourceUsage.IsChecked = settings.ShowResourceUsage;
             ChkPreviewUpdates.IsChecked = settings.IncludePreviewUpdates;
             ChkClipSavedOverlay.IsChecked = settings.ShowClipSavedOverlay;
@@ -394,51 +400,76 @@ public partial class SettingsWindow : UserControl
     {
         CancelShortcutEdit();
         _editingShortcut = sender is Button { Tag: "Toggle" } ? TxtToggleHotkey : TxtSaveHotkey;
+        _shortcutBeforeEdit = _editingShortcut.Text;
+        // Capture keys rather than free-form text, paste or IME composition.
+        // The prompt is display-only and is restored before any Settings Save.
+        _editingShortcut.Text = "Press a shortcut…";
+        _editingShortcut.SetResourceReference(Control.ForegroundProperty, "Flick.Brush.TextPrimary");
+        _editingShortcut.SetResourceReference(Control.BorderBrushProperty, "Flick.Brush.Focus");
+        System.Windows.Automation.AutomationProperties.SetHelpText(_editingShortcut,
+            "Press Ctrl or Alt with a key. Escape cancels.");
         ShortcutEditor.Visibility = Visibility.Visible;
-        ShortcutHint.Text = "Choose Record shortcut, then press Ctrl or Alt with a key.";
+        ShortcutHint.Text = "Ctrl or Alt + a key. Esc cancels.";
         ShortcutEditingChanged?.Invoke(true);
-    }
-
-    private void RecordShortcut_Click(object sender, RoutedEventArgs e)
-    {
-        if (_editingShortcut is null) return;
-        _recordingShortcut = true;
-        _shortcutCandidate = "";
-        SaveShortcutButton.IsEnabled = false;
-        ShortcutHint.Text = "Press your shortcut. Escape cancels.";
+        FocusManager.SetFocusedElement(FocusManager.GetFocusScope(_editingShortcut), _editingShortcut);
         _editingShortcut.Focus();
     }
 
-    private void CancelShortcutEdit()
+    private void FinishShortcutEdit(string? accepted = null)
     {
+        TextBox? field = _editingShortcut;
         _editingShortcut = null;
-        _recordingShortcut = false;
-        _shortcutCandidate = "";
+        if (field != null)
+        {
+            field.Text = accepted ?? _shortcutBeforeEdit;
+            field.SetResourceReference(Control.ForegroundProperty, "Flick.Brush.TextSecondary");
+            field.ClearValue(Control.BorderBrushProperty);
+            System.Windows.Automation.AutomationProperties.SetHelpText(field,
+                "Choose Edit to change this shortcut.");
+        }
+        _shortcutBeforeEdit = "";
         if (ShortcutEditor != null) ShortcutEditor.Visibility = Visibility.Collapsed;
-        if (SaveShortcutButton != null) SaveShortcutButton.IsEnabled = false;
-        ShortcutEditingChanged?.Invoke(false);
+        if (ShortcutHint != null) ShortcutHint.Text = "";
+        if (field != null) ShortcutEditingChanged?.Invoke(false);
     }
+
+    private void CancelShortcutEdit() => FinishShortcutEdit();
 
     private void CancelShortcut_Click(object sender, RoutedEventArgs e) => CancelShortcutEdit();
 
-    private void SaveShortcut_Click(object sender, RoutedEventArgs e)
+    private void Shortcut_LostKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e)
     {
-        if (_editingShortcut is null || !SaveShortcutButton.IsEnabled) return;
-        _editingShortcut.Text = _shortcutCandidate; // staged only
-        CancelShortcutEdit();
+        if (ReferenceEquals(sender, _editingShortcut)) CancelShortcutEdit();
     }
 
     private void Shortcut_PreviewKeyDown(object sender, KeyEventArgs e)
     {
-        if (_editingShortcut is null || !_recordingShortcut ||
+        if (_editingShortcut is null ||
             !ReferenceEquals(sender, _editingShortcut)) return;
-        if (e.Key == Key.Tab) { _recordingShortcut = false; return; }
-        e.Handled = true;
-        if (e.Key == Key.Escape) { CancelShortcutEdit(); return; }
         Key key = e.Key == Key.System ? e.SystemKey : e.Key;
-        if (key is Key.LeftCtrl or Key.RightCtrl or Key.LeftShift or Key.RightShift or
-            Key.LeftAlt or Key.RightAlt or Key.LWin or Key.RWin or Key.None) return;
         ModifierKeys modifiers = Keyboard.Modifiers;
+        // Tab/Shift+Tab still navigate; Ctrl+Tab remains recordable whenever
+        // the shared shortcut policy permits that exact modifier chord.
+        if (key == Key.Tab && (modifiers & ~ModifierKeys.Shift) == ModifierKeys.None)
+        {
+            CancelShortcutEdit();
+            return;
+        }
+        e.Handled = true;
+        CaptureShortcut(key, modifiers);
+    }
+
+    private void CaptureShortcut(Key key, ModifierKeys modifiers)
+    {
+        if (_editingShortcut is null) return;
+        if (key == Key.Escape && (modifiers & ~ModifierKeys.Shift) == ModifierKeys.None)
+        {
+            CancelShortcutEdit();
+            return;
+        }
+        if (key is Key.LeftCtrl or Key.RightCtrl or Key.LeftShift or Key.RightShift or
+            Key.LeftAlt or Key.RightAlt or Key.LWin or Key.RWin or Key.None or
+            Key.System or Key.ImeProcessed or Key.DeadCharProcessed) return;
         string proposal = "";
         if (modifiers.HasFlag(ModifierKeys.Control)) proposal += "Ctrl+";
         if (modifiers.HasFlag(ModifierKeys.Shift)) proposal += "Shift+";
@@ -447,13 +478,21 @@ public partial class SettingsWindow : UserControl
         proposal += key;
         string other = ReferenceEquals(_editingShortcut, TxtToggleHotkey)
             ? TxtSaveHotkey.Text : TxtToggleHotkey.Text;
-        bool valid = HotkeyManager.IsValidHotkey(proposal) &&
-            !HotkeyManager.AreEquivalentHotkeys(proposal, other);
-        _shortcutCandidate = valid ? proposal : "";
-        SaveShortcutButton.IsEnabled = valid;
-        ShortcutHint.Text = valid ? proposal + " · choose Use shortcut to keep it."
-            : "Choose a different Ctrl or Alt shortcut.";
-        _recordingShortcut = false;
+        if (!HotkeyManager.IsValidHotkey(proposal))
+        {
+            ShortcutHint.Text = (modifiers & (ModifierKeys.Control | ModifierKeys.Alt)) == ModifierKeys.None
+                ? "Use Ctrl or Alt with a key."
+                : "That shortcut is reserved. Try another key.";
+            return;
+        }
+        if (HotkeyManager.AreEquivalentHotkeys(proposal, other))
+        {
+            ShortcutHint.Text = "Already used by the other shortcut.";
+            return;
+        }
+        TextBox field = _editingShortcut;
+        FinishShortcutEdit(proposal); // Only staged; the global Save persists it.
+        (ReferenceEquals(field, TxtToggleHotkey) ? BtnEditToggleHotkey : BtnEditSaveHotkey).Focus();
     }
 
     private void BrowseOriginals_Click(object sender, RoutedEventArgs e)
@@ -511,17 +550,10 @@ public partial class SettingsWindow : UserControl
 
     private void Save_Click(object sender, RoutedEventArgs e)
     {
+        CancelShortcutEdit();
         LastSaveWarning = "";
         TxtSaveStatus.Text = "Saving…";
         TxtSaveStatus.ToolTip = null;
-        if (_editingShortcut != null)
-        {
-            ShortcutHint.Text = "Choose Use shortcut, or cancel this edit.";
-            TxtSaveStatus.Text = "Finish or cancel the shortcut edit first.";
-            // Do not navigate categories here: that path cancels the pending
-            // shortcut recording and would silently lose the user's chord.
-            return; // Never silently apply or discard an unfinished shortcut.
-        }
         if (!int.TryParse(TxtDuration.Text, out int duration) ||
             duration < 15 || duration > 120)
         {
@@ -608,6 +640,7 @@ public partial class SettingsWindow : UserControl
             staged.AllowSoftwareFallback = ChkSoftwareFallback.IsChecked == true;
             staged.StartWithWindows = ChkStartWithWindows.IsChecked == true;
             staged.StartMinimizedToTray = ChkStartMinimized.IsChecked == true;
+            staged.KeepReplayReadyInBackground = ChkKeepReplayReadyInBackground.IsChecked == true;
             staged.IncludePreviewUpdates = ChkPreviewUpdates.IsChecked == true;
             StageDisplay(staged);
             staged.ShowClipSavedOverlay = ChkClipSavedOverlay.IsChecked == true;
@@ -625,22 +658,30 @@ public partial class SettingsWindow : UserControl
             Directory.CreateDirectory(exports);
             // Windows startup is a separate OS registration; failure must not
             // discard unrelated settings such as RAM/CPU or tray preferences.
-            // Only touch HKCU Run when its desired command actually changed.
-            bool startupChanged = staged.StartWithWindows != originalStartup ||
-                (staged.StartWithWindows && staged.StartMinimizedToTray != originalMinimized);
-            if (startupChanged)
+            // An enabled preference may outlive a missing/stale Run entry. A
+            // deliberate Save repairs and verifies it even when JSON is unchanged.
+            // Disabled, unrelated Saves never create or modify startup entries.
+            if (staged.StartWithWindows || staged.StartWithWindows != originalStartup)
             {
                 try
                 {
                     _applyWindowsStartup(staged.StartWithWindows, staged.StartMinimizedToTray);
                     startupTouched = true;
+                    if (staged.StartWithWindows)
+                    {
+                        var status = _readWindowsStartupStatus(staged.StartMinimizedToTray);
+                        if (status.State == WindowsStartupRegistrationState.MissingOrStale)
+                            throw new IOException("Windows startup registration could not be verified.");
+                        if (status.State != WindowsStartupRegistrationState.Registered)
+                            LastSaveWarning = status.Message;
+                    }
                 }
                 catch (Exception startupError)
                 {
                     // Don't persist a false claim that Windows startup was changed.
                     staged.StartWithWindows = originalStartup;
-                    LastSaveWarning = "Other preferences were saved, but Windows startup registration was not changed: " +
-                        startupError.Message;
+                    LastSaveWarning = "Windows startup couldn't be updated. Open Settings to retry.";
+                    TxtSaveStatus.ToolTip = startupError.Message;
                 }
             }
             // Save all fields together and independently re-read the complete
@@ -675,6 +716,7 @@ public partial class SettingsWindow : UserControl
             _settings.AllowSoftwareFallback = staged.AllowSoftwareFallback;
             _settings.StartWithWindows = staged.StartWithWindows;
             _settings.StartMinimizedToTray = staged.StartMinimizedToTray;
+            _settings.KeepReplayReadyInBackground = staged.KeepReplayReadyInBackground;
             _settings.ShowResourceUsage = staged.ShowResourceUsage;
             _settings.IncludePreviewUpdates = staged.IncludePreviewUpdates;
             _settings.ShowClipSavedOverlay = staged.ShowClipSavedOverlay;
@@ -686,7 +728,7 @@ public partial class SettingsWindow : UserControl
             _settings.MaskedWebhookUrl = staged.MaskedWebhookUrl;
             _settings.EnableDiscordWebhook = staged.EnableDiscordWebhook;
             TxtSaveStatus.Text = LastSaveWarning.Length > 0
-                ? "Saved. Windows startup couldn't be changed."
+                ? "Saved. Review Windows startup."
                 : "Settings saved.";
             CloseRequested?.Invoke(true);
         }
@@ -735,11 +777,11 @@ public partial class SettingsWindow : UserControl
     {
         // Avoid stealing Escape from the shortcut capture fields; their own
         // handler uses it to restore the old chord without exiting Settings.
-        if (e.Key == Key.Escape && _editingShortcut != null) { CancelShortcutEdit(); e.Handled = true; return; }
         if (e.Key != Key.Escape || e.Handled ||
-            ReferenceEquals(Keyboard.FocusedElement, TxtToggleHotkey) ||
-            ReferenceEquals(Keyboard.FocusedElement, TxtSaveHotkey))
+            (Keyboard.Modifiers & ~ModifierKeys.Shift) != ModifierKeys.None)
             return;
+
+        if (_editingShortcut != null) { CancelShortcutEdit(); e.Handled = true; return; }
 
         e.Handled = true;
         CloseRequested?.Invoke(false); // Cancel staged changes, stay in Flick.
@@ -747,6 +789,7 @@ public partial class SettingsWindow : UserControl
 
     private void Cancel_Click(object sender, RoutedEventArgs e)
     {
+        CancelShortcutEdit();
         CloseRequested?.Invoke(false);
     }
 

@@ -15,6 +15,7 @@ public class AppSettings
     // Capture Target
     public string TargetType { get; set; } = "Monitor"; // "Monitor" or "Window"
     public int MonitorIndex { get; set; } = 0;
+    public string MonitorDevice { get; set; } = "";
     public ulong WindowHwnd { get; set; } = 0;
     public string WindowTitle { get; set; } = "";
     public string WindowExecutable { get; set; } = "";
@@ -63,6 +64,9 @@ public class AppSettings
     // App Behavior
     public bool StartWithWindows { get; set; } = false;
     public bool StartMinimizedToTray { get; set; } = false;
+    // Tray/background operation is intended to keep the saved replay source
+    // ready. Normal foreground launches still wait for a game or user action.
+    public bool KeepReplayReadyInBackground { get; set; } = true;
     public bool ShowResourceUsage { get; set; } = true;
     // Explicit release-channel preference; checking for updates never changes it implicitly.
     public bool IncludePreviewUpdates { get; set; } = true;

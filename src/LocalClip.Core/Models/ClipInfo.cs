@@ -49,7 +49,20 @@ public class ClipMetadata : INotifyPropertyChanged
     private string _thumbnailPath = "";
     public string Id { get; set; } = Guid.NewGuid().ToString("N");
     public string OriginalFilePath { get; set; } = "";
-    public string Title { get; set; } = "";
+    private string _title = "";
+    public string Title
+    {
+        get => _title;
+        set
+        {
+            if (_title == value) return;
+            _title = value;
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Title)));
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(DisplayTitle)));
+        }
+    }
+    [JsonIgnore] public string DisplayTitle => LocalClip.Core.Rules.ClipTitleRules.ForDisplay(
+        Title, OriginalFilePath, TargetName, CreatedAt, IsImported);
     public DateTime CreatedAt { get; set; } = DateTime.Now;
     public double DurationSeconds { get; set; }
     public long FileSizeBytes { get; set; }

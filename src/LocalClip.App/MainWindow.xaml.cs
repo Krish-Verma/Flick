@@ -65,6 +65,7 @@ public partial class MainWindow : Window
     private Button? _activeEditorTool;
     private bool _updateInstallInProgress;
     private bool _quitInProgress;
+    private bool _backgroundReplayContext;
 
     public MainWindow()
     {
@@ -90,6 +91,14 @@ public partial class MainWindow : Window
         { if (!_updateInstallInProgress && !_quitInProgress) await _vm.ToggleCaptureAsync(DiagnosticControlOrigin.GlobalHotkey); };
         _hotkeyManager.OnSaveReplayHotkeyPressed += async () =>
         { if (!_updateInstallInProgress && !_quitInProgress) await _vm.SaveReplayAsync(DiagnosticControlOrigin.GlobalHotkey); };
+        _hotkeyManager.ShortcutRestoreFailed += error =>
+        {
+            _vm.ReportHotkeyHealth("Toggle replay", _vm.Settings.CaptureToggleHotkey,
+                _hotkeyManager.RegisteredToggleHotkey, error);
+            _vm.ReportHotkeyHealth("Save replay", _vm.Settings.SaveReplayHotkey,
+                _hotkeyManager.RegisteredSaveHotkey, error);
+            _vm.StatusDetails = "A shortcut is unavailable. Open Settings to retry.";
+        };
 
         _playerTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(200) };
         _playerTimer.Tick += PlayerTimer_Tick;
@@ -105,7 +114,12 @@ public partial class MainWindow : Window
                 ReleasePosterWhileHidden();
                 // Minimize to tray is a user preference, not only a
                 // launch-time flag. Capture continues safely in the tray.
-                if (_vm.Settings.StartMinimizedToTray) Hide();
+                if (_vm.Settings.StartMinimizedToTray)
+                {
+                    Hide();
+                    _backgroundReplayContext = true;
+                    _ = ApplyBackgroundReplayIntentAsync();
+                }
             }
             else if (WorkspacePageLayer.Visibility != Visibility.Visible)
                 RestorePosterAfterShow();
@@ -130,28 +144,35 @@ public partial class MainWindow : Window
         // Setup Tray Icon
         SetupSystemTray();
 
+        var arguments = Environment.GetCommandLineArgs();
+        bool launchInTray = _vm.Settings.StartMinimizedToTray || arguments.Any(a =>
+            a.Equals("--minimized", StringComparison.OrdinalIgnoreCase));
+        _backgroundReplayContext = launchInTray || arguments.Any(a =>
+            a.Equals("--startup", StringComparison.OrdinalIgnoreCase));
+        // Create the tray icon first, then hide before source discovery. A
+        // background launch should not flash an empty dashboard on screen.
+        if (launchInTray) Hide();
+
         // Initialize targets
         await _vm.InitializeAsync();
         if (!string.IsNullOrWhiteSpace(_vm.Settings.LoadWarning))
             _vm.StatusDetails = _vm.Settings.LoadWarning;
 
-        // Manual replay starts off; explicitly approved game automation is separate.
-        if (_vm.Settings.StartMinimizedToTray ||
-            Environment.GetCommandLineArgs().Any(a =>
-                a.Equals("--minimized", StringComparison.OrdinalIgnoreCase)))
-            _ = Dispatcher.BeginInvoke(new Action(() =>
-            {
-                SuspendPlayback(clearSource: true);
-                ReleasePosterWhileHidden();
-                Hide();
-            }));
+        await ApplyBackgroundReplayIntentAsync();
+        if (_vm.Settings.StartWithWindows)
+        {
+            var startup = WindowsStartupRegistration.ReadStatus(_vm.Settings.StartMinimizedToTray);
+            if (startup.State != WindowsStartupRegistrationState.Registered)
+                _vm.StatusDetails = startup.Message;
+        }
 
         // Wire CaptureStatus badge color updates
         _vm.PropertyChanged += (s, ev) =>
         {
             if (ev.PropertyName is nameof(MainViewModel.CaptureStatus) or nameof(MainViewModel.HealthStatusText)
                 or nameof(MainViewModel.IsRecordingDiagnosticRunning) or nameof(MainViewModel.CanControlReplay)
-                or nameof(MainViewModel.ActiveReplayDurationSeconds) or nameof(MainViewModel.IsAutomaticGameCapture))
+                or nameof(MainViewModel.ActiveReplayDurationSeconds) or nameof(MainViewModel.IsAutomaticGameCapture)
+                or nameof(MainViewModel.GameDetectionStatus))
             {
                 UpdateStatusBadgeColor();
                 if (_vm.CaptureStatus == "Starting" || _vm.IsRecordingDiagnosticRunning)
@@ -185,6 +206,26 @@ public partial class MainWindow : Window
         ResetPlayerForSelection();
         _layoutInitialized = true;
         RefreshWorkspaceForSize();
+    }
+
+    private async System.Threading.Tasks.Task ApplyBackgroundReplayIntentAsync()
+    {
+        try
+        {
+            await _vm.ApplyBackgroundReplayPreferencesAsync(_vm.Settings.KeepReplayReadyInBackground &&
+                (_backgroundReplayContext || _vm.Settings.StartMinimizedToTray));
+        }
+        catch (Exception)
+        {
+            _vm.StatusDetails = "Automatic replay couldn't start. Choose a source or check recording health.";
+        }
+        UpdateStatusBadgeColor();
+    }
+
+    internal void ActivateFromSecondInstance()
+    {
+        if (!_quitInProgress && !_isRealClosing && !_updateInstallInProgress)
+            ShowAndRestoreWindow();
     }
 
     private void RegisterHotkeys()
@@ -262,14 +303,14 @@ public partial class MainWindow : Window
         if (asset == null) throw new IOException("The embedded Flick brand artwork was not found.");
         using var stream = asset.Stream;
         using var source = new System.Drawing.Bitmap(stream);
-        // Match the WPF brand source and packaged ICO: keep a fixed dark
-        // circle, and move only its original artwork by 1/38 of the canvas.
+        // Match the shared WPF/ICO viewport using the approved full-canvas
+        // artwork; its placement replaces the old bitmap's optical offset.
         const int size = 128;
         using var bitmap = new System.Drawing.Bitmap(size, size,
             System.Drawing.Imaging.PixelFormat.Format32bppArgb);
         using (var graphics = System.Drawing.Graphics.FromImage(bitmap))
         using (var clip = new System.Drawing.Drawing2D.GraphicsPath())
-        using (var canvas = new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(255, 6, 3, 13)))
+        using (var canvas = new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(255, 0, 0, 0)))
         {
             graphics.Clear(System.Drawing.Color.Transparent);
             graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
@@ -279,8 +320,7 @@ public partial class MainWindow : Window
             graphics.FillEllipse(canvas, viewport);
             clip.AddEllipse(viewport);
             graphics.SetClip(clip);
-            float offset = size / 38f;
-            graphics.DrawImage(source, new System.Drawing.RectangleF(offset, offset, size, size));
+            graphics.DrawImage(source, viewport);
         }
         IntPtr native = bitmap.GetHicon();
         try
@@ -322,7 +362,7 @@ public partial class MainWindow : Window
         menu.Items.Add(new System.Windows.Forms.ToolStripSeparator());
 
         menu.Items.Add("Settings", null, (sender, args) =>
-            _ = Dispatcher.BeginInvoke(new Action(() => OpenSettings())));
+            _ = Dispatcher.BeginInvoke(new Action(() => { ShowAndRestoreWindow(); OpenSettings(); })));
         menu.Items.Add("Quit Flick", null, (sender, args) =>
             _ = Dispatcher.BeginInvoke(new Action(RealQuit)));
 
@@ -388,12 +428,15 @@ public partial class MainWindow : Window
             "Paused" => compact ? "Paused" : "Replay paused",
             _ => compact ? "Off" : "Replay off"
         };
+        if (!testing && !active && !transitional && !fault)
+            TxtCaptureStatus.Text = _vm.ReplayWaitingText;
 
         var neutral = (System.Windows.Media.Brush)FindResource("Flick.Brush.TextMuted");
         var green = (System.Windows.Media.Brush)FindResource("Flick.Brush.Success");
         var amber = (System.Windows.Media.Brush)FindResource("Flick.Brush.Warning");
         var danger = (System.Windows.Media.Brush)FindResource("Flick.Brush.Danger");
-        CaptureStateDot.Fill = testing ? amber : ready ? green : buffering || transitional ? amber :
+        bool waiting = !active && !fault && _vm.ReplayWaitingText is "Waiting for game" or "Waiting to start replay";
+        CaptureStateDot.Fill = testing ? amber : ready ? green : buffering || transitional || waiting ? amber :
             fault ? danger : neutral;
         // Badge surface is a DynamicResource so a Windows high-contrast
         // theme can override it without stale fixed-color rendering.
@@ -401,7 +444,7 @@ public partial class MainWindow : Window
         BtnToggleCapture.Content = active || transitional ? "Stop replay" : "Start replay";
         BtnToggleCapture.Style = (Style)FindResource(
             active || transitional ? "Flick.Button.Secondary" : "Flick.Button.Primary");
-        BtnToggleCapture.IsEnabled = (_vm.IsAutomaticGameCapture && _vm.CaptureStatus == "Starting") || (!transitional && _vm.CanControlReplay);
+        BtnToggleCapture.IsEnabled = (!testing && status == "Starting") || (!transitional && _vm.CanControlReplay);
         BtnToggleCapture.ToolTip = $"Toggle Replay ({_vm.Settings.CaptureToggleHotkey})";
 
         string saveLabel = WorkspaceLayoutRules.SaveActionLabel(
@@ -425,7 +468,12 @@ public partial class MainWindow : Window
             _traySaveItem.Enabled = ready && !testing;
         }
         if (_notifyIcon != null)
-            _notifyIcon.Text = $"Flick — {TxtCaptureStatus.Text}";
+        {
+            string tooltip = $"Flick — {TxtCaptureStatus.Text}";
+            // NotifyIcon rejects over 63 characters. Error text must never
+            // crash the dashboard while it updates the tray's truthful state.
+            _notifyIcon.Text = tooltip.Length <= 63 ? tooltip : tooltip[..62] + "…";
+        }
     }
 
     private void ShowAndRestoreWindow()
@@ -480,6 +528,8 @@ public partial class MainWindow : Window
             SuspendPlayback(clearSource: true);
             ReleasePosterWhileHidden();
             Hide();
+            _backgroundReplayContext = true;
+            _ = ApplyBackgroundReplayIntentAsync();
             if (!_trayHintShown)
             {
                 _trayHintShown = true;
@@ -824,11 +874,12 @@ public partial class MainWindow : Window
         }
     }
 
-    private void CloseSettingsPage(bool saved)
+    private async void CloseSettingsPage(bool saved)
     {
         bool uninstall = _settingsPage?.UninstallRequested == true;
         string saveWarning = _settingsPage?.LastSaveWarning ?? "";
-        ReturnToClipWorkspace();
+        if (saved) CompleteSavedSettingsNavigation();
+        else ReturnToClipWorkspace();
         if (uninstall)
         {
             if (UpdateRequiresFinishingWork())
@@ -847,7 +898,6 @@ public partial class MainWindow : Window
         _notificationService.StopSound();
 
         RegisterHotkeys();
-        _ = _vm.ApplyGameDetectionPreferencesAsync();
         _vm.RefreshExportPreferences();
         _vm.RefreshResourceUsagePreferences();
         UpdateSharePresetSelection();
@@ -856,21 +906,34 @@ public partial class MainWindow : Window
         if (captureActive && (_settingsAudioSnapshot != AudioSettingsSnapshot() || (_settingsMicrophoneWasEnabled &&
             !_vm.Settings.EnableMicrophone)))
         {
-            _ = StopCaptureForMicPrivacyAsync();
-            return;
+            if (!await StopCaptureForMicPrivacyAsync()) return;
         }
-        _vm.StatusDetails = saveWarning.Length > 0 ? saveWarning
-            : _vm.Settings.GameDetectionEnabled
-                ? "All preferences saved and verified. Approved game replay follows Games settings."
-                : captureActive ? "All preferences saved and verified. Recording changes apply next replay."
-                : "All preferences saved and verified. Replay remains off until manually started.";
+        _vm.StatusDetails = "Settings saved.";
+        try
+        {
+            await _vm.ApplyGameDetectionPreferencesAsync(allowResourceRetry: true);
+            await ApplyBackgroundReplayIntentAsync();
+        }
+        catch (Exception) { _vm.StatusDetails = "Settings saved. Check recording health to resume replay."; }
+        if (saveWarning.Length > 0) _vm.StatusDetails = saveWarning;
+        UpdateStatusBadgeColor();
+    }
+
+    // Kept separate from OS shortcut/replay work so the real navigation can
+    // also be verified in inert WPF fixtures without registering hotkeys.
+    private void CompleteSavedSettingsNavigation()
+    {
+        ReturnToClipWorkspace();
+        CloseEditorContext();
+        ShowCompactLibrary();
+        TxtClipSearch.Focus();
     }
 
     private string AudioSettingsSnapshot() => System.Text.Json.JsonSerializer.Serialize(new {
         _vm.Settings.AudioMode, _vm.Settings.GameAudioSource, _vm.Settings.VoiceAudioSource,
         _vm.Settings.EnableMicrophone, _vm.Settings.MicrophoneDeviceId, _vm.Settings.SystemAudioDeviceId });
 
-    private async System.Threading.Tasks.Task StopCaptureForMicPrivacyAsync()
+    private async System.Threading.Tasks.Task<bool> StopCaptureForMicPrivacyAsync()
     {
         try
         {
@@ -881,15 +944,17 @@ public partial class MainWindow : Window
                 _vm.StatusDetails = exited
                     ? "Microphone disabled and recording test stopped. Any produced original was kept."
                     : "Microphone preference is off, but test helper exit was not confirmed. Quit Flick to release its recording resources.";
-                return;
+                return exited;
             }
             await _vm.StopCaptureAsync(DiagnosticControlOrigin.Settings);
-            _vm.StatusDetails = "Audio preferences saved and capture stopped. Manually start replay when ready.";
+            _vm.StatusDetails = "Audio preferences saved.";
+            return true;
         }
         catch (Exception ex)
         {
             _vm.StatusDetails = "Couldn't stop the capture worker to release the microphone: " +
                                 ex.Message + ". Quit Flick if the input remains active.";
+            return false;
         }
     }
 
@@ -907,7 +972,7 @@ public partial class MainWindow : Window
     private void BtnRename_Click(object sender, RoutedEventArgs e)
     {
         if (_vm.SelectedClip == null) return;
-        string current = _vm.SelectedClip.Title;
+        string current = _vm.SelectedClip.DisplayTitle;
         string? title = FlickDialog.Prompt("Rename clip", "Enter a clip title:", current);
         if (title != null) _vm.RenameSelectedClip(title);
     }
@@ -1235,7 +1300,8 @@ public partial class MainWindow : Window
         {
             double seconds = Math.Clamp(PlayerSlider.Value, 0,
                 Math.Max(0, PlayerSlider.Maximum));
-            TxtPlayerTime.Text = TimeSpan.FromSeconds(seconds).ToString(@"m\:ss") +
+            var position = TimeSpan.FromSeconds(seconds);
+            TxtPlayerTime.Text = position.ToString(position.TotalHours >= 1 ? @"h\:mm\:ss" : @"m\:ss") +
                 " / " + (_vm.SelectedClip?.FormattedDuration ?? "0:00");
         }
     }

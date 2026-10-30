@@ -125,7 +125,7 @@
                         </Grid>
                         <Grid Margin="0,0,0,10">
                             <TextBox x:Name="TxtClipSearch" Style="{StaticResource Flick.Input.Text}" Text="{Binding SearchQuery, UpdateSourceTrigger=PropertyChanged, Delay=180}" ToolTip="Search titles, games, source names and tags; use #tag"/>
-                            <TextBlock Text="Search clips…" Foreground="{DynamicResource Flick.Brush.TextMuted}" Margin="11,0,0,0" VerticalAlignment="Center" IsHitTestVisible="False">
+                            <TextBlock Text="Search clips…" Foreground="{DynamicResource Flick.Brush.TextSecondary}" Margin="11,0,0,0" VerticalAlignment="Center" IsHitTestVisible="False">
                                 <TextBlock.Style>
                                     <Style TargetType="TextBlock">
                                         <Setter Property="Visibility" Value="Collapsed"/>
@@ -181,7 +181,7 @@
                                             <Image Source="{Binding ThumbnailPath, Converter={StaticResource Flick.ThumbnailDecoder}}" Stretch="UniformToFill" SnapsToDevicePixels="True"/>
                                         </Border>
                                         <StackPanel Grid.Column="1" Margin="9,0,0,0" VerticalAlignment="Center" MinWidth="0">
-                                            <TextBlock Text="{Binding Title}" Style="{StaticResource Flick.Text.Control}" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" ToolTip="{Binding Title}"/>
+                                            <TextBlock Text="{Binding DisplayTitle}" Style="{StaticResource Flick.Text.Control}" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" ToolTip="{Binding DisplayTitle}"/>
                                             <TextBlock Text="{Binding OrganizationSummary}" Style="{StaticResource Flick.Text.Caption}" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" Margin="0,2,0,0" ToolTip="{Binding TagsText}"/>
                                             <DockPanel Margin="0,3,0,0" LastChildFill="False">
                                                 <TextBlock Text="{Binding FormattedDuration}" Style="{StaticResource Flick.Text.Caption}"/>
@@ -262,7 +262,7 @@
                                 <TextBlock Text="Game label" Style="{StaticResource Flick.Text.Caption}" Margin="0,0,0,4"/>
                                 <TextBox Text="{Binding GameDraft, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource Flick.Input.Text}" MaxLength="80" AutomationProperties.Name="Clip Game Label"/>
                                 <TextBlock Text="Tags · comma separated" Style="{StaticResource Flick.Text.Caption}" Margin="0,8,0,4"/>
-                                <TextBox Text="{Binding TagsDraft, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource Flick.Input.Text}" MaxLength="400" AutomationProperties.Name="Clip Tags"/>
+                                <TextBox Text="{Binding TagsDraft, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource Flick.Input.Text}" MaxLength="400" AutomationProperties.Name="Clip tags"/>
                                 <WrapPanel Margin="0,8,0,0">
                                     <Button x:Name="BtnSaveClipDetails" Content="Save details" Click="SaveOrganization_Click" IsEnabled="{Binding HasUnsavedOrganization}" Style="{StaticResource Flick.Button.Secondary}" Padding="9,0" Margin="0,0,8,0"/>
                                     <Button Content="Favorite" Click="ToggleFavorite_Click" Style="{StaticResource Flick.Button.Ghost}" Padding="9,0"/>
@@ -274,12 +274,19 @@
                 </Grid>
             </Border>
 
-            <GridSplitter x:Name="LibrarySplitter" Grid.Column="1" Width="4" ResizeBehavior="PreviousAndNext" ResizeDirection="Columns" HorizontalAlignment="Stretch" ToolTip="Resize Clip Library">
+            <GridSplitter x:Name="LibrarySplitter" Grid.Column="1" Width="4" ResizeBehavior="PreviousAndNext" ResizeDirection="Columns" HorizontalAlignment="Stretch" ToolTip="Resize clip library">
                 <GridSplitter.Style>
                     <Style TargetType="{x:Type GridSplitter}">
                         <Setter Property="Background" Value="Transparent"/>
+                        <Setter Property="services:FlickHoverFeedback.Enabled" Value="True"/>
+                        <Setter Property="Template"><Setter.Value>
+                            <ControlTemplate TargetType="{x:Type GridSplitter}">
+                                <Border Background="{TemplateBinding Background}">
+                                    <Border x:Name="PART_FlickHoverSurface" Background="White" Opacity="0" IsHitTestVisible="False"/>
+                                </Border>
+                            </ControlTemplate>
+                        </Setter.Value></Setter>
                         <Style.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True"><Setter Property="Background" Value="{DynamicResource Flick.Brush.Divider}"/></Trigger>
                             <Trigger Property="IsKeyboardFocused" Value="True"><Setter Property="Background" Value="{DynamicResource Flick.Brush.Focus}"/></Trigger>
                         </Style.Triggers>
                     </Style>
@@ -294,7 +301,7 @@
                             </Grid.ColumnDefinitions>
                             <StackPanel Grid.Column="0" MinWidth="0" VerticalAlignment="Center">
                                 <Button x:Name="BtnBackToLibrary" Content="Your clips" ContentTemplate="{StaticResource Flick.IconText.Back}" Style="{StaticResource Flick.Button.Ghost}" HorizontalAlignment="Left" Margin="0,0,0,6" Click="BtnBackToLibrary_Click" Visibility="Collapsed" ToolTip="Return to Your Clips" AutomationProperties.Name="Back to Your Clips"/>
-                                <TextBlock Text="{Binding SelectedClip.Title, TargetNullValue=Select a clip}" Style="{StaticResource Flick.Text.ClipTitle}" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"/>
+                                <TextBlock Text="{Binding SelectedClip.DisplayTitle, TargetNullValue=Select a clip}" Style="{StaticResource Flick.Text.ClipTitle}" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"/>
                                 <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
                                     <TextBlock Text="{Binding SelectedClip.LibrarySource, FallbackValue=Your library}" Style="{StaticResource Flick.Text.Caption}" TextTrimming="CharacterEllipsis"/>
                                     <TextBlock Text="  ·  " Style="{StaticResource Flick.Text.Caption}"/>
@@ -482,7 +489,7 @@
                                                     </Grid.ColumnDefinitions>
                                                     <TextBlock Grid.Column="0" Text="{Binding Name}" ToolTip="{Binding Name}" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" Style="{StaticResource Flick.Text.Control}" VerticalAlignment="Center" Margin="0,0,9,0"/>
                                                     <CheckBox Grid.Column="1" Content="Mute" Style="{StaticResource Flick.Input.CheckBox}" IsChecked="{Binding IsMuted, Mode=TwoWay}" VerticalAlignment="Center" Foreground="{DynamicResource Flick.Brush.TextSecondary}" FontSize="12"/>
-                                                    <Slider Grid.Column="2" Minimum="0" Maximum="2" Style="{StaticResource Flick.Input.Slider}" Value="{Binding Gain, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" VerticalAlignment="Center" AutomationProperties.Name="Export Audio Volume" Margin="0,0,8,0"/>
+                                                    <Slider Grid.Column="2" Minimum="0" Maximum="2" Style="{StaticResource Flick.Input.Slider}" Value="{Binding Gain, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" VerticalAlignment="Center" AutomationProperties.Name="Export audio volume" Margin="0,0,8,0"/>
                                                     <TextBlock Grid.Column="3" Text="{Binding Gain, StringFormat='{}{0:P0}'}" Style="{StaticResource Flick.Text.Caption}" TextAlignment="Right" VerticalAlignment="Center"/>
                                                 </Grid>
                                             </DataTemplate>
@@ -499,6 +506,7 @@
                             <StackPanel>
                                 <Border x:Name="DragHandle" Padding="8" CornerRadius="12" Focusable="True"
                                         services:FlickHoverFeedback.Enabled="{Binding ShareCanCopy}"
+                                        services:FlickHoverFeedback.Surface="{Binding ElementName=ShareHoverSurface}"
                                         PreviewMouseLeftButtonDown="DragHandle_MouseLeftButtonDown" PreviewMouseMove="DragHandle_PreviewMouseMove"
                                         PreviewKeyDown="ShareTile_PreviewKeyDown" ToolTip="{Binding ShareTileHint}"
                                         AutomationProperties.Name="{Binding ShareClipTitle}" AutomationProperties.HelpText="{Binding ShareTileHint}">
@@ -509,7 +517,7 @@
                                             <Setter Property="Cursor" Value="Arrow"/>
                                             <Style.Triggers>
                                                 <DataTrigger Binding="{Binding ShareCanCopy}" Value="True"><Setter Property="Cursor" Value="Hand"/></DataTrigger>
-                                                <Trigger Property="IsMouseOver" Value="True"><Setter Property="Background" Value="{DynamicResource Flick.Brush.Hover}"/></Trigger>
+
                                                 <Trigger Property="IsKeyboardFocused" Value="True"><Setter Property="BorderBrush" Value="{DynamicResource Flick.Brush.Focus}"/></Trigger>
                                                 <DataTrigger Binding="{Binding ShareHighContrast}" Value="True">
                                                     <Setter Property="Background" Value="{DynamicResource {x:Static SystemColors.WindowBrushKey}}"/>
@@ -528,6 +536,7 @@
                                     </Border.Style>
                                     <Grid>
                                         <Grid.ColumnDefinitions><ColumnDefinition Width="104"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                        <Border x:Name="ShareHoverSurface" Grid.ColumnSpan="2" Background="White" Opacity="0" CornerRadius="9" IsHitTestVisible="False"/>
                                         <StackPanel Margin="0,0,12,0" VerticalAlignment="Center">
                                             <Border Height="60" Background="{DynamicResource Flick.Brush.SharePreview}" CornerRadius="6" ClipToBounds="True">
                                                 <Grid>
@@ -535,7 +544,7 @@
                                                     <Image x:Name="ShareThumbnail" Source="{Binding SharePreview}" Stretch="Uniform" RenderOptions.BitmapScalingMode="HighQuality"/>
                                                 </Grid>
                                             </Border>
-                                            <TextBlock x:Name="ShareOriginalLabel" Text="Original still" Style="{StaticResource Flick.Text.Muted}" TextWrapping="NoWrap" Margin="0,2,0,0" HorizontalAlignment="Center"/>
+                                            <TextBlock x:Name="ShareOriginalLabel" Text="Original still" Style="{StaticResource Flick.Text.Muted}" Foreground="{DynamicResource Flick.Brush.TextSecondary}" TextWrapping="NoWrap" Margin="0,2,0,0" HorizontalAlignment="Center"/>
                                         </StackPanel>
                                         <StackPanel Grid.Column="1" VerticalAlignment="Center">
                                             <TextBlock x:Name="ShareTileTitle" Text="{Binding ShareClipTitle}" FontSize="16" FontWeight="SemiBold" LineHeight="20" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" ToolTip="{Binding ShareClipTitle}"/>
