@@ -89,11 +89,20 @@ function Get-Quantile([double[]]$Values, [double]$Probability) {
 
 function Write-Comparison([string]$Status, [string]$Failure = '') {
     $runs = @()
+    $evidenceReadErrors = @()
     foreach ($entry in $sequence) {
         $path = Join-Path $OutputDirectory $entry.file
         if (!(Test-Path -LiteralPath $path)) { continue }
-        $data = Get-Content -LiteralPath $path -Raw | ConvertFrom-Json
-        if ($data.status -eq 'passed') {
+        try { $data = Get-Content -LiteralPath $path -Raw | ConvertFrom-Json }
+        catch { $evidenceReadErrors += "$($entry.file): $($_.Exception.Message)"; continue }
+        if ($null -eq $data -or !$data.PSObject.Properties['status']) {
+            $evidenceReadErrors += "$($entry.file): missing raw result status"
+            continue
+        }
+        $processPath = $path + '.process.json'
+        if ($data.status -eq 'passed' -and (Test-Path -LiteralPath $processPath)) {
+            $completion = Get-Content -LiteralPath $processPath -Raw | ConvertFrom-Json
+            if (!$completion.exited -or $completion.exitCode -ne 0 -or $completion.timedOut -or $completion.terminatedDuringFinally) { continue }
             $data | Add-Member -NotePropertyName repetition -NotePropertyValue $entry.repetition
             $data | Add-Member -NotePropertyName rawFile -NotePropertyValue $entry.file
             $runs += $data
@@ -157,9 +166,19 @@ function Write-Comparison([string]$Status, [string]$Failure = '') {
         schemaVersion=1; status=$Status; failure=$Failure; evidenceClass=$manifest.evidenceClass
         baselineRevision=$baselineRevision; candidateRevision=$candidateRevision
         completedRuns=$runs.Count; expectedRuns=$sequence.Count; comparisons=$comparisons; investigations=$investigations
+        evidenceReadErrors=$evidenceReadErrors
         interpretation='Descriptive same-runner synthetic comparison. Pooled samples are correlated; this is not statistical significance, normal app idle, gameplay FPS or hardware acceptance. Baseline/candidate raw files and run order are retained.'
     } | ConvertTo-Json -Depth 15 | Set-Content -LiteralPath (Join-Path $OutputDirectory 'comparison.json') -Encoding utf8
     foreach ($note in $investigations) { Write-Warning $note }
+}
+
+function Save-ChildStream([object]$ReadTask, [string]$Path) {
+    try {
+        if ($null -eq $ReadTask) { 'Stream reader did not initialize.' | Set-Content -LiteralPath $Path -Encoding utf8 }
+        elseif ($ReadTask.Wait(5000)) { $ReadTask.GetAwaiter().GetResult() | Set-Content -LiteralPath $Path -Encoding utf8 }
+        else { 'Owned child stream did not drain within 5 seconds after termination.' | Set-Content -LiteralPath $Path -Encoding utf8 }
+    }
+    catch { $_.Exception.ToString() | Set-Content -LiteralPath $Path -Encoding utf8 }
 }
 
 try {
@@ -184,20 +203,47 @@ try {
         }
         $process = [Diagnostics.Process]::Start($info)
         if ($null -eq $process) { throw 'Could not start the owned benchmark child process.' }
+        $stdout = $null
+        $stderr = $null
+        $timedOut = $false
+        $terminatedDuringFinally = $false
+        $terminationError = ''
+        $childClock = [Diagnostics.Stopwatch]::StartNew()
         try {
             $stdout = $process.StandardOutput.ReadToEndAsync()
             $stderr = $process.StandardError.ReadToEndAsync()
             if (!$process.WaitForExit(($SampleSeconds+150)*1000)) {
-                $process.Kill($true)
-                $process.WaitForExit(5000) | Out-Null
+                $timedOut = $true
                 throw "Owned benchmark child exceeded its bounded timeout: $($entry.file)"
             }
-            $stdout.GetAwaiter().GetResult() | Set-Content -LiteralPath ($path+'.stdout.log') -Encoding utf8
-            $stderr.GetAwaiter().GetResult() | Set-Content -LiteralPath ($path+'.stderr.log') -Encoding utf8
-            if ($process.ExitCode -ne 0) { throw "Synthetic benchmark invariant failed: $($entry.file)" }
+            if ($process.ExitCode -ne 0) { throw "Synthetic benchmark invariant failed: $($entry.file); inspect raw error, phases and stderr" }
             if (!(Test-Path -LiteralPath $path)) { throw 'Benchmark child returned without raw evidence.' }
         }
-        finally { $process.Dispose() }
+        finally {
+            # Always preserve the original failure/trace, including timeout paths.
+            # Terminate only the child started above, never another app/process.
+            try {
+                if (!$process.HasExited) {
+                    $terminatedDuringFinally = $true
+                    $process.Kill($true)
+                    $process.WaitForExit(5000) | Out-Null
+                }
+            }
+            catch { $terminationError = $_.Exception.ToString() }
+            Save-ChildStream $stdout ($path+'.stdout.log')
+            Save-ChildStream $stderr ($path+'.stderr.log')
+            $lastCheckpoints = @()
+            $checkpointPath = $path + '.phases.jsonl'
+            if (Test-Path -LiteralPath $checkpointPath) { $lastCheckpoints = @(Get-Content -LiteralPath $checkpointPath -Tail 3) }
+            $exited = $process.HasExited
+            [pscustomobject]@{
+                childProcessId=$process.Id; exited=$exited; exitCode=$(if ($exited) { $process.ExitCode } else { $null })
+                timedOut=$timedOut; terminatedDuringFinally=$terminatedDuringFinally; terminationError=$terminationError
+                elapsedSeconds=$childClock.Elapsed.TotalSeconds; lastCheckpoints=$lastCheckpoints
+                profilePolicy='Only marker-owned fixtures are deleted by the child; forced-exit leftovers remain on the disposable runner for diagnosis.'
+            } | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath ($path+'.process.json') -Encoding utf8
+            $process.Dispose()
+        }
     }
     Write-Comparison 'completed'
     Write-Host 'Matched synthetic diagnostics completed. Review comparison.json alongside raw runs; physical and normal-app qualification remain separate.'

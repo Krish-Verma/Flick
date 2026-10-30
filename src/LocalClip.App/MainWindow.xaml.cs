@@ -131,6 +131,7 @@ public partial class MainWindow : Window
             _ = FlickBackdropService.TryApplyDarkTitleBar(this);
             _ = FlickBackdropService.TryApplyMica(this);
         };
+        InitializeWorkspacePresentation();
     }
 
     private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
@@ -166,7 +167,12 @@ public partial class MainWindow : Window
                 _vm.StatusDetails = startup.Message;
         }
 
-        // Wire CaptureStatus badge color updates
+    }
+
+    private void InitializeWorkspacePresentation()
+    {
+        // Presentation observes the model before asynchronous startup.
+        // This subscribes UI only; discovery, hotkeys, tray and replay stay in Loaded.
         _vm.PropertyChanged += (s, ev) =>
         {
             if (ev.PropertyName is nameof(MainViewModel.CaptureStatus) or nameof(MainViewModel.HealthStatusText)
@@ -176,6 +182,7 @@ public partial class MainWindow : Window
                 or nameof(MainViewModel.CaptureStateTone) or nameof(MainViewModel.CaptureStateDetail))
             {
                 UpdateStatusBadgeColor();
+                UpdateSelectedAvailabilityUi(refreshPoster: false);
                 if (_vm.CaptureStatus == "Starting" || _vm.IsRecordingDiagnosticRunning)
                 {
                     // A real gameplay session always outranks a preview decoder.
@@ -186,6 +193,15 @@ public partial class MainWindow : Window
             else if (ev.PropertyName == nameof(MainViewModel.ShareCanCopy))
             {
                 UpdateShareActionStyles();
+            }
+            else if (ev.PropertyName == nameof(MainViewModel.SelectedClipAvailabilityRevision))
+            {
+                UpdateSelectedAvailabilityUi(refreshPoster: true);
+            }
+            else if (ev.PropertyName is nameof(MainViewModel.IsCaptureActive) or nameof(MainViewModel.IsImporting)
+                or nameof(MainViewModel.IsExporting) or nameof(MainViewModel.IsBackgroundWorkActive))
+            {
+                UpdateSelectedAvailabilityUi(refreshPoster: false);
             }
             else if (ev.PropertyName == nameof(MainViewModel.AudioMixRevision))
             {
@@ -202,7 +218,11 @@ public partial class MainWindow : Window
                      !_vm.IsExportReady && _playerView == PlayerView.Exported)
             {
                 // The export became stale after edits, so never preview it as ready.
-                ShowOriginalPreview(startPlaying: false);
+                SuspendPlayback(clearSource: true);
+                _playerView = PlayerView.Original;
+                _previewWasReencoded = false;
+                BtnPreviewMode.Content = "Original";
+                UpdateSelectedAvailabilityUi(refreshPoster: true);
             }
         };
         UpdateStatusBadgeColor();
@@ -375,6 +395,7 @@ public partial class MainWindow : Window
         _notifyIcon.ContextMenuStrip = menu;
         _notifyIcon.DoubleClick += (sender, args) =>
             _ = Dispatcher.BeginInvoke(new Action(ShowAndRestoreWindow));
+        UpdateStatusBadgeColor(); // Initialize tray/menu from the same presentation as the capture bar.
     }
 
     private void OnClipSavedConfirmed(ClipMetadata clip)
@@ -1043,7 +1064,7 @@ public partial class MainWindow : Window
             if (clearSource)
             {
                 VideoPlayer.Source = null;
-                PlayerPoster.Visibility = _vm.SelectedClip?.IsAvailable == true
+                PlayerPoster.Visibility = _vm.SelectedClip?.IsAvailableForUi == true
                     ? Visibility.Visible : Visibility.Collapsed;
                 PlayerPosterHint.Visibility = PlayerPoster.Visibility;
             }
@@ -1085,7 +1106,7 @@ public partial class MainWindow : Window
         if (BtnBuildPreview != null)
         {
             BtnBuildPreview.Content = "Create preview";
-            BtnBuildPreview.IsEnabled = _vm.SelectedClip?.IsAvailable == true;
+            BtnBuildPreview.IsEnabled = _vm.SelectedClip?.IsAvailableForUi == true;
         }
     }
 
@@ -1110,28 +1131,8 @@ public partial class MainWindow : Window
         TrimTimeline.SetRange(clip?.DurationSeconds ?? 0,
             clip?.TrimStartSeconds ?? 0, clip?.TrimEndSeconds ?? 0);
         PlayerSlider.Maximum = Math.Max(.25, clip?.DurationSeconds ?? 0);
-        BtnPlayPause.IsEnabled = clip?.IsAvailable == true;
-        BtnPreviewMode.IsEnabled = clip?.IsAvailable == true;
-        BtnBuildPreview.IsEnabled = clip?.IsAvailable == true;
         TxtPlayerTime.Text = "0:00 / " + (clip is null ? "0:00" : clip.FormattedDuration);
-
-        if (clip is null || !clip.IsAvailable)
-        {
-            PreviewFallbackPanel.Visibility = Visibility.Visible;
-            TxtPreviewIssue.Text = clip is null
-                ? "Choose a clip"
-                : "Original video is offline";
-            TxtPreviewFallbackHint.Text = clip is null
-                ? "Save a replay or import a folder."
-                : "Reconnect its folder to preview it.";
-            BtnBuildPreview.Visibility = Visibility.Collapsed;
-            return;
-        }
-
-        PreviewFallbackPanel.Visibility = Visibility.Collapsed;
-        BtnBuildPreview.Visibility = Visibility.Visible;
-        PlayerPoster.Visibility = Visibility.Visible;
-        PlayerPosterHint.Visibility = Visibility.Visible;
+        UpdateSelectedAvailabilityUi(refreshPoster: true);
         // Important: assigning MediaElement.Source opens a decoder even without
         // Play(). Keep it null until playback is explicitly requested.
     }
@@ -1207,7 +1208,7 @@ public partial class MainWindow : Window
 
     private void BtnPlayPause_Click(object sender, RoutedEventArgs e)
     {
-        if (_vm.SelectedClip?.IsAvailable != true) return;
+        if (_vm.SelectedClip?.IsAvailableForUi != true) return;
         if (_playerIsPlaying)
         {
             VideoPlayer.Pause();
@@ -1374,7 +1375,7 @@ public partial class MainWindow : Window
     private async void BuildPlayablePreview_Click(object sender, RoutedEventArgs e)
     {
         var clip = _vm.SelectedClip;
-        if (clip?.IsAvailable != true || _vm.IsCaptureActive || _vm.IsImporting || _vm.IsExporting || _vm.IsBackgroundWorkActive)
+        if (clip?.IsAvailableForUi != true || _vm.IsCaptureActive || _vm.IsImporting || _vm.IsExporting || _vm.IsBackgroundWorkActive)
         {
             _vm.StatusDetails = "Finish recording and background work before creating a local preview.";
             return;

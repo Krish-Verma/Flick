@@ -6,6 +6,7 @@ using System.Security.Cryptography;
 using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Data;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
@@ -24,6 +25,13 @@ internal static class Program
     private const BindingFlags Private = BindingFlags.Instance | BindingFlags.NonPublic;
     private const int ContainerLimit = 96;
     private static readonly JsonSerializerOptions Json = new() { WriteIndented = true };
+    private static readonly object TraceGate = new();
+    private static readonly Stopwatch Lifetime = Stopwatch.StartNew();
+    private static string? _tracePath;
+    private static string? _outputPath;
+    private static string _phase = "startup";
+    private static Exception? _backgroundFailure;
+    private static int _cleanupFinished;
 
     [STAThread]
     private static int Main(string[] args)
@@ -35,6 +43,9 @@ internal static class Program
         Window? host = null;
         MainViewModel? vm = null;
         string token = Guid.NewGuid().ToString("N");
+        string? resultJson = null;
+        Exception? failure = null;
+        System.Threading.Timer? deadlineWatchdog = null;
         try
         {
             Require(OperatingSystem.IsWindows() && Environment.GetEnvironmentVariable("GITHUB_ACTIONS") == "true",
@@ -48,6 +59,20 @@ internal static class Program
             Require(sampleSeconds is >= 15 and <= 300, "Sample duration must be 15–300 seconds");
             Require(!File.Exists(output), "Refusing to replace existing benchmark evidence");
             Directory.CreateDirectory(Path.GetDirectoryName(output)!);
+            _outputPath = output;
+            _tracePath = output + ".phases.jsonl";
+            Checkpoint("arguments-validated", new { variant, revision, rowCount, sampleSeconds });
+            AppDomain.CurrentDomain.UnhandledException += (_, eventArgs) =>
+                RecordFailure(eventArgs.ExceptionObject as Exception ?? new Exception(eventArgs.ExceptionObject?.ToString()), "runtime-unhandled");
+            TaskScheduler.UnobservedTaskException += (_, eventArgs) =>
+            {
+                Interlocked.CompareExchange(ref _backgroundFailure, eventArgs.Exception, null);
+                Checkpoint("task-unobserved-exception", new { error = eventArgs.Exception.ToString() });
+            };
+            // A dispatcher deadlock cannot service a DispatcherTimer timeout.
+            // Keep the existing total budget, enforced independently of WPF.
+            deadlineWatchdog = new System.Threading.Timer(_ => FatalBudget("process-budget-exceeded"), null,
+                TimeSpan.FromSeconds(sampleSeconds + 120), Timeout.InfiniteTimeSpan);
             var deadline = Stopwatch.StartNew();
 
             // Windows known-folder APIs need not honor a LOCALAPPDATA override.
@@ -70,6 +95,7 @@ internal static class Program
             settings.KeepReplayReadyInBackground = false;
             settings.GameDetectionEnabled = false;
             settings.SaveToFile(AppSettings.GetSettingsFilePath());
+            Checkpoint("throwaway-profile-created");
 
             app = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
             foreach (string dictionary in new[] { "Colors", "Metrics", "Typography", "Icons", "Controls", "Chrome" })
@@ -77,7 +103,14 @@ internal static class Program
                 {
                     Source = new Uri($"/Flick;component/Resources/Theme/Flick.{dictionary}.xaml", UriKind.Relative)
                 });
+            app.DispatcherUnhandledException += (_, eventArgs) =>
+            {
+                RecordFailure(eventArgs.Exception, "dispatcher-unhandled");
+                Environment.Exit(1); // Only this isolated owned process; retain trace and marker for diagnosis.
+            };
+            Checkpoint("construct-mainwindow");
             var main = new MainWindow();
+            Checkpoint("mainwindow-constructed");
             // Application.Shutdown also closes unshown windows. Remove the
             // production close-to-tray hook before any dispatcher work so cleanup
             // cannot apply a background-replay intent in this synthetic process.
@@ -102,7 +135,9 @@ internal static class Program
             var search = (TextBox)main.FindName("TxtClipSearch");
             // Same 64 bounded, deterministic PNGs exercise the production synchronous
             // baseline and asynchronous candidate row-still paths. No video exists.
+            Checkpoint("generate-synthetic-stills");
             var stillPaths = WriteSyntheticStills(profileRoot);
+            Checkpoint("synthetic-stills-generated", new { count = stillPaths.Length });
             // Seed the in-memory storage list in one O(N) AddRange, without an
             // index write per row. Empty originals deliberately model offline
             // source metadata; File.Exists("") returns before any filesystem IO.
@@ -120,9 +155,12 @@ internal static class Program
             var storedClips = (List<ClipMetadata>)typeof(ClipStorage).GetField("_clips", Private)!.GetValue(storage)!;
             storedClips.AddRange(clips);
             vm.ReloadClips();
+            Checkpoint("library-seeded", new { count = storedClips.Count });
             typeof(MainWindow).GetMethod("ApplyWorkspaceLayout", Private)!.Invoke(main, null);
+            Checkpoint("show-inert-host");
             host.Show();
             Settle();
+            Checkpoint("inert-host-shown");
             Require(!main.IsLoaded && !main.IsVisible, "MainWindow lifecycle escaped inert host");
             Require(TimersStopped(vm) && TimersStopped(main), "Production timers restarted in the inert host");
             Require(!Descendants<MediaElement>(root).Any(media => media.Source != null), "A media source was loaded");
@@ -135,20 +173,24 @@ internal static class Program
                 "Production library must retain virtualization and recycling");
             Require(Descendants<VirtualizingStackPanel>(list).Any(), "No actual virtualizing items panel");
             int initialContainers = CheckContainers(list, rowCount);
+            var inputBinding = BindingOperations.GetBindingExpression(search, TextBox.TextProperty);
+            Require(inputBinding is { Status: BindingStatus.Active } && inputBinding.ParentBinding.Delay == 180,
+                "Actual delayed search binding is not active");
             var scroll = Descendants<ScrollViewer>(list).First();
             Require(scroll.CanContentScroll, "Library logical scrolling is disabled");
 
             // Warm production bindings/templates, a query, a scroll and a Settings
             // construction before collecting timings. No forced GC is used.
+            Checkpoint("warmup-query");
             vm.SearchQuery = "clutch";
             Settle();
             vm.SearchQuery = "";
             Settle();
-            scroll.ScrollToBottom(); Settle(); WaitForRowStills(list, rowCount);
-            scroll.ScrollToTop(); Settle(); WaitForRowStills(list, rowCount);
+            scroll.ScrollToBottom(); Settle(); WaitForRowStills(list, rowCount, "warmup-bottom");
+            scroll.ScrollToTop(); Settle(); WaitForRowStills(list, rowCount, "warmup-top");
             OpenSettings(host, root, settings);
             Wait(TimeSpan.FromSeconds(3));
-            WaitForRowStills(list, rowCount);
+            WaitForRowStills(list, rowCount, "warmup-complete");
             var stillObservations = new List<object> { ObserveRowStills(list, rowCount, "after-warmup") };
             var query = new List<object>();
             var queryPostDebounce = new List<double>();
@@ -168,8 +210,14 @@ internal static class Program
                         "" => rowCount,
                         _ => 0
                     };
+                    Checkpoint("query-input", new { repetition, term });
+                    Require(ReferenceEquals(inputBinding, BindingOperations.GetBindingExpression(search, TextBox.TextProperty)),
+                        "Search binding was replaced before input");
                     var watch = Stopwatch.StartNew();
-                    search.Text = term; // Real production binding includes 180ms debounce.
+                    // Preserve the production binding expression and its 180ms delay.
+                    search.SetCurrentValue(TextBox.TextProperty, term);
+                    Require(ReferenceEquals(inputBinding, BindingOperations.GetBindingExpression(search, TextBox.TextProperty)),
+                        "Programmatic input replaced the production search binding");
                     while (vm.SearchQuery != term)
                     {
                         Require(watch.Elapsed < TimeSpan.FromSeconds(5), "Search binding did not settle");
@@ -178,23 +226,26 @@ internal static class Program
                     Settle();
                     query.Add(new { term, milliseconds = watch.Elapsed.TotalMilliseconds, expected, actual = list.Items.Count });
                     Require(list.Items.Count == expected, "Search returned an incorrect deterministic count");
+                    Checkpoint("query-filter-layout", new { repetition, term, bindingStatus = inputBinding!.Status.ToString() });
                     watch.Restart();
                     vm.ApplyFilter(); // Separately labelled filter+binding/layout, after debounce.
                     Settle();
                     queryPostDebounce.Add(watch.Elapsed.TotalMilliseconds);
-                    WaitForRowStills(list, expected);
+                    WaitForRowStills(list, expected, $"query-{repetition}-{term}");
                     containers.Add(CheckContainers(list, expected));
                 }
                 foreach (double position in new[] { 0d, .5, 1, .25, .75, 0, .9, 0 })
                 {
+                    Checkpoint("scroll-layout", new { repetition, position });
                     var watch = Stopwatch.StartNew();
                     scroll.ScrollToVerticalOffset(scroll.ScrollableHeight * position);
                     Settle();
                     scrollMs.Add(watch.Elapsed.TotalMilliseconds);
-                    WaitForRowStills(list, rowCount);
+                    WaitForRowStills(list, rowCount, $"scroll-{repetition}-{position}");
                     scrollAndStillsReadyMs.Add(watch.Elapsed.TotalMilliseconds);
                     containers.Add(CheckContainers(list, rowCount));
                 }
+                Checkpoint("layout-invalidation", new { repetition });
                 var layoutWatch = Stopwatch.StartNew();
                 root.InvalidateMeasure(); root.UpdateLayout(); Settle();
                 layoutMs.Add(layoutWatch.Elapsed.TotalMilliseconds);
@@ -203,8 +254,9 @@ internal static class Program
             // Let bounded transitions/JIT settle after scripted operations. Samples
             // cover this inert-host synthetic idle, not normal app polling/gameplay.
             Wait(TimeSpan.FromSeconds(3));
-            WaitForRowStills(list, rowCount);
+            WaitForRowStills(list, rowCount, "pre-idle");
             stillObservations.Add(ObserveRowStills(list, rowCount, "before-idle-sampling"));
+            Checkpoint("idle-sampling-begin", new { sampleSeconds });
             var resources = new List<object>();
             using var process = Process.GetCurrentProcess();
             var idleClock = Stopwatch.StartNew();
@@ -228,17 +280,21 @@ internal static class Program
                 previousCpu = cpu; previousTime = now;
                 Require(deadline.Elapsed < TimeSpan.FromSeconds(sampleSeconds + 120), "Benchmark exceeded its internal budget");
             }
+            Checkpoint("idle-sampling-complete", new { count = resources.Count });
             Require(!main.IsLoaded && vm.SelectedClip == null && vm.CaptureHost.HostProcessId == null &&
                 TimersStopped(vm) && TimersStopped(main) && !Descendants<MediaElement>(root).Any(media => media.Source != null),
                 "Benchmark isolation changed during measurement");
             Require(clips.Count == rowCount && vm.FilteredClips.Count == rowCount, "Fixture changed during benchmark");
             stillObservations.Add(ObserveRowStills(list, rowCount, "after-idle-sampling"));
             var dpi = VisualTreeHelper.GetDpi(host);
-            File.WriteAllText(output, JsonSerializer.Serialize(new
+            Checkpoint("serialize-measurements");
+            resultJson = JsonSerializer.Serialize(new
             {
                 schemaVersion = 1, status = "passed", evidenceClass = sampleSeconds < 300
                     ? "synthetic-short-CI-diagnostic" : "synthetic-five-minute-protocol",
                 variant, revision, rowCount, sampleSeconds, warmupSeconds = 6,
+                searchBindingDelayMs = inputBinding!.ParentBinding.Delay, searchBindingPreserved =
+                    ReferenceEquals(inputBinding, BindingOperations.GetBindingExpression(search, TextBox.TextProperty)),
                 runner = Environment.GetEnvironmentVariable("RUNNER_NAME"), os = Environment.OSVersion.ToString(),
                 processors = Environment.ProcessorCount, dpiX = dpi.PixelsPerInchX, dpiY = dpi.PixelsPerInchY,
                 viewport = new { width = host.ActualWidth, height = host.ActualHeight },
@@ -265,23 +321,132 @@ internal static class Program
                     visibleRowObservations = stillObservations
                 },
                 resources, totalSeconds = deadline.Elapsed.TotalSeconds
-            }, Json));
-            return 0;
+            }, Json);
+            Checkpoint("measurements-serialized");
         }
         catch (Exception error)
         {
-            Console.Error.WriteLine(error);
-            if (output != null && !File.Exists(output))
-                File.WriteAllText(output, JsonSerializer.Serialize(new { schemaVersion = 1, status = "failed", error = error.ToString() }, Json));
-            return 1;
+            failure = error;
+            RecordFailure(error, "benchmark-exception");
         }
         finally
         {
-            try { if (host != null) { host.Content = null; host.Close(); } vm?.Dispose(); app?.Shutdown(); }
-            catch (Exception cleanupError) { Console.Error.WriteLine("WPF cleanup: " + cleanupError.Message); }
-            if (profileRoot != null && marker != null && File.Exists(marker) && File.ReadAllText(marker) == token)
-                Directory.Delete(profileRoot, true);
+            // Failure evidence is durable before cleanup. A faulted image/dispatcher
+            // must not turn a 10-second readiness error into a 165-second mystery.
+            using var cleanupWatchdog = new System.Threading.Timer(_ =>
+            {
+                if (Volatile.Read(ref _cleanupFinished) == 0) FatalBudget("cleanup-budget-exceeded");
+            }, null, TimeSpan.FromSeconds(8), Timeout.InfiniteTimeSpan);
+            try
+            {
+                Checkpoint("cleanup-detach-host");
+                if (host != null) host.Content = null;
+                Checkpoint("cleanup-close-host");
+                host?.Close();
+                Checkpoint("cleanup-dispose-viewmodel");
+                vm?.Dispose();
+                Checkpoint("cleanup-shutdown-application");
+                app?.Shutdown();
+                Checkpoint("cleanup-delete-owned-profile");
+                if (profileRoot != null && marker != null && File.Exists(marker) && File.ReadAllText(marker) == token)
+                    Directory.Delete(profileRoot, true);
+                Checkpoint("cleanup-complete");
+            }
+            catch (Exception cleanupError)
+            {
+                failure ??= cleanupError;
+                RecordFailure(cleanupError, "cleanup-exception");
+            }
+            finally { Interlocked.Exchange(ref _cleanupFinished, 1); }
         }
+        if (failure == null)
+        {
+            try
+            {
+                Require(output != null && resultJson != null, "Measurement result was not prepared");
+                ThrowBackgroundFailure();
+                File.WriteAllText(output!, resultJson!); // A passing raw result requires successful cleanup too.
+                Checkpoint("process-complete");
+            }
+            catch (Exception error) { failure = error; RecordFailure(error, "result-write-exception"); }
+        }
+        deadlineWatchdog?.Dispose();
+        return failure == null ? 0 : 1;
+    }
+
+    private static void Checkpoint(string phase, object? details = null)
+    {
+        Volatile.Write(ref _phase, phase);
+        try
+        {
+            string line = JsonSerializer.Serialize(new { timestampUtc = DateTimeOffset.UtcNow,
+                elapsedSeconds = Lifetime.Elapsed.TotalSeconds, phase, thread = Environment.CurrentManagedThreadId, details });
+            lock (TraceGate)
+                if (_tracePath != null) File.AppendAllText(_tracePath, line + Environment.NewLine);
+            Console.WriteLine($"Benchmark phase: {phase}");
+        }
+        catch (Exception error) { Console.Error.WriteLine("Checkpoint write failed: " + error); }
+    }
+
+    private static void RecordFailure(Exception error, string kind)
+    {
+        string failedDuring = Volatile.Read(ref _phase);
+        Checkpoint(kind, new { failedDuring, error = error.ToString() });
+        Console.Error.WriteLine(error);
+        try
+        {
+            lock (TraceGate)
+                if (_outputPath != null && !File.Exists(_outputPath))
+                    File.WriteAllText(_outputPath, JsonSerializer.Serialize(new
+                    {
+                        schemaVersion = 1, status = "failed", phase = failedDuring,
+                        error = error.ToString(), trace = Path.GetFileName(_tracePath)
+                    }, Json));
+        }
+        catch (Exception writeError) { Console.Error.WriteLine("Failure evidence write failed: " + writeError); }
+    }
+
+    private static void FatalBudget(string reason)
+    {
+        try
+        {
+            RecordFailure(new TimeoutException(reason + "; last phase=" + Volatile.Read(ref _phase) +
+                ". The owned benchmark process exits; any marker-owned profile is retained on this disposable runner."), reason);
+        }
+        finally { Environment.Exit(1); }
+    }
+
+    private static void ThrowBackgroundFailure()
+    {
+        if (Volatile.Read(ref _backgroundFailure) is { } error)
+            throw new InvalidOperationException("An unobserved background operation faulted in the synthetic process", error);
+    }
+
+    private static object RowStillDiagnostics(ListBox list, int expectedItems)
+    {
+        var type = typeof(MainWindow).Assembly.GetType("LocalClip.App.Services.AsyncThumbnail");
+        var stateProperty = type?.GetField("StateProperty", BindingFlags.Static | BindingFlags.NonPublic)?.GetValue(null) as DependencyProperty;
+        var loader = RowStillLoader();
+        var images = RowImages(list);
+        return new
+        {
+            expectedItems, actualItems = list.Items.Count, realizedContainers = Descendants<ListBoxItem>(list).Count(),
+            rowImages = images.Length, pendingRequests = PendingRowStills(),
+            cacheEntries = loader?.GetType().GetProperty("CacheEntryCount")?.GetValue(loader),
+            visibleConsumers = type?.GetField("_visibleConsumers", BindingFlags.Static | BindingFlags.NonPublic)?.GetValue(null),
+            rows = images.Take(ContainerLimit + 1).Select(image =>
+            {
+                var clip = (ClipMetadata)image.DataContext;
+                var bitmap = image.Source as BitmapSource;
+                var state = stateProperty == null ? null : image.GetValue(stateProperty);
+                var cancellation = state?.GetType().GetField("Cancellation")?.GetValue(state) as CancellationTokenSource;
+                return new { clipId = clip.Id, file = Path.GetFileName(clip.ThumbnailPath), image.IsLoaded, image.IsVisible,
+                    sourceType = image.Source?.GetType().FullName, pixelWidth = bitmap?.PixelWidth, pixelHeight = bitmap?.PixelHeight,
+                    stateGeneration = state?.GetType().GetField("Generation")?.GetValue(state),
+                    visibleConsumer = state?.GetType().GetField("VisibleConsumer")?.GetValue(state),
+                    cancellationRequested = cancellation?.IsCancellationRequested };
+            }).ToArray()
+        };
     }
 
     private static string[] WriteSyntheticStills(string profileRoot)
@@ -337,8 +502,11 @@ internal static class Program
         return loader?.GetType().GetField("_pending", Private)?.GetValue(loader) as int?;
     }
 
-    private static void WaitForRowStills(ListBox list, int items)
+    private static void WaitForRowStills(ListBox list, int items, string phase = "row-stills")
     {
+        // The parent phase checkpoint is already durable. Update the watchdog
+        // phase without adding file/console IO inside measured readiness timing.
+        Volatile.Write(ref _phase, phase + "-stills-wait");
         var watch = Stopwatch.StartNew();
         while (true)
         {
@@ -346,15 +514,22 @@ internal static class Program
             var images = RowImages(list);
             if ((items == 0 || images.Length > 0) && images.All(image =>
                 image.Source is BitmapSource { PixelWidth: 256, PixelHeight: 144 }) && (PendingRowStills() ?? 0) == 0)
+            {
+                Volatile.Write(ref _phase, phase + "-stills-ready");
                 return;
-            Require(watch.Elapsed < TimeSpan.FromSeconds(10), "Production row still decoding did not settle");
+            }
+            if (watch.Elapsed >= TimeSpan.FromSeconds(10))
+            {
+                Checkpoint(phase + "-stills-timeout", RowStillDiagnostics(list, items));
+                throw new InvalidOperationException("Production row still decoding did not settle during " + phase);
+            }
             Wait(TimeSpan.FromMilliseconds(10));
         }
     }
 
     private static object ObserveRowStills(ListBox list, int items, string phase)
     {
-        WaitForRowStills(list, items);
+        WaitForRowStills(list, items, phase);
         var images = RowImages(list);
         var rows = new List<object>();
         foreach (var image in images)
@@ -399,6 +574,7 @@ internal static class Program
 
     private static double OpenSettings(Window host, FrameworkElement workspace, AppSettings settings)
     {
+        Checkpoint("settings-construct");
         var watch = Stopwatch.StartNew();
         var page = new SettingsWindow(settings, () => false,
             loadAudioSources: () => Task.FromResult(new TargetList()),
@@ -406,12 +582,16 @@ internal static class Program
             saveReviewedSettings: _ => throw new InvalidOperationException("Benchmark must not save preferences"),
             applyWindowsStartup: (_, _) => throw new InvalidOperationException("Benchmark must not write Windows startup"),
             readWindowsStartupStatus: _ => new WindowsStartupStatus(WindowsStartupRegistrationState.Registered, "Synthetic startup disabled"));
+        Volatile.Write(ref _phase, "settings-show");
         host.Content = page;
         Settle();
         double milliseconds = watch.Elapsed.TotalMilliseconds;
+        Checkpoint("settings-shown", new { milliseconds });
+        Checkpoint("settings-leave");
         page.LeavePage();
         host.Content = workspace;
         Settle();
+        Checkpoint("settings-workspace-restored");
         return milliseconds;
     }
 
@@ -435,8 +615,10 @@ internal static class Program
 
     private static void Settle()
     {
+        ThrowBackgroundFailure();
         for (int pass = 0; pass < 2; pass++)
             Dispatcher.CurrentDispatcher.Invoke(() => { }, DispatcherPriority.ContextIdle);
+        ThrowBackgroundFailure();
     }
 
     private static void Wait(TimeSpan duration)
@@ -446,7 +628,9 @@ internal static class Program
         var timer = new DispatcherTimer(DispatcherPriority.Background) { Interval = duration };
         timer.Tick += (_, _) => { timer.Stop(); frame.Continue = false; };
         timer.Start();
-        Dispatcher.PushFrame(frame);
+        try { Dispatcher.PushFrame(frame); }
+        finally { timer.Stop(); }
+        ThrowBackgroundFailure();
     }
 
     private static void Require(bool condition, string message)

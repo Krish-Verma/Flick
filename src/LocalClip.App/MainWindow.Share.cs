@@ -60,7 +60,7 @@ public partial class MainWindow
         Grid.SetRow(EditorContextLayer, useEditorArea ? 0 : 1);
         Grid.SetRowSpan(EditorContextLayer, useEditorArea ? 5 : 1);
         double available = useEditorArea ? ClipEditorPanel.ActualHeight : PreviewSurface.ActualHeight;
-        EditorContextLayer.Width = share ? Math.Min(640, Math.Max(280, ClipEditorPanel.ActualWidth - 24)) : double.NaN;
+        EditorContextLayer.Width = share ? Math.Min(600, Math.Max(280, ClipEditorPanel.ActualWidth - 24)) : double.NaN;
         EditorContextLayer.MaxHeight = Math.Max(100, available - 24);
         if (!share) EditorContextScroll.MaxHeight = Math.Max(32, available - 100);
     }

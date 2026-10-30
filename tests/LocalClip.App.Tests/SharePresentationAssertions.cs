@@ -22,6 +22,7 @@ internal static class SharePresentationAssertions
     private const BindingFlags Private = BindingFlags.NonPublic | BindingFlags.Instance;
     internal static void AssertStaleNotificationsAndSamePathRepair(MainWindow window, MainViewModel vm)
     {
+        LibraryObservationAssertions.Settle(vm);
         var dispatcher = Application.Current?.Dispatcher ?? throw new InvalidOperationException("Use the existing Application fixture.");
         Assert.True(dispatcher.CheckAccess());
         FieldInfo Field(string name) => typeof(MainViewModel).GetField(name, Private)!;
@@ -103,6 +104,7 @@ internal static class SharePresentationAssertions
             {
                 second.RefreshAvailability();
                 Invoke("OnSelectedClipChanged"); // Same production recheck used when Share opens.
+                LibraryObservationAssertions.Settle(vm);
                 for (int pass = 0; pass < 3; pass++)
                     dispatcher.Invoke(() => { }, DispatcherPriority.ContextIdle,
                         CancellationToken.None, TimeSpan.FromSeconds(2));
@@ -208,6 +210,7 @@ internal static class SharePresentationAssertions
         }
         finally
         {
+            LibraryObservationAssertions.Settle(vm);
             if (held) gate.Release();
             var pending = Get("_sharePreviewCancellation") as CancellationTokenSource;
             if (pending != null && !ReferenceEquals(pending, currentCancellation))

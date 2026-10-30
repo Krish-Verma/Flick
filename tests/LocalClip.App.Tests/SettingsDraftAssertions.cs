@@ -3,6 +3,7 @@ using System.IO;
 using System.Reflection;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using LocalClip.App.Services;
 using LocalClip.App.Views;
 using LocalClip.Core.Audio;
@@ -19,6 +20,7 @@ internal static class SettingsDraftAssertions
     public static void Run(string root)
     {
         ChangedRevertedAndInvalidDrafts(root);
+        HiddenInvalidDraftReviewReturnsToField(root);
         GameSelectionAndRevertedEdits(root);
         ReviewedSaveReopenAndCancel(root);
         RepairAndRecoveredReviewRemainSaveable(root);
@@ -45,11 +47,15 @@ internal static class SettingsDraftAssertions
         Assert.False(page.HasUnsavedChanges);
         Assert.False(page.CanSaveDraft);
         var duration = Find<TextBox>(page, "TxtDuration");
+        Assert.Contains("MiB", Find<TextBlock>(page, "TxtBufferWarning").Text);
         duration.Text = "bad";
         Assert.True(page.HasUnsavedChanges);
         Assert.False(page.CanSaveDraft);
         Assert.Equal(Visibility.Visible, Find<TextBlock>(page, "TxtDurationError").Visibility);
         Assert.Contains("15–120", Find<TextBlock>(page, "TxtDurationError").Text);
+        Assert.Empty(Find<TextBlock>(page, "TxtBufferWarning").Text);
+        Assert.Null(Find<TextBlock>(page, "TxtBufferWarning").ToolTip);
+        Assert.Equal(source.AllowSoftwareFallback, Find<CheckBox>(page, "ChkSoftwareFallback").IsChecked);
         bool closed = false;
         page.CloseRequested += _ => closed = true;
         Invoke(page, "Save_Click"); // A keyboard/programmatic attempt still validates.
@@ -59,6 +65,8 @@ internal static class SettingsDraftAssertions
         duration.Text = source.ReplayDurationSeconds.ToString();
         Assert.False(page.HasUnsavedChanges);
         Assert.Equal(Visibility.Collapsed, Find<TextBlock>(page, "TxtDurationError").Visibility);
+        Assert.Contains("MiB", Find<TextBlock>(page, "TxtBufferWarning").Text);
+        Assert.NotNull(Find<TextBlock>(page, "TxtBufferWarning").ToolTip);
         Assert.False(page.CanSaveDraft);
         var cap = Find<ComboBox>(page, "CmbShareCap");
         int originalCap = cap.SelectedIndex;
@@ -71,6 +79,39 @@ internal static class SettingsDraftAssertions
         Assert.False(page.CanSaveDraft);
         Assert.Equal(0, endpointReads);
         Assert.Equal(0, startupReads);
+    }
+
+    private static void HiddenInvalidDraftReviewReturnsToField(string root)
+    {
+        var source = Preferences(root, "draft-review-route");
+        int writes = 0;
+        var page = new SettingsWindow(source, () => false,
+            loadAudioEndpoints: _ => Array.Empty<AudioEndpoint>(),
+            saveReviewedSettings: _ => writes++, applyWindowsStartup: (_, _) => { });
+        var duration = Find<TextBox>(page, "TxtDuration");
+        var review = Find<Button>(page, "BtnReviewSettings");
+        Assert.Equal(Visibility.Collapsed, review.Visibility);
+        duration.Text = "invalid draft";
+        Find<Button>(page, "NavGeneral").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Assert.Equal(Visibility.Visible, Find<StackPanel>(page, "PanelGeneral").Visibility);
+        Assert.Equal(Visibility.Collapsed, Find<StackPanel>(page, "PanelRecording").Visibility);
+        Assert.False(Find<Button>(page, "BtnSaveSettings").IsEnabled);
+        Assert.Equal(Visibility.Visible, review.Visibility);
+        Assert.True(review.IsEnabled);
+        Assert.Equal("Review recording", review.Content);
+        review.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Assert.Equal(Visibility.Visible, Find<StackPanel>(page, "PanelRecording").Visibility);
+        Assert.Equal(Visibility.Collapsed, Find<StackPanel>(page, "PanelGeneral").Visibility);
+        Assert.Same(duration, FocusManager.GetFocusedElement(FocusManager.GetFocusScope(duration)));
+        Assert.Equal("invalid draft", duration.Text);
+        Assert.Equal(Visibility.Visible, Find<TextBlock>(page, "TxtDurationError").Visibility);
+        Assert.True(page.HasUnsavedChanges);
+        Assert.False(page.CanSaveDraft);
+        Assert.Equal(0, writes);
+        Assert.Equal(30, source.ReplayDurationSeconds);
+        duration.Text = source.ReplayDurationSeconds.ToString();
+        Assert.Equal(Visibility.Collapsed, review.Visibility);
+        Assert.False(page.HasUnsavedChanges);
     }
 
     private static void GameSelectionAndRevertedEdits(string root)
@@ -91,6 +132,40 @@ internal static class SettingsDraftAssertions
         Assert.False(page.HasUnsavedChanges);
         Assert.False(page.CanSaveDraft);
         Assert.Equal("Generated game", source.ApprovedGameProfiles[0].Name);
+
+        // A blank name must return to the name field, rather than the valid
+        // replay duration. The real footer button also works from another page.
+        name.Text = "";
+        Find<Button>(page, "NavGeneral").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        var review = Find<Button>(page, "BtnReviewSettings");
+        Assert.Equal("Review games", review.Content);
+        Assert.False(Find<Button>(page, "BtnSaveSettings").IsEnabled);
+        review.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Assert.Equal(Visibility.Visible, Find<StackPanel>(page, "PanelGames").Visibility);
+        Assert.Equal(Visibility.Visible, Find<StackPanel>(page, "GameProfileEditor").Visibility);
+        Assert.Same(name, FocusManager.GetFocusedElement(FocusManager.GetFocusScope(name)));
+        Assert.Equal("", name.Text);
+        Assert.Equal("Enter a game name.", Find<TextBlock>(page, "TxtGameNameError").Text);
+        Assert.Equal(Visibility.Visible, Find<TextBlock>(page, "TxtGameNameError").Visibility);
+        Assert.Equal("30", Find<TextBox>(page, "TxtGameDuration").Text);
+        Assert.False(page.CanSaveDraft);
+        Assert.Equal("Generated game", source.ApprovedGameProfiles[0].Name);
+
+        name.Text = "Generated game";
+        var duration = Find<TextBox>(page, "TxtGameDuration");
+        duration.Text = "121";
+        Find<Button>(page, "NavGeneral").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        review.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Assert.Same(duration, FocusManager.GetFocusedElement(FocusManager.GetFocusScope(duration)));
+        Assert.Equal("121", duration.Text);
+        Assert.Equal(Visibility.Visible, Find<TextBlock>(page, "TxtGameDurationError").Visibility);
+        Assert.Contains("15–120", Find<TextBlock>(page, "TxtGameDurationError").Text);
+        Assert.Equal(Visibility.Collapsed, Find<TextBlock>(page, "TxtGameNameError").Visibility);
+        Assert.False(page.CanSaveDraft);
+        Assert.Equal(30, source.ApprovedGameProfiles[0].ReplayDurationSeconds);
+        duration.Text = "30";
+        Assert.Equal(Visibility.Collapsed, review.Visibility);
+        Assert.False(page.HasUnsavedChanges);
     }
 
     private static void ReviewedSaveReopenAndCancel(string root)

@@ -126,6 +126,7 @@
                     <StackPanel x:Name="GameProfileEditor" Visibility="Collapsed" Margin="0,12,0,0">
                         <TextBlock Text="Game name" Style="{StaticResource Flick.Text.Control}" Margin="0,0,0,5"/>
                         <TextBox x:Name="TxtGameName" MaxLength="120" Style="{StaticResource Flick.Input.Text}" AutomationProperties.Name="Approved game name"/>
+                        <TextBlock x:Name="TxtGameNameError" Style="{StaticResource Settings.FieldError}"/>
                         <TextBlock x:Name="TxtGameExecutable" Style="{StaticResource Flick.Text.Muted}" TextTrimming="CharacterEllipsis"
                                    ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}" Margin="0,6,0,12"/>
                         <CheckBox x:Name="ChkGameProfileEnabled" Content="Use this game profile" Style="{StaticResource Flick.Toggle}" Margin="0,0,0,12"/>
@@ -137,6 +138,7 @@
                         </ComboBox>
                         <TextBlock Text="Replay duration (15–120 seconds)" Style="{StaticResource Flick.Text.Control}" Margin="0,12,0,5"/>
                         <TextBox x:Name="TxtGameDuration" Width="80" HorizontalAlignment="Left" Style="{StaticResource Flick.Input.Text}" AutomationProperties.Name="Game replay duration in seconds"/>
+                        <TextBlock x:Name="TxtGameDurationError" Style="{StaticResource Settings.FieldError}"/>
                         <CheckBox x:Name="ChkGameMicrophone" Content="Allow microphone for this game" Style="{StaticResource Flick.Toggle}" Margin="0,14,0,5"
                                   ToolTip="Also enable Record microphone in Audio. Other audio follows your preferences; automatic replay does not change your manual capture source or profile."/>
                         <WrapPanel Margin="0,12,0,0">
@@ -462,10 +464,14 @@
                                AutomationProperties.LiveSetting="Polite"
                                AutomationProperties.Name="Settings draft and save status"/>
                 </Grid>
-                <Button x:Name="BtnCancelSettings" Grid.Column="1" Content="Cancel"
+                <Button x:Name="BtnReviewSettings" Grid.Column="1" Content="Review" Visibility="Collapsed"
+                        Style="{StaticResource Flick.Button.Ghost}" Padding="6,0" MinWidth="0" MinHeight="32"
+                        FontSize="13" Click="ReviewSettings_Click" Margin="0,0,9,0"
+                        AutomationProperties.Name="Review invalid settings"/>
+                <Button x:Name="BtnCancelSettings" Grid.Column="2" Content="Cancel"
                         Style="{StaticResource Flick.Button.Secondary}"
                         Click="Cancel_Click" Margin="0,0,9,0"/>
-                <Button x:Name="BtnSaveSettings" Grid.Column="2" Content="Save"
+                <Button x:Name="BtnSaveSettings" Grid.Column="3" Content="Save"
                         Style="{StaticResource Flick.Button.Primary}"
                         Click="Save_Click"/>
             </Grid>

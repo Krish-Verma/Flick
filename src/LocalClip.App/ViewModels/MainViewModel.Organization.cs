@@ -85,16 +85,7 @@ public partial class MainViewModel
     }
     private void RefreshRecentExports()
     {
-        RecentExports.Clear(); _recentExportIds.Clear();
-        foreach (var clip in _allClips.Where(c => c.LastExportedAtUtc != null && c.IsExportReady)
-                     .OrderByDescending(c => c.LastExportedAtUtc).Take(40))
-            if (ReadyShareFile.TryGet(clip, clip.LastExportTargetMb, out var path, _settings.ExportsFolder))
-            {
-                RecentExports.Add(new(clip.Id, clip.DisplayTitle, path, clip.ExportedFileSizeBytes, clip.LastExportedAtUtc!.Value,
-                    clip.ExportAspectPreset, clip.LastExportTargetMb));
-                _recentExportIds.Add(clip.Id);
-                if (RecentExports.Count == 20) break;
-            }
+        StartRecentExportsRead();
     }
     public bool SelectRecentExport(string clipId)
     {
@@ -191,7 +182,7 @@ public partial class MainViewModel
     }
     public async Task LoadFilmstripAsync()
     {
-        if (SelectedClip is not { } clip || !clip.IsAvailable || !double.IsFinite(clip.DurationSeconds) || clip.DurationSeconds < .25 || !CanLoadFilmstrip) return;
+        if (SelectedClip is not { } clip || !clip.IsAvailableForUi || !double.IsFinite(clip.DurationSeconds) || clip.DurationSeconds < .25 || !CanLoadFilmstrip) return;
         ClearFilmstrip(); int generation = _filmstripGeneration;
         using var cancellation = new CancellationTokenSource(TimeSpan.FromSeconds(30)); _filmstripCancellation = cancellation;
         var completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously); _filmstripCompletion = completion;

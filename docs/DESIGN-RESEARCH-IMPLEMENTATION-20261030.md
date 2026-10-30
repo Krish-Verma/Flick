@@ -19,7 +19,7 @@ Impeccable 4.8.0 guidance is applied in Operate mode. Keep the established Graph
 
 | ID | Report pages | Implementation or reconciliation | Acceptance |
 | --- | --- | --- | --- |
-| UX-01 | 7, 9, 13, 24 | Unified state presentation over existing correlated ledger; semantic chip and durable last-save recovery | No false Ready/failed/pending contradiction, including validation after capture stops |
+| UX-01 | 7, 9, 13, 24 | Unified state presentation over existing correlated ledger; semantic chip and durable last-save recovery | Capture bar, tray tooltip and Health use the same state; no false Ready/failed/pending contradiction, including validation after capture stops. Automatic approved-game source is distinguished from the manual picker. Buffer text uses reported retained seconds, with `~` for an estimate, separately from the configured maximum |
 | UX-02 | 15-16, 24 | Stronger full-file tile, larger bounded still and prominent Copy; retain real OLE path/fingerprint guard | Ready file identifiable; Drag/Copy/Open folder usable; no stale transfer |
 | UX-03 | 16, 24 | Dirty/reverted state, field-local validation and repair-aware Save; verified dashboard confirmation | Complete reviewed JSON round-trip; Cancel/no unrelated endpoint blockage; startup repair retained |
 | UX-04 | 14, 17 | Intentional poster and empty/no-match/offline states with real actions | No decoder or FFmpeg merely to decorate; no-source/first clip path understandable |
@@ -31,8 +31,8 @@ Impeccable 4.8.0 guidance is applied in Operate mode. Keep the established Graph
 | UX-10 | 14, 16 | Clear real track/device roles, mute/preview/export context and remembered device recovery | Mic opt-in and mix exclusion retained; no unsupported isolation claims |
 | UX-11 | 10, 23 | Already shipped supplied fixed artwork; preserve exact bytes and mapping, bound display decoding | App/tray/installer renders and source identity remain correct |
 | UX-12 | 9, 20, 23 | Preserve one-step shortcut capture/native suspension; add missing action names/help and keyboard paths | Real current shortcuts shown; Escape/focus and missing-registration reporting retained |
-| UX-13 | 14, 18, 23 | Existing on-demand six-frame filmstrip satisfies optional feature; verify bounds/cancellation rather than duplicate | Hidden/tray/capture work does not start a decoder or filmstrip |
-| UX-14 | 17, 23 | Existing on-demand Health last validated save and bounded issues satisfy the low-cost activity disclosure; no duplicate history surface | Bounded data, no permanent sidebar, no extra idle polling |
+| UX-13 | 14, 18, 23 | Retain the existing explicitly requested six-frame filmstrip (`Services/FilmstripFrameDecoder.cs`: six frozen 160x90 frames). The report's optional hover/scrub bubble is a separate deferred P2 enhancement | Existing filmstrip stays bounded/cancellable; hidden/tray/capture work does not start it. No claim that a hover bubble was implemented |
+| UX-14 | 17, 23 | Retain existing on-demand Health last validated save and bounded issues. Defer the report's optional recent-activity history disclosure rather than equate a summary with history | Bounded existing data, no permanent sidebar or extra idle polling. No claim that a new activity timeline was implemented |
 | UX-15 | 23, 27 | Explicitly deferred by report: multiple themes/custom skins | Existing appearance/options preserved; no new theme engine |
 | UX-16 | 23, 27-28 | Explicit report anti-goal: social feed/auto-upload/AI overlays | No forced account, upload, capture permission or unrelated feature expansion |
 

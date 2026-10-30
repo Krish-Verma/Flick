@@ -34,6 +34,7 @@ internal static class OrganizationEditorAssertions
         try
         {
             field.SetValue(vm, storage); vm.CaptureStatus = "Off"; vm.ReloadClips(); vm.SelectedClip = first;
+            LibraryObservationAssertions.Settle(vm);
             vm.ToggleFavorite(); Assert.True(first.IsFavorite);
             vm.TagsDraft = "Clutch, clutch, Team"; vm.GameDraft = "Fixture Game";
             Assert.True(vm.HasUnsavedOrganization); Assert.True(vm.SaveOrganization()); Assert.False(vm.HasUnsavedOrganization);
@@ -91,6 +92,7 @@ internal static class OrganizationEditorAssertions
             Directory.Delete(blocked);
             Assert.Equal(bytes, File.ReadAllBytes(source));
             File.Delete(source); vm.ReloadClips();
+            LibraryObservationAssertions.Settle(vm);
             vm.SearchQuery = "#clutch Fixture"; Assert.Contains(first, vm.FilteredClips); Assert.False(first.IsAvailable);
             vm.SearchQuery = "";
             var restored = new ClipStorage(new AppSettings(), metadataDirectory: metadata).GetClipById("first")!;
@@ -120,8 +122,10 @@ internal static class OrganizationEditorAssertions
             clip.LastExportFingerprint = ExportFingerprint.Compute(clip.OriginalFilePath, clip.TrimStartSeconds,
                 clip.TrimEndSeconds, clip.AudioTracks, 10, clip.ExportAspectPreset);
             clip.IsExportReady = true; storage.AddOrUpdateClip(clip); vm.ReloadClips();
+            LibraryObservationAssertions.Settle(vm);
             Assert.Contains(vm.RecentExports, recent => recent.ClipId == clip.Id);
             Assert.True(vm.SelectRecentExport(clip.Id)); Assert.Equal(10, vm.TargetSizeMb);
+            LibraryObservationAssertions.Settle(vm);
             Assert.True(vm.IsExportReady); Assert.Equal(clip.ExportedFilePath, vm.ReadyExportFilePath);
             Assert.Equal(defaultCap, vm.Settings.DiscordTargetSizeMb);
         }

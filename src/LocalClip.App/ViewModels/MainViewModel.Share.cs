@@ -29,6 +29,8 @@ public partial class MainViewModel
     public string ShareTileStateText => SelectedClip == null ? "No clip selected"
         : IsExporting ? (_shareCancellationRequested ? "Finishing cancellation…" : ShareExportStageText)
         : IsExportReady ? "MP4 ready"
+        : ExportStatusMessage.StartsWith("Checking ", StringComparison.OrdinalIgnoreCase)
+            ? (SelectedClip.HasKnownAvailability && SelectedClip.IsAvailableForUi ? "Checking MP4…" : "Checking original…")
         : ExportStatusMessage.StartsWith("Original Video Offline", StringComparison.OrdinalIgnoreCase) ? "Original offline"
         : ExportStatusMessage.StartsWith("Export Failed", StringComparison.OrdinalIgnoreCase) ? "Export failed"
         : ExportStatusMessage.StartsWith("Export Cancelled", StringComparison.OrdinalIgnoreCase) ? "Export cancelled"
@@ -36,6 +38,7 @@ public partial class MainViewModel
     public string ShareTileHint => SelectedClip == null ? "Select a clip from Your clips."
         : IsExporting ? (_shareCancellationRequested ? "Cancelling export…" : "Your original stays unchanged.")
         : IsExportReady ? "Drag this MP4 into Discord · Ctrl+C to copy."
+        : ShareTileStateText.StartsWith("Checking ", StringComparison.Ordinal) ? "You can keep browsing."
         : ShareTileStateText == "Original offline" ? "Reconnect its folder before exporting."
         : ShareTileStateText == "Export failed" ? "Try export again, or open Details."
         : ShareTileStateText == "Export cancelled" ? "Export again when you're ready."
@@ -63,6 +66,8 @@ public partial class MainViewModel
         {
             string status = ExportStatusMessage;
             if (IsExporting) return ""; // The tile owns the current stage; Details retains full diagnostics.
+            if (status.StartsWith("Checking ", StringComparison.OrdinalIgnoreCase) || status == "Export to prepare an MP4.")
+                return ""; // Readiness and the next action already appear on the tile.
             if (IsExportReady && status.StartsWith("Ready to share", StringComparison.OrdinalIgnoreCase))
                 return ""; // The tile already shows readiness and actual size.
             if (status.Length <= 72) return status;

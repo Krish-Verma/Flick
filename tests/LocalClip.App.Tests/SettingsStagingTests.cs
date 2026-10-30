@@ -650,6 +650,7 @@ public partial class SettingsStagingTests
                     workspacePage.Visibility = Visibility.Collapsed;
                     OrganizationEditorAssertions.Run(vm);
                     LibraryBrowseAssertions.Run(vm);
+                    LibraryObservationAssertions.Run(vm);
                     ResearchPresentationAssertions.Run(window, vm);
                     ThumbnailOperationAssertions.Run(vm);
                     SharePresentationAssertions.AssertStaleNotificationsAndSamePathRepair(window, vm);

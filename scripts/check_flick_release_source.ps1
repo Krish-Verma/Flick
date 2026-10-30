@@ -66,6 +66,9 @@ Require $install 'MyAppVersion "1\.0\.12"' "Inno Setup AppVersion must match"
 Require $package 'Flick-v1\.0\.12-win-x64' "Portable version must match installer"
 Require $setupScript 'Flick-Setup\.exe' "User-facing installer must be a single EXE"
 Require $lock '1\.0\.12-preview\.1' "Pinned app version must match tag"
+$nativeVersion = Read "src/LocalClip.CaptureHost/capture_version.h"
+Require $nativeVersion '#define FLICK_FILE_VERSION 1,0,12,0' "Native numeric file version must match managed version"
+Require $nativeVersion '#define FLICK_PRODUCT_VERSION 1,0,12,0' "Native numeric product version must match managed version"
 if ($versions.Trim() -ne "1.0.12-preview.1") { throw "Release version manifest does not match compiled version" }
 Write-Host "Flick packaging and memory source contracts PASS (not a hardware performance test)." -ForegroundColor Green
 

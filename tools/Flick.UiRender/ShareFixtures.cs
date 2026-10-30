@@ -76,6 +76,7 @@ internal static partial class Program
         storage.AddOrUpdateClip(clip);
         vm.ReloadClips();
         vm.SelectedClip = vm.FilteredClips.Single(item => item.Id == clip.Id);
+        SettleLibraryPresentation(vm, window.Dispatcher);
         if (!vm.TryGetReadyShareFile(out var ready)) throw new InvalidOperationException("Real exported fixture did not pass production readiness.");
         string originalHash = Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(original)));
 

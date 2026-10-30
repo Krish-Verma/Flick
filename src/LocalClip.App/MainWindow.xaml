@@ -71,7 +71,7 @@
                 </Grid.ColumnDefinitions>
                 <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,12,0">
                     <TextBlock Text="Capture source" Style="{StaticResource Flick.Text.Caption}" FontWeight="SemiBold" Margin="0,0,0,2"/>
-                    <Grid><ComboBox x:Name="CmbTargets" AutomationProperties.Name="Capture source" MinWidth="0" Width="235" Height="32" DisplayMemberPath="DisplayName" ToolTip="Choose a window or monitor. Display capture can include notifications." IsEnabled="{Binding CanChangeCaptureSource}" ItemsSource="{Binding Targets}" SelectedItem="{Binding SelectedTarget, Mode=TwoWay}" >
+                    <Grid><ComboBox x:Name="CmbTargets" AutomationProperties.Name="Capture source" AutomationProperties.HelpText="{Binding CaptureSourceCaption}" MinWidth="0" Width="235" Height="32" DisplayMemberPath="DisplayName" ToolTip="Choose a window or monitor. Display capture can include notifications." IsEnabled="{Binding CanChangeCaptureSource}" ItemsSource="{Binding Targets}" SelectedItem="{Binding SelectedTarget, Mode=TwoWay}" >
                         <ComboBox.Style><Style TargetType="ComboBox" BasedOn="{StaticResource Flick.Input.Combo}"><Style.Triggers><DataTrigger Binding="{Binding IsAutomaticGameCapture}" Value="True"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger></Style.Triggers></Style></ComboBox.Style>
                     </ComboBox><TextBlock Text="{Binding AutomaticGameSourceText}" TextTrimming="CharacterEllipsis" MaxWidth="235" Height="32" VerticalAlignment="Center" ToolTip="Automatic game replay. Stop Replay to return to your manual capture source.">
                         <TextBlock.Style><Style TargetType="TextBlock" BasedOn="{StaticResource Flick.Text.Control}"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding IsAutomaticGameCapture}" Value="True"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></TextBlock.Style>
@@ -175,11 +175,14 @@
                                     </TextBlock>
                                     <Grid Height="62" Margin="7,3">
                                         <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="78"/>
+                                            <ColumnDefinition Width="84"/>
                                             <ColumnDefinition Width="*"/>
                                         </Grid.ColumnDefinitions>
-                                        <Border Grid.Column="0" Width="74" Height="48" Background="{DynamicResource Flick.Brush.Raised}" CornerRadius="7" ClipToBounds="True" VerticalAlignment="Center">
-                                            <Image services:AsyncThumbnail.Path="{Binding ThumbnailPath}" Stretch="UniformToFill" SnapsToDevicePixels="True"/>
+                                        <Border Grid.Column="0" Width="80" Height="45" Background="{DynamicResource Flick.Brush.Raised}" CornerRadius="7" ClipToBounds="True" VerticalAlignment="Center">
+                                            <Grid>
+                                                <Path Style="{StaticResource Flick.Icon.Symbol}" Data="{StaticResource Flick.Icon.Geometry.Original}" Width="20" Height="20" HorizontalAlignment="Center" VerticalAlignment="Center" Opacity="0.5" IsHitTestVisible="False"/>
+                                                <Image services:AsyncThumbnail.Path="{Binding ThumbnailPath}" Stretch="UniformToFill" SnapsToDevicePixels="True"/>
+                                            </Grid>
                                         </Border>
                                         <StackPanel Grid.Column="1" Margin="9,0,0,0" VerticalAlignment="Center" MinWidth="0">
                                             <TextBlock Text="{Binding DisplayTitle}" Style="{StaticResource Flick.Text.Control}" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" ToolTip="{Binding DisplayTitle}"/>
@@ -196,12 +199,12 @@
                                                 <TextBlock Style="{StaticResource Flick.Text.Numeric}" ToolTip="{Binding CreatedAt, StringFormat={}{0:f}}">
                                                     <TextBlock.Text><MultiBinding StringFormat="{}{0} · {1:MMM d}"><Binding Path="FormattedDuration"/><Binding Path="CreatedAt"/></MultiBinding></TextBlock.Text>
                                                 </TextBlock>
-                                                <TextBlock Text="{Binding LibraryStatus}" HorizontalAlignment="Right" DockPanel.Dock="Right">
+                                                <TextBlock Text="{Binding LibraryStatusForUi}" HorizontalAlignment="Right" DockPanel.Dock="Right">
                                                     <TextBlock.Style>
                                                         <Style TargetType="TextBlock" BasedOn="{StaticResource Flick.Text.Caption}">
                                                             <Style.Triggers>
-                                                                <DataTrigger Binding="{Binding LibraryStatus}" Value="Flick"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger>
-                                                                <DataTrigger Binding="{Binding IsAvailable}" Value="False">
+                                                                <DataTrigger Binding="{Binding LibraryStatusForUi}" Value="Flick"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger>
+                                                                <DataTrigger Binding="{Binding LibraryStatusForUi}" Value="Offline">
                                                                     <Setter Property="Foreground" Value="{DynamicResource Flick.Brush.Warning}"/>
                                                                 </DataTrigger>
                                                             </Style.Triggers>
@@ -344,7 +347,7 @@
                                     <TextBlock x:Name="TxtPreviewFallbackHint" Text="Create a preview or open your player." ToolTip="The original video stays unchanged." Style="{StaticResource Flick.Text.Caption}" TextWrapping="Wrap" TextAlignment="Center" Margin="0,0,0,12"/>
                                     <WrapPanel HorizontalAlignment="Center">
                                         <Button x:Name="BtnBuildPreview" Content="Create preview" Click="BuildPlayablePreview_Click" Style="{StaticResource Flick.Button.Primary}" Margin="0,0,8,0"/>
-                                        <Button Content="Open player" Click="OpenInPlayer_Click" Style="{StaticResource Flick.Button.Secondary}" IsEnabled="{Binding SelectedClip.IsAvailable, FallbackValue=False, TargetNullValue=False}"/>
+                                        <Button Content="Open player" Click="OpenInPlayer_Click" Style="{StaticResource Flick.Button.Secondary}" IsEnabled="{Binding SelectedClip.IsAvailableForUi, FallbackValue=False, TargetNullValue=False}"/>
                                     </WrapPanel>
                                 </StackPanel>
                             </Grid>
@@ -501,8 +504,8 @@
                                                         <ColumnDefinition Width="50"/>
                                                     </Grid.ColumnDefinitions>
                                                     <TextBlock Grid.Column="0" Text="{Binding Name}" ToolTip="{Binding Name}" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" Style="{StaticResource Flick.Text.Control}" VerticalAlignment="Center" Margin="0,0,9,0"/>
-                                                    <CheckBox Grid.Column="1" Content="Mute" Style="{StaticResource Flick.Input.CheckBox}" IsChecked="{Binding IsMuted, Mode=TwoWay}" VerticalAlignment="Center" Foreground="{DynamicResource Flick.Brush.TextSecondary}" FontSize="12"/>
-                                                    <Slider Grid.Column="2" Minimum="0" Maximum="2" Style="{StaticResource Flick.Input.Slider}" Value="{Binding Gain, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" VerticalAlignment="Center" AutomationProperties.Name="Export audio volume" Margin="0,0,8,0"/>
+                                                    <CheckBox Grid.Column="1" Content="Mute" Style="{StaticResource Flick.Input.CheckBox}" IsChecked="{Binding IsMuted, Mode=TwoWay}" VerticalAlignment="Center" Foreground="{DynamicResource Flick.Brush.TextSecondary}" AutomationProperties.Name="{Binding Name, StringFormat=Mute {0}}" AutomationProperties.HelpText="Changes the exported mix; the original stays unchanged."/>
+                                                    <Slider Grid.Column="2" Minimum="0" Maximum="2" Style="{StaticResource Flick.Input.Slider}" Value="{Binding Gain, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" VerticalAlignment="Center" AutomationProperties.Name="{Binding Name, StringFormat={}{0} export volume}" Margin="0,0,8,0"/>
                                                     <TextBlock Grid.Column="3" Text="{Binding Gain, StringFormat='{}{0:P0}'}" Style="{StaticResource Flick.Text.Caption}" TextAlignment="Right" VerticalAlignment="Center"/>
                                                 </Grid>
                                             </DataTemplate>

@@ -383,7 +383,10 @@ public partial class SettingsWindow : UserControl
         if (!int.TryParse(TxtDuration.Text, out int duration) ||
             duration < 15 || duration > 120)
         {
-            TxtBufferWarning.Text = "Choose 15–120 seconds.";
+            // Duration recovery belongs beside the field. This area is only
+            // for a valid buffer estimate, not a duplicate validation message.
+            TxtBufferWarning.Text = "";
+            TxtBufferWarning.ToolTip = null;
             return;
         }
         var target = AppSettings.CreateDefault();
@@ -782,8 +785,16 @@ public partial class SettingsWindow : UserControl
         SetFieldValidation(category, message, field);
         TxtSaveStatus.Text = HasUnsavedChanges ? "Unsaved changes" : "Review " + category.ToLowerInvariant() + ".";
         TxtSaveStatus.ToolTip = message;
+        FocusManager.SetFocusedElement(FocusManager.GetFocusScope(field), field);
         field.Focus();
         field.BringIntoView();
+    }
+
+    private void ReviewSettings_Click(object sender, RoutedEventArgs e)
+    {
+        var invalid = FindDraftValidation();
+        if (invalid != null) ShowSaveValidation(invalid.Category, invalid.Field, invalid.Message);
+        else UpdateDraftState();
     }
 
     private void DraftText_Changed(object sender, TextChangedEventArgs e) => UpdateDraftState();
@@ -859,8 +870,18 @@ public partial class SettingsWindow : UserControl
         if (ChkEnableWebhook.IsChecked == true && !DiscordWebhookClient.ValidateWebhookUrl(TxtWebhookUrl.Password.Trim(), out _))
             return new("Sharing", TxtWebhookUrl, "Enter a valid Discord webhook or turn off direct posting.");
         var games = DraftGames();
+        var editing = games.FirstOrDefault(game => game.Id == _editingGameProfileId);
+        if (editing != null)
+        {
+            if (string.IsNullOrWhiteSpace(editing.Name))
+                return new("Games", TxtGameName, "Enter a game name.");
+            if (editing.Name.Length > 120 || editing.Name.Any(char.IsControl))
+                return new("Games", TxtGameName, "Use 1–120 visible characters for the game name.");
+            if (editing.ReplayDurationSeconds is < 15 or > 120)
+                return new("Games", TxtGameDuration, "Choose 15–120 seconds for this game.");
+        }
         if (!GameDetectionPolicy.ValidateProfiles(games, out string error))
-            return new("Games", TxtGameDuration, error);
+            return new("Games", LstApprovedGames, error);
         if (ChkGameDetectionEnabled.IsChecked == true && !games.Any(game => game.Enabled))
             return new("Games", ChkGameDetectionEnabled, "Approve and enable at least one game first.");
         try { StageAudio(AppSettings.CreateDefault()); }
@@ -881,6 +902,8 @@ public partial class SettingsWindow : UserControl
             "Audio" when ReferenceEquals(field, CmbSystemAudioDevice) => TxtOutputError,
             "Audio" when ReferenceEquals(field, CmbMicrophoneDevice) => TxtMicrophoneError,
             "Audio" => TxtAudioError,
+            "Games" when ReferenceEquals(field, TxtGameName) => TxtGameNameError,
+            "Games" when ReferenceEquals(field, TxtGameDuration) => TxtGameDurationError,
             "Games" => TxtGameValidation, "Sharing" when ReferenceEquals(field, TxtWebhookUrl) => TxtWebhookError,
             _ => TxtShareCapError
         };
@@ -893,10 +916,14 @@ public partial class SettingsWindow : UserControl
         if (!_trackingDraft || _loading || _loadingGames) return;
         HasUnsavedChanges = !string.Equals(_originalDraft, DraftFingerprint(), StringComparison.Ordinal);
         foreach (TextBlock label in new[] { TxtDurationError, TxtShortcutError, TxtStorageError, TxtAudioError,
-            TxtGameValidation, TxtShareCapError, TxtWebhookError, TxtOutputError, TxtMicrophoneError })
+            TxtGameValidation, TxtGameNameError, TxtGameDurationError, TxtShareCapError, TxtWebhookError, TxtOutputError, TxtMicrophoneError })
         { label.Text = ""; label.Visibility = Visibility.Collapsed; }
         var invalid = FindDraftValidation();
         if (invalid != null) SetFieldValidation(invalid.Category, invalid.Message, invalid.Field);
+        BtnReviewSettings.Visibility = invalid == null ? Visibility.Collapsed : Visibility.Visible;
+        BtnReviewSettings.Content = invalid == null ? "Review" : "Review " + invalid.Category.ToLowerInvariant();
+        BtnReviewSettings.ToolTip = invalid?.Message;
+        System.Windows.Automation.AutomationProperties.SetName(BtnReviewSettings, Convert.ToString(BtnReviewSettings.Content) ?? "Review");
         bool repair = ChkStartWithWindows.IsChecked == true && _startupReview?.State is
             WindowsStartupRegistrationState.MissingOrStale or WindowsStartupRegistrationState.Unavailable;
         CanSaveDraft = invalid == null && (HasUnsavedChanges || _settings.RequiresExplicitSettingsSave || repair);

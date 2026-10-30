@@ -82,9 +82,7 @@ internal static partial class Program
         vm.ReloadClips();
         vm.SelectedClip = vm.FilteredClips[1];
         Invoke("ResetPlayerForSelection");
-        // Keep an honest empty preview instead of substituting fabricated gameplay.
-        Find<Image>("PlayerPoster").Visibility = Visibility.Collapsed;
-        Find<TextBlock>("PlayerPosterHint").Text = "Press Play to preview";
+        // The production lazy poster shows the owned synthetic still; no video decoder opens.
         // Populate the real bound collection/selection together. A local
         // ComboBox selection is overwritten by the VM's null selected target.
         vm.Targets.Add(new TargetItem { DisplayName = "Sample monitor (synthetic)", Type = "Monitor" });
@@ -116,9 +114,7 @@ internal static partial class Program
         RenderNativeTrayIcon(main, output);
         Invoke("ReturnToClipWorkspace");
         Invoke("CloseEditorContext");
-        // Navigation restores the synthetic thumbnail as a poster. Keep the
-        // same honest empty preview fixture across all viewport captures.
-        Find<Image>("PlayerPoster").Visibility = Visibility.Collapsed;
+        // Preserve the actual production poster/binding through navigation.
         Render("11-workspace-wide.png", 1440, 900);
         // Exercise the existing compact library/editor branches without showing
         // a Window or synthesizing new layout rules in this renderer.
@@ -395,12 +391,14 @@ internal static partial class Program
         RenderHoverFixtures(app, output);
         var navigationFailures = RenderUXNavigationFixtures(main, vm, settings, fixtures, output, Render);
         var shortcutFailures = RenderShortcutCaptureFixtures(main, vm, settings, fixtures, output, Render);
-        if (shareLayoutFailures.Count != 0 || resourceLayoutFailures.Count != 0 || cleanSettingsFailures.Count != 0 || cleanDialogFailures.Count != 0 || navigationFailures.Count != 0 || shortcutFailures.Count != 0)
+        var designResearchFailures = RenderDesignResearchFixtures(main, vm, settings, storage, fixtures, output, Render);
+        if (shareLayoutFailures.Count != 0 || resourceLayoutFailures.Count != 0 || cleanSettingsFailures.Count != 0 || cleanDialogFailures.Count != 0 || navigationFailures.Count != 0 || shortcutFailures.Count != 0 || designResearchFailures.Count != 0)
             throw new InvalidOperationException("Layout regression(s). Share: " + string.Join(", ", shareLayoutFailures) +
                 "; resources: " + string.Join(", ", resourceLayoutFailures) +
                 "; settings/folders: " + string.Join(", ", cleanSettingsFailures) + "; dialogs: " + string.Join(", ", cleanDialogFailures) +
                 "; Settings navigation: " + string.Join(", ", navigationFailures) +
-                "; Shortcuts: " + string.Join(", ", shortcutFailures));
+                "; Shortcuts: " + string.Join(", ", shortcutFailures) +
+                "; Design research: " + string.Join(", ", designResearchFailures));
         string applicationVersion = typeof(MainWindow).Assembly
             .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? "unknown";
         File.WriteAllText(Path.Combine(output, "PROVENANCE.txt"),
@@ -423,12 +421,15 @@ internal static partial class Program
             "Hover views137-141 exercise the actual production feedback rendering operation across control families, including disabled, reduced-motion and system-color high-contrast feedback without OS-preference changes. Settings navigation views142-145 use actual Save_Click and CompleteSavedSettingsNavigation with cloned settings, an isolated verified JSON file and inert startup/discovery adapters. They compare the original profile hash and do not enter real hotkey/replay application. Shortcut views146-150 use production Edit/capture handlers with deterministic modifier input, logical focus observations, isolated Settings Save and no OS keypresses. See hover-feedback-evidence.json, settings-navigation-evidence.json and shortcut-capture-evidence.json.\n" +
             "Dialog views131-134 exercise the actual Rename prompt (Cancel), actual Share Export Details (OK), and one explicitly synthetic long retained-detail message. The shared modal has one finite body scroller with fixed actions; no nested scroll surface, native picker, rename, save or external operation is performed. See clean-dialog-fixture-evidence.json.\n" +
             "No gameplay, live MediaElement playback, OS titlebar, real recording, updater network request, or full physical UI acceptance claimed.\n");
+        File.AppendAllText(Path.Combine(output, "PROVENANCE.txt"),
+            "Design research views151-167 exercise production bound capture/library/Settings/trim/poster controls. Ledger save success is simulated, not media validation; Settings endpoints are synthetic and no Settings Save is invoked. The fixture checks unchanged profile/index hashes and no capture/diagnostics/media source. See design-research-fixture-evidence.json.\n");
         vm.Dispose();
         app.Shutdown();
         return 0;
 
         void Render(string file, int width, int height)
         {
+            SettleLibraryPresentation(vm, root.Dispatcher);
             var viewport = new Size(width, height);
             var bounds = new Rect(0, 0, width, height);
             void SettleLayout()
@@ -585,6 +586,21 @@ internal static partial class Program
         for (int i = 0; i < VisualTreeHelper.GetChildrenCount(visual); i++)
             InvalidateVisualMeasure(VisualTreeHelper.GetChild(visual, i));
         if (visual is UIElement element) element.InvalidateMeasure();
+    }
+
+    private static void SettleLibraryPresentation(MainViewModel vm, Dispatcher dispatcher)
+    {
+        var work = vm.WhenLibraryPresentationSettledAsync();
+        var elapsed = System.Diagnostics.Stopwatch.StartNew();
+        while (!work.IsCompleted)
+        {
+            if (elapsed.Elapsed > TimeSpan.FromSeconds(15))
+                throw new TimeoutException("Owned library fixture observations did not finish.");
+            DrainDispatcherThroughContextIdle(dispatcher);
+            Thread.Sleep(1);
+        }
+        work.GetAwaiter().GetResult();
+        DrainDispatcherThroughContextIdle(dispatcher);
     }
 
     private static void CompleteSnapshotThumbnails(FrameworkElement root)

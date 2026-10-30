@@ -264,6 +264,7 @@ internal static partial class Program
         ProductFrame("60-editor-markers-minimum.png", 720, 480, "Minimum editor with markers");
         Invoke("CloseEditorContext");
         vm.LibrarySort = "Recently Exported";
+        SettleLibraryPresentation(vm, window.Dispatcher);
         if (vm.RecentExports.Count != 1 || vm.FilteredClips.Count != 1 || !vm.SelectRecentExport(media.Id))
             throw new InvalidOperationException("Recent exports must contain the genuinely ready generated fixture.");
         Split();

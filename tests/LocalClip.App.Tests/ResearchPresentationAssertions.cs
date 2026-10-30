@@ -88,6 +88,7 @@ internal static class ResearchPresentationAssertions
         Assert.Equal(Visibility.Collapsed, empty.Visibility);
 
         vm.SelectedClip = fixture.First;
+        LibraryObservationAssertions.Settle(vm);
         Drain(window.Dispatcher);
         var media = Find<MediaElement>(window, "VideoPlayer");
         var poster = Find<Image>(window, "PlayerPoster");
@@ -118,6 +119,7 @@ internal static class ResearchPresentationAssertions
     private static void AssertShareStagesAndActions(MainWindow window, MainViewModel vm, OwnedLibrary fixture)
     {
         vm.SelectedClip = fixture.First;
+        LibraryObservationAssertions.Settle(vm);
         vm.IsExportReady = false;
         vm.IsExporting = false;
         Drain(window.Dispatcher);
@@ -170,6 +172,7 @@ internal static class ResearchPresentationAssertions
 
         fixture.PrepareReadySentinel();
         vm.RecheckShareReadiness();
+        LibraryObservationAssertions.Settle(vm);
         Drain(window.Dispatcher);
         Assert.True(vm.IsExportReady);
         Assert.True(copy.IsEnabled);
@@ -179,6 +182,7 @@ internal static class ResearchPresentationAssertions
         // No Copy or Drag command is invoked: this is a last-mile metadata/file sentinel, not codec-valid video.
         File.Delete(fixture.First.ExportedFilePath);
         vm.RecheckShareReadiness();
+        LibraryObservationAssertions.Settle(vm);
         Drain(window.Dispatcher);
         Assert.False(copy.IsEnabled);
         Assert.NotEqual("MP4 ready", tile.Text);
@@ -190,6 +194,7 @@ internal static class ResearchPresentationAssertions
         Assert.Contains("Details", vm.ShareStatusSummary);
         Assert.False(copy.IsEnabled);
         vm.SelectedClip = fixture.Offline;
+        LibraryObservationAssertions.Settle(vm);
         Drain(window.Dispatcher);
         Assert.Equal("Original offline", tile.Text);
         Assert.Contains("Reconnect", vm.ShareTileHint);
@@ -236,6 +241,7 @@ internal static class ResearchPresentationAssertions
         public ClipMetadata Offline { get; }
         public OwnedLibrary(MainWindow window, MainViewModel vm)
         {
+            LibraryObservationAssertions.Settle(vm);
             _window = window; _vm = vm;
             string[] fields = ["_storage", "_allClips", "_selectedClip", "_searchQuery", "_clipSourceFilter", "_favoritesOnly", "_gameFilter",
                 "_libraryPeriod", "_librarySort", "_targetSizeMb", "_isExportReady", "_readyExportFilePath", "_exportStatusMessage", "_isExporting",
@@ -292,6 +298,7 @@ internal static class ResearchPresentationAssertions
         }
         public void Dispose()
         {
+            LibraryObservationAssertions.Settle(_vm);
             InvokeVm("UnsubscribeAudioEvents");
             _vm.Settings.ExportsFolder = _exportsBefore;
             _vm.GameGroups.Clear(); foreach (string game in _games) _vm.GameGroups.Add(game);
