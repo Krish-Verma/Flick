@@ -31,7 +31,9 @@ try {
             $graphics.FillEllipse($canvas, $viewport)
             $clip.AddEllipse($viewport)
             $graphics.SetClip($clip)
-            $graphics.DrawImage($source, $viewport, 0, 0, $source.Width, $source.Height, [Drawing.GraphicsUnit]::Pixel)
+            # The two-argument overload samples the full source and avoids
+            # Windows PowerShell selecting an integer-source Rectangle overload.
+            $graphics.DrawImage($source, $viewport)
             $buffer = [IO.MemoryStream]::new()
             try {
                 $bmp.Save($buffer, [Drawing.Imaging.ImageFormat]::Png)
