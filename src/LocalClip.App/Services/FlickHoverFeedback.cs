@@ -123,7 +123,7 @@ public static class FlickHoverFeedback
         surface.BeginAnimation(UIElement.OpacityProperty, null);
         surface.Background = highContrast ? null : Brushes.White;
         surface.BorderBrush = highContrast ? SystemColors.HighlightBrush : null;
-        surface.BorderThickness = highContrast ? new Thickness(1) : new Thickness(0);
+        surface.BorderThickness = highContrast ? new Thickness(2) : new Thickness(0);
         double target = highlighted ? (highContrast ? 1 : HighlightOpacity) : 0;
         surface.SetCurrentValue(UIElement.OpacityProperty, target);
         if (animate && !highContrast && element.IsEnabled && Math.Abs(current - target) > .001)

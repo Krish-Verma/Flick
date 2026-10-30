@@ -19,6 +19,7 @@ internal static class FlickHoverStyleAssertions
 {
     public static void Run()
     {
+        FlickThemeAccessibilityAssertions.Run();
         var app = Assert.IsAssignableFrom<Application>(Application.Current);
         string[] directStyles =
         [
@@ -134,6 +135,7 @@ internal static class FlickHoverStyleAssertions
             Assert.Equal(1, surface.Opacity);
             Assert.Null(surface.Background); // High contrast uses a system outline.
             Assert.Same(SystemColors.HighlightBrush, surface.BorderBrush);
+            Assert.Equal(new Thickness(2), surface.BorderThickness);
             Assert.False(surface.HasAnimatedProperties);
             feedback.Invoke(null, [control, false, false, false]);
             Assert.Equal(0, surface.Opacity);

@@ -48,7 +48,20 @@ public class ClipMetadata : INotifyPropertyChanged
     public event PropertyChangedEventHandler? PropertyChanged;
     private string _thumbnailPath = "";
     public string Id { get; set; } = Guid.NewGuid().ToString("N");
-    public string OriginalFilePath { get; set; } = "";
+    private string _originalFilePath = "";
+    public string OriginalFilePath
+    {
+        get => _originalFilePath;
+        set
+        {
+            if (_originalFilePath == value) return;
+            _originalFilePath = value;
+            _available = null;
+            foreach (string name in new[] { nameof(OriginalFilePath), nameof(IsAvailable), nameof(HasKnownAvailability),
+                         nameof(IsAvailableForUi), nameof(LibraryStatus), nameof(LibraryStatusForUi), nameof(DisplayTitle) })
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
+        }
+    }
     private string _title = "";
     public string Title
     {
@@ -103,12 +116,28 @@ public class ClipMetadata : INotifyPropertyChanged
     public bool IsAvailable => _available ?? File.Exists(OriginalFilePath);
     private bool? _available;
 
+    // WPF uses only these observed values. The general IsAvailable contract
+    // retains its fresh fallback for Core/non-UI callers.
+    [JsonIgnore] public bool HasKnownAvailability => _available.HasValue;
+    [JsonIgnore] public bool IsAvailableForUi => _available == true;
+    [JsonIgnore] public string LibraryStatusForUi => !_available.HasValue ? "Checking…" :
+        _available.Value ? (IsImported ? "Imported" : "Flick") : "Offline";
+
+    /// <summary>Apply on the UI dispatcher; a replaced path must not inherit an old read's result.</summary>
+    public bool ApplyAvailabilityObservation(string originalPath, bool available)
+    {
+        if (!string.Equals(originalPath, OriginalFilePath, StringComparison.Ordinal) || _available == available) return false;
+        _available = available;
+        foreach (string name in new[] { nameof(IsAvailable), nameof(HasKnownAvailability), nameof(IsAvailableForUi),
+                     nameof(LibraryStatus), nameof(LibraryStatusForUi) })
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
+        return true;
+    }
+
     /// <summary>Refresh at library discovery/rescan, never for every search keystroke.</summary>
     public void RefreshAvailability()
     {
-        _available = File.Exists(OriginalFilePath);
-        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsAvailable)));
-        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(LibraryStatus)));
+        ApplyAvailabilityObservation(OriginalFilePath, File.Exists(OriginalFilePath));
     }
 
     public void NotifyOrganizationChanged()

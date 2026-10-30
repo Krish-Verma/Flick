@@ -37,7 +37,7 @@ public partial class MainWindow
         ? _vm.SelectedClip?.TrimStartSeconds ?? 0 : 0), 0, _vm.SelectedClip?.DurationSeconds ?? 0);
     private void SeekOriginal(double seconds)
     {
-        if (_vm.SelectedClip is not { } clip || !clip.IsAvailable || _vm.IsCaptureActive) return;
+        if (_vm.SelectedClip is not { } clip || !clip.IsAvailableForUi || _vm.IsCaptureActive) return;
         seconds = Math.Clamp(seconds, 0, clip.DurationSeconds);
         if (_playerView == PlayerView.Exported || VideoPlayer.Source == null) ShowOriginalPreview(startPlaying: false);
         PlayerSlider.Maximum = Math.Max(.25, clip.DurationSeconds); PlayerSlider.Value = seconds;

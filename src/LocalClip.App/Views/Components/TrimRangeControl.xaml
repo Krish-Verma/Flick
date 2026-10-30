@@ -3,6 +3,45 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:primitives="clr-namespace:System.Windows.Controls.Primitives;assembly=PresentationFramework"
              MinHeight="113" Focusable="False">
+    <UserControl.Resources>
+        <Style x:Key="Trim.Handle" TargetType="{x:Type primitives:Thumb}">
+            <Setter Property="Width" Value="28"/>
+            <Setter Property="Height" Value="32"/>
+            <Setter Property="Cursor" Value="SizeWE"/>
+            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type primitives:Thumb}">
+                        <Grid Background="Transparent">
+                            <!-- Focus space is always reserved; grip geometry never changes. -->
+                            <Border x:Name="FocusFrame" BorderThickness="2" CornerRadius="4"
+                                    BorderBrush="Transparent"/>
+                            <Border x:Name="Grip" Width="10" Margin="2" CornerRadius="3"
+                                    HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                    Background="{DynamicResource Flick.Brush.TextSecondary}"
+                                    BorderBrush="{DynamicResource Flick.Brush.BorderStrong}" BorderThickness="1"/>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Grip" Property="Background" Value="{DynamicResource Flick.Brush.TextPrimary}"/>
+                            </Trigger>
+                            <Trigger Property="IsDragging" Value="True">
+                                <Setter TargetName="Grip" Property="Background" Value="{DynamicResource Flick.Brush.Accent}"/>
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="FocusFrame" Property="BorderBrush" Value="{DynamicResource Flick.Brush.Focus}"/>
+                                <Setter TargetName="Grip" Property="Background" Value="{DynamicResource Flick.Brush.TextPrimary}"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Cursor" Value="Arrow"/>
+                                <Setter TargetName="Grip" Property="Opacity" Value=".45"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </UserControl.Resources>
     <!-- Single timeline with two accessible keyboard/mouse handles. -->
     <Grid>
         <Grid.RowDefinitions>
@@ -25,76 +64,34 @@
                         ToolTip="Restore the entire original recording"/>
             </StackPanel>
         </Grid>
-        <Canvas Grid.Row="1" x:Name="RangeCanvas" Height="30"
+        <Canvas Grid.Row="1" x:Name="RangeCanvas" Height="34"
                 SizeChanged="RangeCanvas_SizeChanged" ClipToBounds="False" Background="Transparent" PreviewMouseLeftButtonDown="Track_PreviewMouseLeftButtonDown"
                 Margin="7,0,7,0">
-            <Border x:Name="TrackBackground" Canvas.Top="10" Height="11"
+            <Border x:Name="TrackBackground" Canvas.Top="11" Height="11"
                     CornerRadius="3" Background="{DynamicResource Flick.Brush.Raised}"
                     BorderBrush="{DynamicResource Flick.Brush.Border}" BorderThickness="1"/>
-            <Border x:Name="SelectedTrack" Canvas.Top="10" Height="11"
+            <Border x:Name="SelectedTrack" Canvas.Top="11" Height="11"
                     CornerRadius="3" Background="{DynamicResource Flick.Brush.Raised}"
                     BorderBrush="{DynamicResource Flick.Brush.BorderStrong}" BorderThickness="1"/>
-            <Border x:Name="PlayheadLine" Canvas.Top="0" Width="2" Height="30" Background="{DynamicResource Flick.Brush.TextPrimary}" IsHitTestVisible="False"/>
-            <primitives:Thumb x:Name="StartHandle" Width="12" Height="28"
-                              Focusable="True" IsTabStop="True"
-                              Cursor="SizeWE" DragDelta="StartHandle_DragDelta"
-                              DragCompleted="Handle_DragCompleted"
-                              PreviewKeyDown="Handle_PreviewKeyDown"
-                              PreviewKeyUp="Handle_PreviewKeyUp"
+            <Border x:Name="PlayheadLine" Canvas.Top="1" Width="2" Height="32" Background="{DynamicResource Flick.Brush.TextPrimary}" IsHitTestVisible="False"/>
+            <!-- Targets face outward from the selection: both stay reachable
+                 even when the visible selection is narrower than a target. -->
+            <primitives:Thumb x:Name="StartHandle" Style="{StaticResource Trim.Handle}"
+                              HorizontalContentAlignment="Right" Focusable="True" IsTabStop="True"
+                              DragDelta="StartHandle_DragDelta" DragCompleted="Handle_DragCompleted"
+                              PreviewKeyDown="Handle_PreviewKeyDown" PreviewKeyUp="Handle_PreviewKeyUp"
                               LostKeyboardFocus="Handle_LostKeyboardFocus"
                               PreviewMouseLeftButtonDown="Handle_PreviewMouseLeftButtonDown"
-                              ToolTip="Drag or use Left/Right arrows to set trim start"
-                              AutomationProperties.Name="Trim Start Handle">
-                <primitives:Thumb.Template>
-                    <ControlTemplate TargetType="{x:Type primitives:Thumb}">
-                        <Border x:Name="Grip" Background="{DynamicResource Flick.Brush.TextSecondary}"
-                                BorderBrush="{DynamicResource Flick.Brush.BorderStrong}"
-                                BorderThickness="1" CornerRadius="3"/>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsKeyboardFocused" Value="True">
-                                <Setter TargetName="Grip" Property="BorderThickness" Value="2"/>
-                                <Setter TargetName="Grip" Property="BorderBrush"
-                                        Value="{DynamicResource Flick.Brush.Focus}"/>
-                                <Setter TargetName="Grip" Property="Background"
-                                        Value="{DynamicResource Flick.Brush.TextPrimary}"/>
-                            </Trigger>
-                            <Trigger Property="IsEnabled" Value="False">
-                                <Setter TargetName="Grip" Property="Opacity" Value=".45"/>
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </primitives:Thumb.Template>
-            </primitives:Thumb>
-            <primitives:Thumb x:Name="EndHandle" Width="12" Height="28"
-                              Focusable="True" IsTabStop="True"
-                              Cursor="SizeWE" DragDelta="EndHandle_DragDelta"
-                              DragCompleted="Handle_DragCompleted"
-                              PreviewKeyDown="Handle_PreviewKeyDown"
-                              PreviewKeyUp="Handle_PreviewKeyUp"
+                              ToolTip="Drag to set In. Arrow keys: 0.1 seconds; Ctrl+arrow: 1 second."
+                              AutomationProperties.Name="Trim in handle"/>
+            <primitives:Thumb x:Name="EndHandle" Style="{StaticResource Trim.Handle}"
+                              HorizontalContentAlignment="Left" Focusable="True" IsTabStop="True"
+                              DragDelta="EndHandle_DragDelta" DragCompleted="Handle_DragCompleted"
+                              PreviewKeyDown="Handle_PreviewKeyDown" PreviewKeyUp="Handle_PreviewKeyUp"
                               LostKeyboardFocus="Handle_LostKeyboardFocus"
                               PreviewMouseLeftButtonDown="Handle_PreviewMouseLeftButtonDown"
-                              ToolTip="Drag or use Left/Right arrows to set trim end"
-                              AutomationProperties.Name="Trim End Handle">
-                <primitives:Thumb.Template>
-                    <ControlTemplate TargetType="{x:Type primitives:Thumb}">
-                        <Border x:Name="Grip" Background="{DynamicResource Flick.Brush.TextSecondary}"
-                                BorderBrush="{DynamicResource Flick.Brush.BorderStrong}"
-                                BorderThickness="1" CornerRadius="3"/>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsKeyboardFocused" Value="True">
-                                <Setter TargetName="Grip" Property="BorderThickness" Value="2"/>
-                                <Setter TargetName="Grip" Property="BorderBrush"
-                                        Value="{DynamicResource Flick.Brush.Focus}"/>
-                                <Setter TargetName="Grip" Property="Background"
-                                        Value="{DynamicResource Flick.Brush.TextPrimary}"/>
-                            </Trigger>
-                            <Trigger Property="IsEnabled" Value="False">
-                                <Setter TargetName="Grip" Property="Opacity" Value=".45"/>
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </primitives:Thumb.Template>
-            </primitives:Thumb>
+                              ToolTip="Drag to set Out. Arrow keys: 0.1 seconds; Ctrl+arrow: 1 second."
+                              AutomationProperties.Name="Trim out handle"/>
         </Canvas>
         <Grid Grid.Row="2" Margin="0,7,0,0">
             <Grid.ColumnDefinitions>
@@ -104,22 +101,22 @@
                 <ColumnDefinition Width="Auto"/>
                 <ColumnDefinition Width="100"/>
             </Grid.ColumnDefinitions>
-            <TextBlock Grid.Column="0" Text="Start" Style="{StaticResource Flick.Text.Caption}"
+            <TextBlock Grid.Column="0" Text="In" Style="{StaticResource Flick.Text.Caption}"
                        VerticalAlignment="Center" Margin="0,0,8,0"/>
             <TextBox Grid.Column="1" x:Name="StartTimeBox"
                      Style="{StaticResource Flick.Input.Text}"
                      Padding="6,6" FontSize="{StaticResource Flick.Font.Control}" Typography.NumeralAlignment="Tabular"
-                     AutomationProperties.Name="Trim Start Time"
+                     AutomationProperties.Name="Trim in time"
                      LostKeyboardFocus="TimeBox_LostKeyboardFocus"
                      TextChanged="TimeBox_TextChanged"
                      PreviewKeyDown="TimeBox_PreviewKeyDown"
                      ToolTip="Enter seconds or M:SS.ff"/>
-            <TextBlock Grid.Column="3" Text="End" Style="{StaticResource Flick.Text.Caption}"
+            <TextBlock Grid.Column="3" Text="Out" Style="{StaticResource Flick.Text.Caption}"
                        VerticalAlignment="Center" Margin="0,0,8,0"/>
             <TextBox Grid.Column="4" x:Name="EndTimeBox"
                      Style="{StaticResource Flick.Input.Text}"
                      Padding="6,6" FontSize="{StaticResource Flick.Font.Control}" Typography.NumeralAlignment="Tabular"
-                     AutomationProperties.Name="Trim End Time"
+                     AutomationProperties.Name="Trim out time"
                      LostKeyboardFocus="TimeBox_LostKeyboardFocus"
                      TextChanged="TimeBox_TextChanged"
                      PreviewKeyDown="TimeBox_PreviewKeyDown"

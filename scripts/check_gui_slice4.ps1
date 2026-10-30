@@ -36,8 +36,8 @@ Require $main 'DragHandle_MouseLeftButtonDown' "Native Discord drag entry missin
 if ($main -match 'x:Name="SliderTrimStart"' -or $main -match 'x:Name="SliderTrimEnd"') {
     throw "Old separate trim slider layout must be removed"
 }
-Require $trim 'AutomationProperties.Name="Trim Start Handle"' "Keyboard-accessible trim start missing"
-Require $trim 'AutomationProperties.Name="Trim End Handle"' "Keyboard-accessible trim end missing"
+Require $trim 'AutomationProperties.Name="Trim in handle"' "Keyboard-accessible trim In handle missing"
+Require $trim 'AutomationProperties.Name="Trim out handle"' "Keyboard-accessible trim Out handle missing"
 Require $trimCs 'Handle_PreviewKeyDown' "Keyboard trim movement missing"
 Require $trimCs 'TimeBox_PreviewKeyDown' "Precise start/end input missing"
 Require $trimCs 'RangeCommitted\?\.Invoke' "Trim save only after user commit"

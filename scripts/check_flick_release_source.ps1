@@ -8,7 +8,9 @@ function Require([string]$body, [string]$pattern, [string]$why) {
 $media = Read "src/LocalClip.Core/Media/MediaProber.cs"
 $xaml = Read "src/LocalClip.App/MainWindow.xaml"
 $view = Read "src/LocalClip.App/MainWindow.xaml.cs"
+$posterView = Read "src/LocalClip.App/MainWindow.LibraryPresentation.cs"
 $decode = Read "src/LocalClip.App/Services/ThumbnailImageConverter.cs"
+$asyncDecode = Read "src/LocalClip.App/Services/BoundedThumbnailLoader.cs"
 $monitor = Read "src/LocalClip.Core/Diagnostics/ResourceMonitor.cs"
 $package = Read "scripts/build_package.ps1"
 $csproj = Read "src/LocalClip.App/LocalClip.App.csproj"
@@ -16,10 +18,13 @@ $install = Read "installer/Flick.iss"
 $start = Read "src/LocalClip.App/Services/WindowsStartupRegistration.cs"
 Require $media 'force_original_aspect_ratio=decrease' "FFmpeg thumbnails must be bounded"
 Require $decode 'DecodePixelWidth\s*=\s*256' "Legacy thumbnails must decode to display size"
-Require $xaml 'Flick.ThumbnailDecoder' "Row and poster need bounded decoding"
+Require $xaml 'AsyncThumbnail.Path="\{Binding ThumbnailPath\}"' "Virtualized library rows must use the bounded asynchronous still loader"
+Require $xaml 'AsyncThumbnail.Path="\{Binding SelectedClip.ThumbnailPath\}"' "The lazy player poster must use the same bounded asynchronous loader"
+Require $asyncDecode 'BitmapSource.Create' "Cached still pixels must not retain encoded image streams"
 Require $xaml 'Delay=180' "Search should debounce"
 Require $view 'MediaElement.Source opens a decoder' "Editor must defer media until playback"
-Require $view 'PlayerPoster.Visibility\s*=\s*Visibility.Visible' "Editor needs its poster"
+Require $posterView 'PlayerPoster.Visibility\s*=\s*Visibility.Visible' "Known available clips need the lazy poster"
+Require $posterView 'HasKnownAvailability' "Unknown source availability must remain distinct from Offline"
 Require $view 'ReleasePosterWhileHidden' "Tray/minimize should release decoded poster resources"
 Require $monitor 'using var current' "Transient process handles must be disposed"
 Require $package 'Flick.ico' "Portable packaging must include brand icon"
@@ -58,12 +63,15 @@ if ($install -match '(?im)^\s*UninstallDelete|deleteall') {
 $lock = Read "dependencies.lock.json"
 $setupScript = Read "scripts/build_installer.ps1"
 $versions = Read "release/preview-version.txt"
-Require $csproj '<Version>1\.0\.11-preview\.1</Version>' "App assembly version must match preview tag"
-Require $install 'MyAppVersion "1\.0\.11"' "Inno Setup AppVersion must match"
-Require $package 'Flick-v1\.0\.11-win-x64' "Portable version must match installer"
+Require $csproj '<Version>1\.0\.12-preview\.1</Version>' "App assembly version must match preview tag"
+Require $install 'MyAppVersion "1\.0\.12"' "Inno Setup AppVersion must match"
+Require $package 'Flick-v1\.0\.12-win-x64' "Portable version must match installer"
 Require $setupScript 'Flick-Setup\.exe' "User-facing installer must be a single EXE"
-Require $lock '1\.0\.11-preview\.1' "Pinned app version must match tag"
-if ($versions.Trim() -ne "1.0.11-preview.1") { throw "Release version manifest does not match compiled version" }
+Require $lock '1\.0\.12-preview\.1' "Pinned app version must match tag"
+$nativeVersion = Read "src/LocalClip.CaptureHost/capture_version.h"
+Require $nativeVersion '#define FLICK_FILE_VERSION 1,0,12,0' "Native numeric file version must match managed version"
+Require $nativeVersion '#define FLICK_PRODUCT_VERSION 1,0,12,0' "Native numeric product version must match managed version"
+if ($versions.Trim() -ne "1.0.12-preview.1") { throw "Release version manifest does not match compiled version" }
 Write-Host "Flick packaging and memory source contracts PASS (not a hardware performance test)." -ForegroundColor Green
 
 # No automatic unsigned GitHub Releases may be created after SAC block report.
@@ -80,4 +88,4 @@ Require $signedWorkflow 'id-token: write' "Azure Public Trust uses OIDC, not exp
 Require $signedWorkflow 'prepare_flick_signing\.ps1' "Prepare the CA signing client before building"
 Require $signingImpl 'RequireTrustedSigning' "Inno must sign Setup and Uninstaller"
 Require $trustAudit 'Get-AuthenticodeSignature' "Public release gate must verify trusted signatures"
-Write-Host "Unsigned release publishing remains disabled pending validated Public Trust signing." -ForegroundColor Yellow
+Write-Host "Legacy automatic unsigned publishing stays disabled; verified previews use the separately approved publication workflow." -ForegroundColor Yellow

@@ -147,8 +147,8 @@ internal static partial class Program
         vm.SelectedClip = vm.FilteredClips.Single(clip => clip.Id == media.Id);
         Invoke("ResetPlayerForSelection");
         // Never imply that the synthetic poster is decoded gameplay/playback.
-        Find<Image>("PlayerPoster").Visibility = Visibility.Collapsed;
-        Find<TextBlock>("PlayerPosterHint").Text = "Synthetic media fixture · press Play to preview";
+        // Keep the production lazy poster and caption bindings. The owned
+        // generated-media still is synthetic; no video decoder is opened here.
         void Split()
         {
             typeof(MainWindow).GetField("_layoutMode", Private)!.SetValue(window, WorkspaceLayoutMode.Split);
@@ -264,6 +264,7 @@ internal static partial class Program
         ProductFrame("60-editor-markers-minimum.png", 720, 480, "Minimum editor with markers");
         Invoke("CloseEditorContext");
         vm.LibrarySort = "Recently Exported";
+        SettleLibraryPresentation(vm, window.Dispatcher);
         if (vm.RecentExports.Count != 1 || vm.FilteredClips.Count != 1 || !vm.SelectRecentExport(media.Id))
             throw new InvalidOperationException("Recent exports must contain the genuinely ready generated fixture.");
         Split();

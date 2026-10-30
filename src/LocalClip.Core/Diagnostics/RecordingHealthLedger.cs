@@ -10,7 +10,7 @@ namespace LocalClip.Core.Diagnostics;
 public sealed class RecordingHealthLedger
 {
     private sealed record PendingSave(Guid SessionId, RecordingSource Source,
-        CaptureEncodingProfile? Profile, ReplaySaveState State);
+        CaptureEncodingProfile? Profile, ReplaySaveState State, bool AcknowledgementUnconfirmed = false);
 
     private readonly object _gate = new();
     private readonly Func<DateTimeOffset> _utcNow;
@@ -46,7 +46,11 @@ public sealed class RecordingHealthLedger
                 var hotkeys = Array.AsReadOnly(_hotkeys.Values.OrderBy(item => item.Action, StringComparer.Ordinal).ToArray());
                 return new(_revision, _sessionId, _engineState, CurrentSaveState(), _saves.Count,
                     _source, _profile, _lastProfile, _hostHealth, _bufferedSeconds, _maximumBufferSeconds,
-                    _estimated, _trackingLimited, _lastRecordingIssue, _lastSaveIssue, _lastValidatedClip, hotkeys);
+                    _estimated, _trackingLimited, _lastRecordingIssue, _lastSaveIssue, _lastValidatedClip, hotkeys)
+                {
+                    SaveAcknowledgementUnconfirmed = _saves.Values.Any(save =>
+                        save.AcknowledgementUnconfirmed && save.State != ReplaySaveState.Validating)
+                };
             }
         }
     }
@@ -189,10 +193,10 @@ public sealed class RecordingHealthLedger
                     string.IsNullOrWhiteSpace(errorCode) ? "save_rejected" : errorCode,
                     string.IsNullOrWhiteSpace(errorMessage) ? "The capture host did not accept the replay save." : errorMessage);
             }
-            else if (save.State == ReplaySaveState.Requested)
+            else if (save.State is ReplaySaveState.Requested or ReplaySaveState.Accepted)
             {
                 // A late ACK must never move an already validating save backward.
-                _saves[saveId] = save with { State = ReplaySaveState.Accepted };
+                _saves[saveId] = save with { State = ReplaySaveState.Accepted, AcknowledgementUnconfirmed = false };
             }
             _revision++;
             return true;
@@ -204,7 +208,20 @@ public sealed class RecordingHealthLedger
         lock (_gate)
         {
             if (!TryGetSave(sessionId, saveId, out var save)) return false;
-            _saves[saveId] = save with { State = ReplaySaveState.Validating };
+            _saves[saveId] = save with { State = ReplaySaveState.Validating, AcknowledgementUnconfirmed = false };
+            _revision++;
+            return true;
+        }
+    }
+
+    /// <summary>A command timeout cannot settle a save or supersede a terminal file already being checked.</summary>
+    public bool MarkSaveAcknowledgementUnconfirmed(Guid sessionId, string saveId)
+    {
+        lock (_gate)
+        {
+            if (!TryGetSave(sessionId, saveId, out var save) || save.State == ReplaySaveState.Validating)
+                return false;
+            _saves[saveId] = save with { AcknowledgementUnconfirmed = true };
             _revision++;
             return true;
         }

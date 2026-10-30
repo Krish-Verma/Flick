@@ -28,6 +28,8 @@ public partial class TrimRangeControl : UserControl
     private double _committedEnd;
     private bool _keyboardRangeDirty;
     private bool _refreshing;
+    private bool _startTimeEdited;
+    private bool _endTimeEdited;
     private double _playhead;
 
     public event EventHandler<TrimRangeCommittedEventArgs>? RangeCommitted;
@@ -66,9 +68,14 @@ public partial class TrimRangeControl : UserControl
 
     private void RangeCanvas_SizeChanged(object sender, SizeChangedEventArgs e) => UpdateTrack();
 
-    private double TravelWidth => Math.Max(1, RangeCanvas.ActualWidth - StartHandle.Width);
+    // In's target sits before its boundary; Out's sits after it. Reserving
+    // both targets keeps edge timestamps and very short ranges reachable.
+    private double HandleTargetWidth => Math.Max(StartHandle.Width, EndHandle.Width);
+    private double TravelWidth => Math.Max(1, RangeCanvas.ActualWidth - 2 * HandleTargetWidth);
     private double Position(double seconds) => _duration <= 0 ? 0 :
         Math.Clamp(seconds / _duration, 0, 1) * TravelWidth;
+    private double SecondsAt(double canvasX) => _duration <= 0 ? 0 :
+        Math.Clamp((canvasX - HandleTargetWidth) / TravelWidth, 0, 1) * _duration;
     public void SetPlayhead(double seconds) { _playhead = double.IsFinite(seconds) ? Math.Clamp(seconds, 0, _duration) : 0; UpdateTrack(); }
 
     private void UpdateTrack()
@@ -76,15 +83,15 @@ public partial class TrimRangeControl : UserControl
         if (TrackBackground is null || StartHandle is null || EndHandle is null) return;
         double from = Position(_start);
         double to = Position(_end);
-        TrackBackground.Width = Math.Max(0, RangeCanvas.ActualWidth);
-        Canvas.SetLeft(TrackBackground, 0);
-        Canvas.SetLeft(SelectedTrack, from + StartHandle.Width / 2);
+        TrackBackground.Width = TravelWidth;
+        Canvas.SetLeft(TrackBackground, HandleTargetWidth);
+        Canvas.SetLeft(SelectedTrack, from + HandleTargetWidth);
         SelectedTrack.Width = Math.Max(0, to - from);
         Canvas.SetLeft(StartHandle, from);
         Canvas.SetTop(StartHandle, 1);
-        Canvas.SetLeft(EndHandle, to);
+        Canvas.SetLeft(EndHandle, to + HandleTargetWidth);
         Canvas.SetTop(EndHandle, 1);
-        Canvas.SetLeft(PlayheadLine, Position(_playhead) + StartHandle.Width / 2);
+        Canvas.SetLeft(PlayheadLine, Position(_playhead) + HandleTargetWidth - PlayheadLine.Width / 2);
     }
 
     private void RefreshControls()
@@ -94,9 +101,10 @@ public partial class TrimRangeControl : UserControl
         StartTimeBox.Text = TrimTimelineMath.Format(_start);
         EndTimeBox.Text = TrimTimelineMath.Format(_end);
         _refreshing = false;
+        _startTimeEdited = _endTimeEdited = false;
         SelectedDurationText.Text = _duration > 0
             ? "Selected: " + TrimTimelineMath.Format(_end - _start)
-            : "No Clip Selected";
+            : "No clip selected";
         UpdateTrack();
     }
 
@@ -125,12 +133,16 @@ public partial class TrimRangeControl : UserControl
 
     private void Handle_PreviewKeyDown(object sender, KeyEventArgs e)
     {
-        if (_duration <= 0) return;
-        bool startHandle = ReferenceEquals(sender, StartHandle);
-        bool coarse = Keyboard.Modifiers.HasFlag(ModifierKeys.Control);
+        if (MoveHandle(ReferenceEquals(sender, StartHandle), e.Key,
+            Keyboard.Modifiers.HasFlag(ModifierKeys.Control))) e.Handled = true;
+    }
+
+    private bool MoveHandle(bool startHandle, Key key, bool coarse)
+    {
+        if (_duration <= 0) return false;
         double step = coarse ? TrimTimelineMath.KeyboardCoarseStep : TrimTimelineMath.KeyboardFineStep;
         double current = startHandle ? _start : _end;
-        double desired = e.Key switch
+        double desired = key switch
         {
             Key.Left => current - step,
             Key.Right => current + step,
@@ -138,7 +150,7 @@ public partial class TrimRangeControl : UserControl
             Key.End => _duration,
             _ => double.NaN
         };
-        if (!double.IsFinite(desired)) return;
+        if (!double.IsFinite(desired)) return false;
         if (startHandle)
             _start = TrimTimelineMath.MoveStart(desired, _end, _duration);
         else
@@ -146,24 +158,25 @@ public partial class TrimRangeControl : UserControl
         RefreshControls();
         _keyboardRangeDirty = true;
         RangeChanging?.Invoke(this, EventArgs.Empty);
-        e.Handled = true;
+        return true;
     }
 
     private void Handle_PreviewKeyUp(object sender, KeyEventArgs e)
     {
         if (_keyboardRangeDirty && e.Key is Key.Left or Key.Right or Key.Home or Key.End)
         {
-            _keyboardRangeDirty = false;
-            Commit(); // One disk write per completed held key action, not each repeat.
+            CommitKeyboardRange();
             e.Handled = true;
         }
     }
 
-    private void Handle_LostKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e)
+    private void Handle_LostKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e) => CommitKeyboardRange();
+
+    private void CommitKeyboardRange()
     {
         if (!_keyboardRangeDirty) return;
         _keyboardRangeDirty = false;
-        Commit();
+        Commit(); // One completed held-key action, rather than each repeat.
     }
 
     private void TimeBox_PreviewKeyDown(object sender, KeyEventArgs e)
@@ -186,7 +199,12 @@ public partial class TrimRangeControl : UserControl
     private void TimeBox_LostKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e)
         => CommitTimeBoxes();
     private void TimeBox_TextChanged(object sender, TextChangedEventArgs e)
-    { if (!_refreshing && _duration > 0) RangeChanging?.Invoke(this, EventArgs.Empty); }
+    {
+        if (_refreshing || _duration <= 0) return;
+        if (ReferenceEquals(sender, StartTimeBox)) _startTimeEdited = true;
+        if (ReferenceEquals(sender, EndTimeBox)) _endTimeEdited = true;
+        RangeChanging?.Invoke(this, EventArgs.Empty);
+    }
 
     private void Track_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
@@ -197,15 +215,18 @@ public partial class TrimRangeControl : UserControl
             if (source is Thumb) return;
             source = System.Windows.Media.VisualTreeHelper.GetParent(source);
         }
-        double seconds = Math.Clamp((e.GetPosition(RangeCanvas).X - StartHandle.Width / 2) / TravelWidth, 0, 1) * _duration;
+        double seconds = SecondsAt(e.GetPosition(RangeCanvas).X);
         SetPlayhead(seconds); SeekRequested?.Invoke(this, new(seconds)); e.Handled = true;
     }
 
     private void CommitTimeBoxes()
     {
-        if (_duration <= 0) return;
-        if (!TrimTimelineMath.TryParseTime(StartTimeBox.Text, out double s) ||
-            !TrimTimelineMath.TryParseTime(EndTimeBox.Text, out double t) ||
+        if (_duration <= 0 || (!_startTimeEdited && !_endTimeEdited)) return;
+        // The display rounds to hundredths. Reparse only fields the user edited,
+        // so focus changes and editing Out preserve an exact In timestamp.
+        double s = _start, t = _end;
+        if ((_startTimeEdited && !TrimTimelineMath.TryParseTime(StartTimeBox.Text, out s)) ||
+            (_endTimeEdited && !TrimTimelineMath.TryParseTime(EndTimeBox.Text, out t)) ||
             t <= s || t > _duration || s < 0 ||
             !TrimTimelineMath.TryCreate(_duration, s, t, out var start, out var end))
         {

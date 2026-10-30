@@ -1,5 +1,5 @@
 <# Build a separate qualification artifact; never install or launch capture. #>
-param([string]$PackageDirectory = 'dist/Flick-v1.0.11-win-x64')
+param([string]$PackageDirectory = 'dist/Flick-v1.0.12-win-x64')
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 $root = (Get-Item -LiteralPath $PSScriptRoot).Parent.FullName

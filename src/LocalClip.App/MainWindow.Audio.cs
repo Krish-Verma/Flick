@@ -12,7 +12,7 @@ public partial class MainWindow
     private async void BuildAudioMixPreview_Click(object sender, RoutedEventArgs e)
     {
         var clip = _vm.SelectedClip;
-        if (clip?.IsAvailable != true || _vm.IsCaptureActive || _vm.IsExporting || _vm.IsBackgroundWorkActive)
+        if (clip?.IsAvailableForUi != true || _vm.IsCaptureActive || _vm.IsExporting || _vm.IsBackgroundWorkActive)
         {
             _vm.StatusDetails = "Finish recording and background work before previewing the audio mix."; return;
         }
@@ -38,6 +38,7 @@ public partial class MainWindow
             if (ReferenceEquals(_previewCancellation, cancellation)) _previewCancellation = null;
             cancellation.Dispose();
             BtnAudioMixPreview.IsEnabled = true;
+            UpdateSelectedAvailabilityUi(refreshPoster: false);
         }
     }
 }

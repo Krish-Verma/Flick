@@ -19,7 +19,7 @@
     <Color x:Key="Flick.Color.OnAccent">#FF251333</Color>
     <Color x:Key="Flick.Color.Border">#FF3A3349</Color>
     <Color x:Key="Flick.Color.Divider">#FF252332</Color>
-    <Color x:Key="Flick.Color.BorderStrong">#FF795E89</Color>
+    <Color x:Key="Flick.Color.BorderStrong">#FF8C739C</Color>
     <Color x:Key="Flick.Color.Focus">#FFE1C8FF</Color>
     <Color x:Key="Flick.Color.Success">#FF8FD4B0</Color>
     <Color x:Key="Flick.Color.Warning">#FFE2B66F</Color>

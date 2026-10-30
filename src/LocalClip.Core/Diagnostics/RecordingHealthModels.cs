@@ -42,6 +42,10 @@ public sealed record RecordingHealthSnapshot(
     SavedClipSummary? LastValidatedClip,
     IReadOnlyList<RecordingHotkeyHealth> Hotkeys)
 {
+    // Missing command acknowledgement is uncertainty, not a terminal failure.
+    // Kept separate from SaveState so native completion/validation ordering is unchanged.
+    public bool SaveAcknowledgementUnconfirmed { get; init; }
+
     public string StatusText => EngineState == RecordingEngineState.Faulted ? "Recording faulted"
         : PendingSaveCount > 0 ? "Saving clip"
         : HostHealth == CaptureHostHealth.Unresponsive ? "Recording status unavailable"

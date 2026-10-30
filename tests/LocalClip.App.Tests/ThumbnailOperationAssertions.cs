@@ -45,10 +45,12 @@ internal static class ThumbnailOperationAssertions
             vm.IsExporting = false; vm.CaptureStatus = "Off";
             Field("_storage").SetValue(vm, storage); Field("_selectedClip").SetValue(vm, null);
             vm.ReloadClips(); vm.SelectedClip = first;
+            LibraryObservationAssertions.Settle(vm);
             Assert.Equal(0, prober.Starts); Assert.True(vm.CanStartExport); Assert.True(vm.CanLoadFilmstrip);
 
             // Re-selecting a missing-thumbnail clip enters the real VM/storage path.
             first.ThumbnailPath = ""; vm.SelectedClip = null; vm.SelectedClip = first;
+            LibraryObservationAssertions.Settle(vm);
             Assert.Equal(1, prober.Starts); Assert.True(vm.IsBackgroundWorkActive);
             Task<bool> earlyStop = vm.StopSelectedThumbnailAsync(cleanupBudget: TimeSpan.FromMilliseconds(20));
             Pump(earlyStop);
@@ -59,6 +61,7 @@ internal static class ThumbnailOperationAssertions
             Assert.False(vm.CanStartExport); Assert.False(vm.CanLoadFilmstrip);
             Assert.Throws<InvalidOperationException>(() => vm.CreateAudioMixPreviewAsync(first, CancellationToken.None).GetAwaiter().GetResult());
             vm.SelectedClip = second;
+            LibraryObservationAssertions.Settle(vm);
             DrainDispatcher(); Assert.Equal(1, prober.Starts);
 
             // Cancellation is not completion: only explicit late cleanup releases ownership.
@@ -79,6 +82,7 @@ internal static class ThumbnailOperationAssertions
         }
         finally
         {
+            LibraryObservationAssertions.Settle(vm);
             prober.ReleaseCleanup.TrySetResult();
             Task<bool> cleanup = vm.StopSelectedThumbnailAsync(allowSettledShutdown: true, cleanupBudget: TimeSpan.FromSeconds(2));
             Pump(cleanup);

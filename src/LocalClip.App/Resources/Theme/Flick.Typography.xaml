@@ -31,8 +31,21 @@
     <Style x:Key="Flick.Text.Body" TargetType="{x:Type TextBlock}" BasedOn="{StaticResource Flick.Text.Base}"/>
     <Style x:Key="Flick.Text.Control" TargetType="{x:Type TextBlock}" BasedOn="{StaticResource Flick.Text.Base}">
         <Setter Property="FontSize" Value="{StaticResource Flick.Font.Control}"/>
-        <Setter Property="LineHeight" Value="18"/>
+        <Setter Property="LineHeight" Value="20"/>
         <Setter Property="FontWeight" Value="Normal"/>
+    </Style>
+    <!-- Compact metadata stays opt-in; actionable status must not inherit 12-DIP captions. -->
+    <Style x:Key="Flick.Text.Dense" TargetType="{x:Type TextBlock}" BasedOn="{StaticResource Flick.Text.Base}">
+        <Setter Property="FontSize" Value="{StaticResource Flick.Font.Dense}"/>
+        <Setter Property="LineHeight" Value="20"/>
+    </Style>
+    <Style x:Key="Flick.Text.Status" TargetType="{x:Type TextBlock}" BasedOn="{StaticResource Flick.Text.Dense}">
+        <Setter Property="FontSize" Value="{StaticResource Flick.Font.Status}"/>
+        <Setter Property="Foreground" Value="{DynamicResource Flick.Brush.TextSecondary}"/>
+    </Style>
+    <Style x:Key="Flick.Text.Numeric" TargetType="{x:Type TextBlock}" BasedOn="{StaticResource Flick.Text.Status}">
+        <Setter Property="Typography.NumeralAlignment" Value="Tabular"/>
+        <Setter Property="Typography.NumeralStyle" Value="Lining"/>
     </Style>
     <Style x:Key="Flick.Text.Caption" TargetType="{x:Type TextBlock}" BasedOn="{StaticResource Flick.Text.Base}">
         <Setter Property="FontSize" Value="{StaticResource Flick.Font.Caption}"/>
@@ -45,6 +58,9 @@
     <!-- The approved 2026-10-30 artwork includes its own black canvas and glow.
          Map the complete supplied image to the centered 38-DIP viewport without
          the legacy bitmap's 1-DIP offset. Native icons use this same mapping. -->
+    <!-- Decode once near the largest supported display size; keep the approved PNG and mapping untouched. -->
+    <BitmapImage x:Key="Flick.Image.BrandMark.Bitmap" DecodePixelWidth="256" CacheOption="OnLoad"
+                 UriSource="pack://application:,,,/Flick;component/Assets/Brand/FlickLogo.png"/>
     <DrawingImage x:Key="Flick.Image.BrandMark.Source">
         <DrawingImage.Drawing>
             <DrawingGroup>
@@ -57,7 +73,7 @@
                         <RectangleGeometry Rect="0,0,38,38"/>
                     </GeometryDrawing.Geometry>
                 </GeometryDrawing>
-                <ImageDrawing ImageSource="pack://application:,,,/Flick;component/Assets/Brand/FlickLogo.png"
+                <ImageDrawing ImageSource="{StaticResource Flick.Image.BrandMark.Bitmap}"
                               Rect="0,0,38,38"/>
             </DrawingGroup>
         </DrawingImage.Drawing>

@@ -460,6 +460,7 @@ public partial class MainViewModel : INotifyPropertyChanged, IDisposable
 
     private void PublishHealth()
     {
+        PublishCapturePresentation();
         OnPropertyChanged(nameof(RecordingHealth));
         OnPropertyChanged(nameof(HealthStatusText));
         OnPropertyChanged(nameof(HealthDetailsText));
@@ -550,7 +551,7 @@ public partial class MainViewModel : INotifyPropertyChanged, IDisposable
         || Volatile.Read(ref _libraryRescanOperations) > 0 || _isExportingDiagnostics || _isRecordingDiagnosticRunning
         || _isBuildingAudioPreview || _audioPreviewOperation.CleanupFailed || _isLoadingFilmstrip || _filmstripCleanupUnconfirmed || _gameAutomationBusy || _thumbnailOperations.Count > 0 || _thumbnailCleanupUnconfirmed;
     public bool IsCaptureActive => CaptureActive || _gameAutomationBusy || _isRecordingDiagnosticRunning || _diagnosticCleanupUnconfirmed;
-    public bool CanEditClip => SelectedClip?.IsAvailable == true && !IsExporting && !_isBuildingAudioPreview;
+    public bool CanEditClip => SelectedClip?.IsAvailableForUi == true && !IsExporting && !_isBuildingAudioPreview;
     public bool CanStartExport => CanEditClip && !IsImporting && !_gameAutomationBusy && !_isRecordingDiagnosticRunning && !_isPreparingToQuit
         && !_diagnosticCleanupUnconfirmed && !_filmstripCleanupUnconfirmed && !_thumbnailCleanupUnconfirmed && !_thumbnailStopPending && !_audioPreviewOperation.CleanupFailed;
 
@@ -813,6 +814,13 @@ public partial class MainViewModel : INotifyPropertyChanged, IDisposable
     {
         get => _isExporting;
         set { _isExporting = value; OnPropertyChanged(); OnPropertyChanged(nameof(CanEditClip)); OnPropertyChanged(nameof(CanStartExport)); }
+    }
+
+    private string? _exportingClipId;
+    public string? ExportingClipId
+    {
+        get => _exportingClipId;
+        private set { if (_exportingClipId == value) return; _exportingClipId = value; OnPropertyChanged(); }
     }
 
     public double ExportProgress
@@ -1153,6 +1161,7 @@ public partial class MainViewModel : INotifyPropertyChanged, IDisposable
 
     public async Task<bool> PrepareToQuitAsync()
     {
+        StopLibraryObservations();
         ClearFilmstrip();
         _thumbnailCancellation?.Cancel();
         _isPreparingToQuit = true;
@@ -1202,7 +1211,12 @@ public partial class MainViewModel : INotifyPropertyChanged, IDisposable
         }
         finally
         {
-            if (!ready) { _isPreparingToQuit = false; ResumeResourceSampling(); _pollTimer.Start(); UpdateAutomaticReplayTimer(); PublishDiagnosticTest(); }
+            if (!ready)
+            {
+                _isPreparingToQuit = false;
+                ResumeResourceSampling(); _pollTimer.Start(); UpdateAutomaticReplayTimer(); PublishDiagnosticTest();
+                ResumeLibraryObservationsAfterRefusedQuit();
+            }
         }
     }
 
@@ -1286,6 +1300,7 @@ public partial class MainViewModel : INotifyPropertyChanged, IDisposable
                     // the request registered until a correlated terminal event
                     // or confirmed capture-host exit settles its outcome.
                     RecordDiagnostic(DiagnosticEventKind.HostChanged, DiagnosticErrorCode.HostUnresponsive);
+                    _health.MarkSaveAcknowledgementUnconfirmed(saveSession, saveId);
                     PublishHealth();
                 }
                 if (!_captureHost.HasPendingReplaySaves)
@@ -1374,6 +1389,10 @@ public partial class MainViewModel : INotifyPropertyChanged, IDisposable
                         // playable, indexed MKV and notify before creating it.
                         var clip = await _storage.RegisterNewOriginalAsync(
                             filePath, context.Target, trackNames, generateThumbnail: false);
+                        // Registration just validated this original off-thread;
+                        // don't present a freshly confirmed save as unknown while
+                        // unrelated imported paths are still being checked.
+                        clip.ApplyAvailabilityObservation(filePath, true);
                         // Reloading an ObservableCollection can temporarily clear the
                         // ListBox selection through its TwoWay binding. Snapshot the
                         // edit context BEFORE rebuilding the gallery.
@@ -1665,7 +1684,7 @@ public partial class MainViewModel : INotifyPropertyChanged, IDisposable
 
     public bool ApplyTrim(double start, double end)
     {
-        if (SelectedClip is null || !SelectedClip.IsAvailable || IsExporting) return false;
+        if (SelectedClip is null || !SelectedClip.IsAvailableForUi || IsExporting) return false;
         var validated = TrimValidator.Validate(start, end, SelectedClip.DurationSeconds);
         if (!validated.IsValid)
         {
@@ -1726,7 +1745,7 @@ public partial class MainViewModel : INotifyPropertyChanged, IDisposable
     {
         _audioMixRevision++;
         OnPropertyChanged(nameof(AudioMixRevision));
-        if (SelectedClip is null || !SelectedClip.IsAvailable) return;
+        if (SelectedClip is null || !SelectedClip.IsAvailableForUi) return;
         InvalidateExportReady(); // Never let stale exported audio look ready.
         _pendingAudioClip = SelectedClip;
         EditorSaveState = "Saving audio mix…";
@@ -1754,7 +1773,7 @@ public partial class MainViewModel : INotifyPropertyChanged, IDisposable
 
     public void ResetAudioMix()
     {
-        if (SelectedClip == null || IsExporting || !SelectedClip.IsAvailable) return;
+        if (SelectedClip == null || IsExporting || !SelectedClip.IsAvailableForUi) return;
         LocalClip.Core.Audio.AudioTrackRoles.Reset(SelectedClip);
         ScheduleAudioEdit();
     }
@@ -1763,7 +1782,6 @@ public partial class MainViewModel : INotifyPropertyChanged, IDisposable
     {
         string? selectedId = SelectedClip?.Id;
         _allClips = _storage.GetAllClips();
-        foreach (var clip in _allClips) clip.RefreshAvailability();
         RefreshOrganizationFacets();
         ApplyFilter();
         if (selectedId != null)
@@ -1777,6 +1795,7 @@ public partial class MainViewModel : INotifyPropertyChanged, IDisposable
                 OnSelectedClipChanged(); // Availability may change on the same cached metadata instance.
         }
         UpdateLibrarySummary();
+        StartLibraryAvailabilityRefresh();
     }
 
     public void ApplyFilter()
@@ -1793,6 +1812,7 @@ public partial class MainViewModel : INotifyPropertyChanged, IDisposable
         _applyingLibraryFilter = true;
         try { _filteredClips.ReplaceAll(visible); }
         finally { _applyingLibraryFilter = false; }
+        PublishLibraryPresentation();
     }
 
     private void OnSelectedClipChanged()
@@ -1806,34 +1826,12 @@ public partial class MainViewModel : INotifyPropertyChanged, IDisposable
             InvalidateExportReady();
             return;
         }
-        if (!SelectedClip.IsAvailable)
-        {
-            InvalidateExportReady();
-            ExportStatusMessage = "Original video offline · reconnect its folder";
-            return;
-        }
-
-        if (SelectedClip.IsAvailable && CanGenerateSelectedThumbnail &&
-            (string.IsNullOrWhiteSpace(SelectedClip.ThumbnailPath) ||
-             !File.Exists(SelectedClip.ThumbnailPath)))
-            _ = EnsureSelectedThumbnailAsync(SelectedClip);
-
-        // A Ready tile requires both the matching current edits and actual MP4 bytes.
-        if (ReadyShareFile.TryGet(SelectedClip, TargetSizeMb, out var ready, _settings.ExportsFolder))
-        {
-            IsExportReady = true;
-            ReadyExportFilePath = ready;
-            ExportStatusMessage = $"Ready to share · {SelectedClip.ExportedFileSizeBytes / 1_000_000.0:F2} MB";
-        }
-        else
-        {
-            // Switching clips or a size preset must not permanently destroy a
-            // verified old export: if the user switches back to its original
-            // cap, the ready MP4 may be reused without wasting an encode.
-            IsExportReady = false;
-            ReadyExportFilePath = "";
-            ExportStatusMessage = "Export to prepare an MP4.";
-        }
+        if (IsExporting) return; // Reopening Share must preserve the export's current stage/cancellation.
+        // Unknown is not Offline, and neither a row selection nor reopening
+        // Share should synchronously stat an original/remote export on the UI.
+        ClearReadinessPresentation(!SelectedClip.HasKnownAvailability ? "Checking clip availability…"
+            : !SelectedClip.IsAvailableForUi ? "Original video offline · reconnect its folder" : "Checking prepared MP4…");
+        StartSelectedLibraryRead();
     }
 
     private async Task EnsureSelectedThumbnailAsync(ClipMetadata clip)
@@ -1888,6 +1886,7 @@ public partial class MainViewModel : INotifyPropertyChanged, IDisposable
 
     public void InvalidateExportReady()
     {
+        CancelSelectedLibraryRead();
         IsExportReady = false;
         ReadyExportFilePath = "";
         ExportStatusMessage = "Clip changed · export again.";
@@ -1916,6 +1915,7 @@ public partial class MainViewModel : INotifyPropertyChanged, IDisposable
         _exportCancellation = cancellation;
         int generation = ++_exportGeneration;
         InvalidateExportReady();
+        ExportingClipId = clip.Id;
         IsExporting = true;
         ExportProgress = 0;
         ExportStatusMessage = "Preparing MP4…";
@@ -1958,7 +1958,6 @@ public partial class MainViewModel : INotifyPropertyChanged, IDisposable
                 else
                 {
                     ExportStatusMessage = $"Exported {clip.DisplayTitle} · Select to share";
-                    OnSelectedClipChanged();
                 }
             }
             else
@@ -1982,8 +1981,17 @@ public partial class MainViewModel : INotifyPropertyChanged, IDisposable
             if (ReferenceEquals(_exportCancellation, cancellation))
                 _exportCancellation = null;
             cancellation.Dispose();
-            IsExporting = false;
+            CompleteExportPresentation(clip.Id);
         }
+    }
+
+    private void CompleteExportPresentation(string clipId)
+    {
+        IsExporting = false;
+        ExportingClipId = null;
+        // Success/failure/cancellation belongs to the exported clip. A different
+        // current selection needs its own readiness after the global worker stops.
+        if (SelectedClip?.Id != clipId) OnSelectedClipChanged();
     }
 
     public void CopyExportedFileToClipboard()
@@ -2122,6 +2130,7 @@ public partial class MainViewModel : INotifyPropertyChanged, IDisposable
 
     public void Dispose()
     {
+        StopLibraryObservations(disposing: true);
         DisposeSharePresentation();
         ClearFilmstrip();
 
@@ -2155,6 +2164,9 @@ public partial class MainViewModel : INotifyPropertyChanged, IDisposable
     protected void OnPropertyChanged([CallerMemberName] string? name = null)
     {
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
+        if (name is nameof(SelectedTarget) or nameof(AutomaticGameSourceText) or nameof(IsAutomaticGameCapture)
+            or nameof(ReplayWaitingText) or nameof(IsRecordingDiagnosticRunning))
+            PublishCapturePresentation();
         OnShareDependencyChanged(name);
         if (name is nameof(IsCaptureActive) or nameof(CaptureStatus) or nameof(CanEditClip) or nameof(IsExporting) or nameof(IsBackgroundWorkActive))
         {

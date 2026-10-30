@@ -131,6 +131,7 @@ public partial class MainWindow : Window
             _ = FlickBackdropService.TryApplyDarkTitleBar(this);
             _ = FlickBackdropService.TryApplyMica(this);
         };
+        InitializeWorkspacePresentation();
     }
 
     private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
@@ -166,46 +167,88 @@ public partial class MainWindow : Window
                 _vm.StatusDetails = startup.Message;
         }
 
-        // Wire CaptureStatus badge color updates
-        _vm.PropertyChanged += (s, ev) =>
-        {
-            if (ev.PropertyName is nameof(MainViewModel.CaptureStatus) or nameof(MainViewModel.HealthStatusText)
-                or nameof(MainViewModel.IsRecordingDiagnosticRunning) or nameof(MainViewModel.CanControlReplay)
-                or nameof(MainViewModel.ActiveReplayDurationSeconds) or nameof(MainViewModel.IsAutomaticGameCapture)
-                or nameof(MainViewModel.GameDetectionStatus))
-            {
-                UpdateStatusBadgeColor();
-                if (_vm.CaptureStatus == "Starting" || _vm.IsRecordingDiagnosticRunning)
-                {
-                    // A real gameplay session always outranks a preview decoder.
-                    _previewCancellation?.Cancel();
-                    SuspendPlayback(clearSource: true);
-                }
-            }
-            else if (ev.PropertyName == nameof(MainViewModel.AudioMixRevision))
-            {
-                CancelPendingPreview();
-                if (_playerView is PlayerView.Exported or PlayerView.LocalCopy or PlayerView.AudioMix) ShowOriginalPreview(startPlaying: false);
-            }
-            else if (ev.PropertyName == nameof(MainViewModel.SelectedClip))
-            {
-                ResetPlayerForSelection();
-                if (_vm.SelectedClip != null && _layoutMode == WorkspaceLayoutMode.Compact)
-                    ShowCompactEditor();
-            }
-            else if (ev.PropertyName == nameof(MainViewModel.IsExportReady) &&
-                     !_vm.IsExportReady && _playerView == PlayerView.Exported)
-            {
-                // The export became stale after edits, so never preview it as ready.
-                ShowOriginalPreview(startPlaying: false);
-            }
-        };
+    }
+
+    private void InitializeWorkspacePresentation()
+    {
+        // Presentation observes the model before asynchronous startup.
+        // This subscribes UI only; discovery, hotkeys, tray and replay stay in Loaded.
+        _vm.PropertyChanged += WorkspacePresentationChanged;
         UpdateStatusBadgeColor();
+        UpdateShareActionStyles();
         UpdateSharePresetSelection();
         RadioAllClips.IsChecked = true;
         ResetPlayerForSelection();
         _layoutInitialized = true;
         RefreshWorkspaceForSize();
+    }
+
+    private void WorkspacePresentationChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs args)
+    {
+        if (Dispatcher.CheckAccess())
+        {
+            ApplyWorkspacePresentationChange(args.PropertyName);
+            return;
+        }
+        // Bindings marshal model notifications themselves; this manual view
+        // observer must do the same after asynchronous worker completion.
+        if (!Dispatcher.HasShutdownStarted)
+            Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.DataBind,
+                new Action(() => ApplyWorkspacePresentationChange(args.PropertyName)));
+    }
+
+    private void ApplyWorkspacePresentationChange(string? propertyName)
+    {
+        if (_isRealClosing || Dispatcher.HasShutdownStarted) return;
+        if (propertyName is nameof(MainViewModel.CaptureStatus) or nameof(MainViewModel.HealthStatusText)
+            or nameof(MainViewModel.IsRecordingDiagnosticRunning) or nameof(MainViewModel.CanControlReplay)
+            or nameof(MainViewModel.ActiveReplayDurationSeconds) or nameof(MainViewModel.IsAutomaticGameCapture)
+            or nameof(MainViewModel.GameDetectionStatus) or nameof(MainViewModel.CaptureStateText)
+            or nameof(MainViewModel.CaptureStateTone) or nameof(MainViewModel.CaptureStateDetail))
+        {
+            UpdateStatusBadgeColor();
+            UpdateSelectedAvailabilityUi(refreshPoster: false);
+            if (_vm.CaptureStatus == "Starting" || _vm.IsRecordingDiagnosticRunning)
+            {
+                // A real gameplay session always outranks a preview decoder.
+                _previewCancellation?.Cancel();
+                SuspendPlayback(clearSource: true);
+            }
+        }
+        else if (propertyName == nameof(MainViewModel.ShareCanCopy))
+        {
+            UpdateShareActionStyles();
+        }
+        else if (propertyName == nameof(MainViewModel.SelectedClipAvailabilityRevision))
+        {
+            UpdateSelectedAvailabilityUi(refreshPoster: true);
+        }
+        else if (propertyName is nameof(MainViewModel.IsCaptureActive) or nameof(MainViewModel.IsImporting)
+            or nameof(MainViewModel.IsExporting) or nameof(MainViewModel.IsBackgroundWorkActive))
+        {
+            UpdateSelectedAvailabilityUi(refreshPoster: false);
+        }
+        else if (propertyName == nameof(MainViewModel.AudioMixRevision))
+        {
+            CancelPendingPreview();
+            if (_playerView is PlayerView.Exported or PlayerView.LocalCopy or PlayerView.AudioMix) ShowOriginalPreview(startPlaying: false);
+        }
+        else if (propertyName == nameof(MainViewModel.SelectedClip))
+        {
+            ResetPlayerForSelection();
+            if (_vm.SelectedClip != null && _layoutMode == WorkspaceLayoutMode.Compact)
+                ShowCompactEditor();
+        }
+        else if (propertyName == nameof(MainViewModel.IsExportReady) &&
+                 !_vm.IsExportReady && _playerView == PlayerView.Exported)
+        {
+            // The export became stale after edits, so never preview it as ready.
+            SuspendPlayback(clearSource: true);
+            _playerView = PlayerView.Original;
+            _previewWasReencoded = false;
+            BtnPreviewMode.Content = "Original";
+            UpdateSelectedAvailabilityUi(refreshPoster: true);
+        }
     }
 
     private async System.Threading.Tasks.Task ApplyBackgroundReplayIntentAsync()
@@ -369,6 +412,7 @@ public partial class MainWindow : Window
         _notifyIcon.ContextMenuStrip = menu;
         _notifyIcon.DoubleClick += (sender, args) =>
             _ = Dispatcher.BeginInvoke(new Action(ShowAndRestoreWindow));
+        UpdateStatusBadgeColor(); // Initialize tray/menu from the same presentation as the capture bar.
     }
 
     private void OnClipSavedConfirmed(ClipMetadata clip)
@@ -417,27 +461,22 @@ public partial class MainWindow : Window
         bool testing = _vm.IsRecordingDiagnosticRunning;
 
         bool compact = _layoutMode == WorkspaceLayoutMode.Compact;
-        TxtCaptureStatus.Text = testing ? "Testing recording" : _vm.RecordingHealth.SessionId != Guid.Empty || _vm.RecordingHealth.LastSaveIssue != null
-            ? _vm.HealthStatusText : status switch
-        {
-            "Armed" => compact ? "Ready" : "Replay ready",
-            "Buffering" => compact ? "Buffering" : "Buffering replay",
-            "Starting" => compact ? "Starting" : "Starting replay",
-            "Stopping" => compact ? "Stopping" : "Stopping replay",
-            "Faulted" => compact ? "Error" : "Capture error",
-            "Paused" => compact ? "Paused" : "Replay paused",
-            _ => compact ? "Off" : "Replay off"
-        };
-        if (!testing && !active && !transitional && !fault)
-            TxtCaptureStatus.Text = _vm.ReplayWaitingText;
+        TxtCaptureStatus.Text = testing ? "Testing recording" : _vm.CaptureStateText;
+        System.Windows.Automation.AutomationProperties.SetName(BtnRecordingHealth, TxtCaptureStatus.Text);
+        System.Windows.Automation.AutomationProperties.SetHelpText(BtnRecordingHealth, _vm.CaptureStateDetail);
+        BtnRecordingHealth.ToolTip = _vm.CaptureStateDetail;
 
         var neutral = (System.Windows.Media.Brush)FindResource("Flick.Brush.TextMuted");
         var green = (System.Windows.Media.Brush)FindResource("Flick.Brush.Success");
         var amber = (System.Windows.Media.Brush)FindResource("Flick.Brush.Warning");
         var danger = (System.Windows.Media.Brush)FindResource("Flick.Brush.Danger");
-        bool waiting = !active && !fault && _vm.ReplayWaitingText is "Waiting for game" or "Waiting to start replay";
-        CaptureStateDot.Fill = testing ? amber : ready ? green : buffering || transitional || waiting ? amber :
-            fault ? danger : neutral;
+        CaptureStateDot.Fill = testing ? amber : _vm.CaptureStateTone switch
+        {
+            "Success" => green,
+            "Warning" => amber,
+            "Danger" => danger,
+            _ => neutral
+        };
         // Badge surface is a DynamicResource so a Windows high-contrast
         // theme can override it without stale fixed-color rendering.
 
@@ -1042,7 +1081,7 @@ public partial class MainWindow : Window
             if (clearSource)
             {
                 VideoPlayer.Source = null;
-                PlayerPoster.Visibility = _vm.SelectedClip?.IsAvailable == true
+                PlayerPoster.Visibility = _vm.SelectedClip?.IsAvailableForUi == true
                     ? Visibility.Visible : Visibility.Collapsed;
                 PlayerPosterHint.Visibility = PlayerPoster.Visibility;
             }
@@ -1056,18 +1095,17 @@ public partial class MainWindow : Window
     {
         if (_posterCacheDetached) return;
         System.Windows.Data.BindingOperations.ClearBinding(
-            PlayerPoster, System.Windows.Controls.Image.SourceProperty);
-        PlayerPoster.Source = null; // Drop decoded poster pixels; keep clip model.
+            PlayerPoster, AsyncThumbnail.PathProperty);
+        AsyncThumbnail.SetPath(PlayerPoster, ""); // Cancels and releases only decoded still pixels.
         _posterCacheDetached = true;
     }
 
     private void RestorePosterAfterShow()
     {
         if (!_posterCacheDetached) return;
-        var converter = (System.Windows.Data.IValueConverter)FindResource("Flick.ThumbnailDecoder");
         System.Windows.Data.BindingOperations.SetBinding(
-            PlayerPoster, System.Windows.Controls.Image.SourceProperty,
-            new System.Windows.Data.Binding("SelectedClip.ThumbnailPath") { Converter = converter });
+            PlayerPoster, AsyncThumbnail.PathProperty,
+            new System.Windows.Data.Binding("SelectedClip.ThumbnailPath"));
         _posterCacheDetached = false;
     }
 
@@ -1085,8 +1123,9 @@ public partial class MainWindow : Window
         if (BtnBuildPreview != null)
         {
             BtnBuildPreview.Content = "Create preview";
-            BtnBuildPreview.IsEnabled = _vm.SelectedClip?.IsAvailable == true;
+            BtnBuildPreview.IsEnabled = _vm.SelectedClip?.IsAvailableForUi == true;
         }
+        UpdateSelectedAvailabilityUi(refreshPoster: false);
     }
 
     private void ResetPlayerForSelection()
@@ -1110,31 +1149,15 @@ public partial class MainWindow : Window
         TrimTimeline.SetRange(clip?.DurationSeconds ?? 0,
             clip?.TrimStartSeconds ?? 0, clip?.TrimEndSeconds ?? 0);
         PlayerSlider.Maximum = Math.Max(.25, clip?.DurationSeconds ?? 0);
-        BtnPlayPause.IsEnabled = clip?.IsAvailable == true;
-        BtnPreviewMode.IsEnabled = clip?.IsAvailable == true;
-        BtnBuildPreview.IsEnabled = clip?.IsAvailable == true;
         TxtPlayerTime.Text = "0:00 / " + (clip is null ? "0:00" : clip.FormattedDuration);
-
-        if (clip is null || !clip.IsAvailable)
-        {
-            PreviewFallbackPanel.Visibility = Visibility.Visible;
-            TxtPreviewIssue.Text = clip is null
-                ? "Select a Clip to Preview"
-                : "Original video is offline";
-            BtnBuildPreview.Visibility = Visibility.Collapsed;
-            return;
-        }
-
-        PreviewFallbackPanel.Visibility = Visibility.Collapsed;
-        BtnBuildPreview.Visibility = Visibility.Visible;
-        PlayerPoster.Visibility = Visibility.Visible;
-        PlayerPosterHint.Visibility = Visibility.Visible;
+        UpdateSelectedAvailabilityUi(refreshPoster: true);
         // Important: assigning MediaElement.Source opens a decoder even without
         // Play(). Keep it null until playback is explicitly requested.
     }
 
     private void SetPreviewSource(string path, PlayerView mode, bool startPlaying)
     {
+        if (!NativePreviewAllowed) return;
         if (!File.Exists(path))
         {
             _vm.StatusDetails = "Preview unavailable · reconnect the original";
@@ -1204,7 +1227,8 @@ public partial class MainWindow : Window
 
     private void BtnPlayPause_Click(object sender, RoutedEventArgs e)
     {
-        if (_vm.SelectedClip?.IsAvailable != true) return;
+        var clip = _vm.SelectedClip;
+        if (clip == null || !NativePreviewAllowed || _previewCancellation != null) return;
         if (_playerIsPlaying)
         {
             VideoPlayer.Pause();
@@ -1215,7 +1239,7 @@ public partial class MainWindow : Window
         }
         if (PreviewFallbackPanel.Visibility == Visibility.Visible) return;
         if (VideoPlayer.Source == null)
-            SetPreviewSource(_vm.SelectedClip.OriginalFilePath, PlayerView.Original, false);
+            SetPreviewSource(clip.OriginalFilePath, PlayerView.Original, false);
         if (VideoPlayer.Source == null) return;
         VideoPlayer.Play();
         _playerIsPlaying = true;
@@ -1361,6 +1385,7 @@ public partial class MainWindow : Window
             PlayerView.Exported => "Windows couldn't preview the MP4",
             PlayerView.AudioMix => "Windows couldn't play the audio mix",
             _ => "Windows couldn't play this video" };
+        TxtPreviewFallbackHint.Text = "Create a preview or open your player.";
         _vm.StatusDetails = _playerView switch {
             PlayerView.Exported => "Export preview unavailable. Open the validated MP4 externally.",
             PlayerView.AudioMix => "Mix playback unavailable. The original remains unchanged; export the mix to hear it in another player.",
@@ -1370,7 +1395,7 @@ public partial class MainWindow : Window
     private async void BuildPlayablePreview_Click(object sender, RoutedEventArgs e)
     {
         var clip = _vm.SelectedClip;
-        if (clip?.IsAvailable != true || _vm.IsCaptureActive || _vm.IsImporting || _vm.IsExporting || _vm.IsBackgroundWorkActive)
+        if (clip?.IsAvailableForUi != true || _vm.IsCaptureActive || _vm.IsImporting || _vm.IsExporting || _vm.IsBackgroundWorkActive)
         {
             _vm.StatusDetails = "Finish recording and background work before creating a local preview.";
             return;
@@ -1409,6 +1434,7 @@ public partial class MainWindow : Window
                 _previewCancellation = null;
                 BtnBuildPreview.IsEnabled = true;
                 BtnBuildPreview.Content = "Create preview";
+                UpdateSelectedAvailabilityUi(refreshPoster: false);
             }
             cancellation.Dispose();
         }
