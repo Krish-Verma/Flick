@@ -320,7 +320,7 @@ public partial class MainWindow : Window
             graphics.FillEllipse(canvas, viewport);
             clip.AddEllipse(viewport);
             graphics.SetClip(clip);
-            graphics.DrawImage(source, viewport, 0, 0, source.Width, source.Height, System.Drawing.GraphicsUnit.Pixel);
+            graphics.DrawImage(source, viewport);
         }
         IntPtr native = bitmap.GetHicon();
         try
