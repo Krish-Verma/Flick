@@ -138,15 +138,14 @@ public sealed class ClipStorage
             var ignored = _ignoredImportedPaths.Where(p =>
                 !IsWithin(p, folder.Path)).ToList();
             // Do not delete any actual imported video or user-created export.
-            _folders.Remove(folder);
-            try { SaveSourcesLocked(); }
-            catch { _folders.Add(folder); throw; }
-            _clips.Clear();
-            _clips.AddRange(remainingClips);
-            _ignoredImportedPaths.Clear();
-            foreach (var p in ignored) _ignoredImportedPaths.Add(p);
-            SaveIndexLocked();
-            SaveSourcesLocked();
+            PersistSourceMembershipChangeLocked(() =>
+            {
+                _folders.Remove(folder);
+                _clips.Clear();
+                _clips.AddRange(remainingClips);
+                _ignoredImportedPaths.Clear();
+                foreach (var p in ignored) _ignoredImportedPaths.Add(p);
+            });
             return true;
         }
     }
@@ -462,10 +461,11 @@ public sealed class ClipStorage
             if (clip.IsImported)
             {
                 string key = SafeNormalize(clip.OriginalFilePath);
-                _ignoredImportedPaths.Add(key);
-                SaveSourcesLocked();
-                _clips.Remove(clip);
-                SaveIndexLocked();
+                PersistSourceMembershipChangeLocked(() =>
+                {
+                    _ignoredImportedPaths.Add(key);
+                    _clips.Remove(clip);
+                });
                 return true;
             }
 
@@ -594,6 +594,45 @@ public sealed class ClipStorage
                 _sourcesReadFailed = true;
                 LastLoadWarning = "Connected folder registry unavailable; original metadata was preserved. " + ex.Message;
             }
+        }
+    }
+
+    // The registry and index have separate atomic files. If the second
+    // commit fails, compensate the first before reporting a failed change.
+    // No media operation belongs in this metadata-only transaction.
+    private void PersistSourceMembershipChangeLocked(Action change)
+    {
+        var beforeFolders = _folders.ToArray();
+        var beforeClips = _clips.ToArray();
+        var beforeIgnored = _ignoredImportedPaths.ToArray();
+        int beforeUnflushed = _unflushedImportedEntries;
+        bool sourcesCommitted = false;
+        try
+        {
+            change();
+            SaveSourcesLocked();
+            sourcesCommitted = true;
+            SaveIndexLocked();
+        }
+        catch (Exception saveError)
+        {
+            _folders.Clear(); _folders.AddRange(beforeFolders);
+            _clips.Clear(); _clips.AddRange(beforeClips);
+            _ignoredImportedPaths.Clear();
+            foreach (string path in beforeIgnored) _ignoredImportedPaths.Add(path);
+            _unflushedImportedEntries = beforeUnflushed;
+            if (sourcesCommitted)
+            {
+                try { SaveSourcesLocked(); }
+                catch (Exception rollbackError)
+                {
+                    _sourcesReadFailed = true;
+                    LastLoadWarning = "The library change failed and its folder registry could not be restored. " +
+                        "Media files were preserved. Back up and repair the library metadata before editing it again.";
+                    throw new IOException(LastLoadWarning, new AggregateException(saveError, rollbackError));
+                }
+            }
+            throw;
         }
     }
 
