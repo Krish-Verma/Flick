@@ -115,7 +115,7 @@ internal static class TrayGlobalAssertions
             save.PerformClick();
             Until(() => pipe.Requests().Count(request => request.GetProperty("cmd").GetString() == "save_replay") == before + 1 && !vm.IsReplaySavePending);
             replay.PerformClick();
-            Until(() => !client.IsRunning); StopTimers(vm);
+            Until(() => !client.IsRunning && vm.CaptureStatus == "Off" && !vm.IsCaptureActive && vm.CanControlReplay); StopTimers(vm);
             Assert.False(window.IsVisible);
             Invoke(window, "UpdateStatusBadgeColor");
             Assert.Equal("Start replay", replay.Text);
@@ -123,7 +123,7 @@ internal static class TrayGlobalAssertions
             Until(() => vm.CaptureStatus == "Buffering" && vm.CaptureHost.CurrentProfile != null && vm.RecordingHealth.Profile != null);
             StopTimers(vm);
             Hotkey(keys, 19001);
-            Until(() => !client.IsRunning); StopTimers(vm);
+            Until(() => !client.IsRunning && vm.CaptureStatus == "Off" && !vm.IsCaptureActive && vm.CanControlReplay); StopTimers(vm);
             Assert.False(window.IsVisible);
 
             // Shutdown/update gates share the production tray/global route.
