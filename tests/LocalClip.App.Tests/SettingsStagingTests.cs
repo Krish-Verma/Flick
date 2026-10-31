@@ -46,6 +46,7 @@ public partial class SettingsStagingTests
                         Source = new Uri($"/Flick;component/Resources/Theme/Flick.{dictionary}.xaml", UriKind.Relative)
                     });
                 ResourceUsageSettingsAssertions.Run();
+                CaptureStartupAssertions.Run();
                 SettingsPersistenceAssertions.Run();
                 ShortcutCaptureAssertions.Run();
                 TrimHandleAssertions.Run();
@@ -701,7 +702,9 @@ public partial class SettingsStagingTests
         });
         thread.SetApartmentState(ApartmentState.STA);
         thread.Start();
-        Assert.True(thread.Join(TimeSpan.FromSeconds(30)), "WPF staging test timed out.");
+        // Startup scenarios add isolated metadata-only helper launches. Every
+        // IPC operation retains its own short bound within this STA deadline.
+        Assert.True(thread.Join(TimeSpan.FromSeconds(120)), "WPF staging test timed out.");
         if (failure != null) ExceptionDispatchInfo.Capture(failure).Throw();
     }
 

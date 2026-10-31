@@ -1067,11 +1067,17 @@ public partial class MainViewModel : INotifyPropertyChanged, IDisposable
             }
             else if (SelectedTarget.Type == "Monitor" && !string.IsNullOrWhiteSpace(SelectedTarget.MonitorDevice))
             {
+                // Source-bound requests require verification on this helper,
+                // including after target discovery shut its idle helper down.
+                var capabilities = await _captureHost.GetCapabilitiesAsync();
+                if (startingEpoch != _captureEpoch || startingSession != _healthSession || _isPreparingToQuit || _manualStopOperation != null) return;
+                if (!capabilities.SourceIdentityBinding) throw new InvalidOperationException("Update the capture helper before recording this exact display.");
                 sourceOptions = new(ExpectedMonitorId: SelectedTarget.MonitorDevice);
             }
             bool started = await _captureHost.StartCaptureAsync(_settings, sourceOptions);
 
             if (startingEpoch != _captureEpoch || startingSession != _healthSession) return;
+            ObserveStartupHostHealth();
             if (!started)
             {
                 CaptureStatus = "Faulted";
@@ -1082,9 +1088,24 @@ public partial class MainViewModel : INotifyPropertyChanged, IDisposable
         {
             if (startingEpoch != _captureEpoch || startingSession != _healthSession) return;
             CaptureStatus = "Faulted";
+            ObserveStartupHostHealth();
             RecordCaptureFailure("startup-failed", "Capture startup failed: " + ex.Message);
         }
+        finally
+        {
+            // Release only this failed attempt's reservation. A later Stop or
+            // replacement start owns its own epoch and must not be rewritten.
+            if (startingEpoch == _captureEpoch && startingSession == _healthSession && !CaptureActive)
+            {
+                _manualReplayReserved = false;
+                PublishGameAutomation(CaptureStatus == "Faulted" ? _health.Snapshot.LastRecordingIssue?.Message : null);
+            }
+        }
     }
+
+    private void ObserveStartupHostHealth() => _health.ObserveHost(_healthSession,
+        !_captureHost.IsRunning ? CaptureHostHealth.Exited :
+        _captureHost.HasResponded ? CaptureHostHealth.Responsive : CaptureHostHealth.Unresponsive);
 
     public async Task StopCaptureAsync(DiagnosticControlOrigin origin = DiagnosticControlOrigin.Unknown, bool userPause = false)
     {
@@ -1482,6 +1503,7 @@ public partial class MainViewModel : INotifyPropertyChanged, IDisposable
                 CaptureStatus = "Faulted";
                 RecordCaptureFailure("host-exited", "The recording helper exited. Review the source and restart replay.");
             }
+            else PublishHealth(); // Publish confirmed idle/faulted helper exit too.
             return;
         }
         _pollInProgress = true;

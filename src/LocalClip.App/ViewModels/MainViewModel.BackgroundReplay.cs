@@ -202,7 +202,9 @@ public partial class MainViewModel
                 !_automaticReplaySession.BackgroundPaused;
             _backgroundReplayStartFailed = !CaptureActive && !_automaticReplaySession.BackgroundPaused;
             PublishGameAutomation(CaptureActive ? (_backgroundReplayOwned ? "Replay active in the tray." : "Replay active.")
-                : "Background replay couldn't start. Choose a source or start replay to retry.");
+                : _health.Snapshot.LastRecordingIssue?.Message is { Length: > 0 } failure
+                    ? "Background replay couldn't start. " + failure
+                    : "Background replay couldn't start. Choose a source or start replay to retry.");
         }
         finally
         {

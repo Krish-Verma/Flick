@@ -10,7 +10,9 @@ public sealed record CaptureWindowIdentity(ulong Hwnd, uint ProcessId, string Ti
 public sealed record CaptureStartOptions(bool EnableSystemAudio = true,
     CaptureWindowIdentity? ExpectedWindow = null, string? ExpectedMonitorId = null)
 {
-    internal bool RequiresCapabilities => !EnableSystemAudio || ExpectedWindow != null || ExpectedMonitorId != null;
+    internal bool RequiresDiagnosticCapabilities => !EnableSystemAudio;
+    internal bool RequiresSourceIdentityBinding => ExpectedWindow != null || ExpectedMonitorId != null;
+    internal bool RequiresCapabilities => RequiresDiagnosticCapabilities || RequiresSourceIdentityBinding;
 
     internal void Validate(AppSettings settings)
     {

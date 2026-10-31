@@ -1,13 +1,10 @@
-# Flick 1.0.12 Preview 1 — Design Research (UNSIGNED)
+# Flick 1.0.13 Preview 1 — Replay Startup Fix (UNSIGNED)
 
-- Replay and save labels distinguish requests, acceptance, unconfirmed acknowledgement, video checking and verified saves. Checking remains visible when replay stops.
-- Share has a larger original still and a clear ready-MP4 tile. Copy file becomes the primary action when ready; real encoding and validation stages replace generic progress. Drag, Copy, Open folder, size limits and export options remain available in the complete card.
-- Settings show changed/reverted drafts and errors beside the relevant fields. Unchanged valid settings need no save; startup repair and recovered-settings review remain available. Verified Save returns to the dashboard; failed saves retain the draft.
-- Search has Clear, active filters show their count, and Reset restores the full library. Empty and no-match states explain the next action. Clip rows use concise duration/date metadata and retain offline/source information.
-- Library stills load in a bounded background queue and pixel cache. The player shows an explicit Play action; browsing never starts a video decoder.
-- Shared controls use clearer type, stable keyboard focus, meaningful disabled states and the established purple/graphite identity. High Contrast, reduced motion and the approved logo are preserved.
-- Trim handles have larger hit areas and clearer In/Out labels. Leaving an untouched time field no longer rounds its stored precision. Originals remain unchanged.
+- Fixed normal monitor Replay being rejected by a recording-test capability check before the capture helper or encoder started. Fresh manual and background Replay now verify the selected display on the current helper before recording.
+- Diagnostic recordings retain their separate consent and verified-helper checks. Missing or changed displays never silently fall back to a different source.
+- Recording health now updates the helper state after startup failure instead of leaving “Host: Starting” visible. Background Replay retains the underlying startup error for review.
+- The existing interface, recording options, microphone consent, clips and preferences are retained.
 
-Install **Flick-Setup.exe** over the current installation after quitting Flick. Portable users should replace the complete extracted folder. Clips and preferences are retained. Previous releases, assets and tags remain available.
+Quit Flick, then install **Flick-Setup.exe** over the current installation. Portable users should replace the complete extracted folder. Previous releases, assets and tags remain available.
 
-This is an unsigned preview. Automated Windows/native/media/installer checks, actual WPF render checks and matched synthetic UI diagnostics are recorded with the build. Synthetic diagnostics do not establish normal idle or gameplay performance. Physical GPU/audio/gameplay, real Discord, Narrator and per-monitor DPI acceptance remain separate.
+This is an unsigned preview. Startup regressions are checked with an owned metadata-only helper; they do not record the desktop or exercise GPU/audio hardware. Automated Windows/native/media/installer and render checks accompany the build. Physical gameplay, GPU/audio and real desktop acceptance remain separate.
