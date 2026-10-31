@@ -24,6 +24,7 @@ internal static class CaptureStartupAssertions
         SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(Application.Current.Dispatcher));
         try
         {
+            AssertIdleHostHealthTransitions();
             foreach (bool background in new[] { false, true })
             {
                 // The ordinary source-binding feature must not depend on the
@@ -71,6 +72,38 @@ internal static class CaptureStartupAssertions
                     int before = pipe.Requests().Length;
                     Pump((Task)typeof(MainViewModel).GetMethod("TryStartBackgroundReplayAsync", Hidden)!.Invoke(fixture.Vm, null)!);
                     Assert.Equal(before, pipe.Requests().Length); // No timer-driven retry loop.
+
+                    var historicalIssue = fixture.Vm.RecordingHealth.LastRecordingIssue;
+                    Guid historicalSession = fixture.Vm.RecordingHealth.SessionId;
+                    var cleanup = typeof(MainViewModel).GetField("_filmstripCleanupUnconfirmed", Hidden)!;
+                    Assert.False((bool)cleanup.GetValue(fixture.Vm)!);
+                    bool blocked = false;
+                    System.ComponentModel.PropertyChangedEventHandler blockDuringTransition = (_, args) =>
+                    {
+                        if (args.PropertyName == nameof(MainViewModel.GameDetectionStatus) &&
+                            fixture.Vm.GameDetectionStatus == "Starting background replay.")
+                        {
+                            // Model cleanup becoming unavailable after background
+                            // admission but before the actual Start guard.
+                            blocked = true;
+                            cleanup.SetValue(fixture.Vm, true);
+                        }
+                    };
+                    fixture.Vm.PropertyChanged += blockDuringTransition;
+                    try { Pump(fixture.Vm.ApplyBackgroundReplayPreferencesAsync(true)); }
+                    finally
+                    {
+                        fixture.Vm.PropertyChanged -= blockDuringTransition;
+                        cleanup.SetValue(fixture.Vm, false);
+                        fixture.StopTimers();
+                    }
+                    Assert.True(blocked); // The real Start guard was exercised.
+                    Assert.Equal(before, pipe.Requests().Length);
+                    Assert.Equal(historicalSession, fixture.Vm.RecordingHealth.SessionId);
+                    Assert.Same(historicalIssue, fixture.Vm.RecordingHealth.LastRecordingIssue);
+                    Assert.Equal("Background replay couldn't start. Finish any pending work, then start replay to retry.", fixture.Vm.GameDetectionStatus);
+                    Assert.DoesNotContain(refusal, fixture.Vm.GameDetectionStatus);
+                    Assert.Contains(refusal, fixture.Vm.HealthLastFailureText);
                 }
                 Guid failedSession = fixture.Vm.RecordingHealth.SessionId;
                 pipe.AllowCapture();
@@ -110,6 +143,42 @@ internal static class CaptureStartupAssertions
         finally { SynchronizationContext.SetSynchronizationContext(previousContext); }
     }
 
+    private static void AssertIdleHostHealthTransitions()
+    {
+        using var pipe = new CaptureHostPipeFixture();
+        using var fixture = new VmFixture(new CaptureHostClient(System.IO.Path.Combine(pipe.Root, "not-created.exe")), pipe.Root);
+        var vm = fixture.Vm;
+        var poll = typeof(MainViewModel).GetMethod("OnPollTick", Hidden)!;
+        var health = (RecordingHealthLedger)typeof(MainViewModel).GetField("_health", Hidden)!.GetValue(vm)!;
+        var notifications = new List<string?>();
+        System.ComponentModel.PropertyChangedEventHandler observed = (_, args) => notifications.Add(args.PropertyName);
+        vm.PropertyChanged += observed;
+        try
+        {
+            void Poll() => poll.Invoke(vm, [null, EventArgs.Empty]); // No helper: this actual branch completes synchronously.
+            Assert.Equal(Guid.Empty, vm.RecordingHealth.SessionId);
+            long emptyRevision = vm.RecordingHealth.Revision;
+            Poll(); Poll();
+            Assert.Empty(notifications);
+            Assert.Equal(emptyRevision, vm.RecordingHealth.Revision);
+
+            Guid session = health.BeginSession(new RecordingSource("Monitor", "Owned idle transition"));
+            typeof(MainViewModel).GetField("_healthSession", Hidden)!.SetValue(vm, session);
+            Assert.Equal(CaptureHostHealth.Starting, vm.RecordingHealth.HostHealth);
+            Poll();
+            Assert.Equal(CaptureHostHealth.Exited, vm.RecordingHealth.HostHealth);
+            Assert.Equal(1, notifications.Count(name => name == nameof(MainViewModel.RecordingHealth)));
+            Assert.Equal(1, notifications.Count(name => name == nameof(MainViewModel.CaptureStateText)));
+            notifications.Clear();
+            long exitedRevision = vm.RecordingHealth.Revision;
+            Poll(); Poll();
+            Assert.Empty(notifications);
+            Assert.Equal(exitedRevision, vm.RecordingHealth.Revision);
+            Assert.Empty(pipe.Requests());
+        }
+        finally { vm.PropertyChanged -= observed; }
+    }
+
     private static void AssertFailure(MainViewModel vm, CaptureHostHealth host, string message)
     {
         Assert.Equal("Faulted", vm.CaptureStatus);
@@ -133,23 +202,30 @@ internal static class CaptureStartupAssertions
 
     private sealed class VmFixture : IDisposable
     {
-        public MainViewModel Vm { get; } = new();
+        public MainViewModel Vm { get; }
         private readonly CaptureHostClient _originalHost;
 
         public VmFixture(CaptureHostClient client, string root)
         {
-            StopTimers();
-            LibraryObservationAssertions.Settle(Vm);
-            _originalHost = Vm.CaptureHost;
-            // Test-only instance substitution. No production transport bypass or
-            // persistent settings mutation is added to the application.
-            typeof(MainViewModel).GetField("_captureHost", Hidden)!.SetValue(Vm, client);
-            typeof(MainViewModel).GetField("_settings", Hidden)!.SetValue(Vm, new AppSettings
+            var settings = new AppSettings
             {
-                TargetType = "Monitor", MonitorIndex = 7, MonitorDevice = "fixture-monitor-id",
+                StorageRoot = root, TargetType = "Monitor", MonitorIndex = 7, MonitorDevice = "fixture-monitor-id",
                 OriginalsFolder = System.IO.Path.Combine(root, "Originals"),
                 ExportsFolder = System.IO.Path.Combine(root, "Exports"), TempFolder = System.IO.Path.Combine(root, "Temp")
-            });
+            };
+            // Supply both settings and metadata before any constructor I/O;
+            // an environment-variable override does not fence Windows known folders.
+            Vm = (MainViewModel)typeof(MainViewModel).GetConstructor(Hidden, null,
+                [typeof(AppSettings), typeof(string)], null)!.Invoke([settings, System.IO.Path.Combine(root, "Metadata")]);
+            StopTimers();
+            LibraryObservationAssertions.Settle(Vm);
+            Assert.Same(settings, Vm.Settings);
+            Assert.Empty(Vm.FilteredClips);
+            Assert.Empty(Vm.ConnectedFolders);
+            _originalHost = Vm.CaptureHost;
+            // Substitute only the process endpoint; all real startup, protocol
+            // validation and VM observations still execute.
+            typeof(MainViewModel).GetField("_captureHost", Hidden)!.SetValue(Vm, client);
             var target = new TargetItem { Type = "Monitor", MonitorIndex = 7, MonitorDevice = "fixture-monitor-id", DisplayName = "Metadata fixture display" };
             Vm.Targets.Clear(); Vm.Targets.Add(target);
             typeof(MainViewModel).GetField("_selectedTarget", Hidden)!.SetValue(Vm, target);

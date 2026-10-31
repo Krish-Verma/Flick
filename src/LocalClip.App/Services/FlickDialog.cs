@@ -69,6 +69,7 @@ public static class FlickDialog
         Button Add(string label, MessageBoxResult choice, bool primary)
         {
             var button = new Button { Content = label, MinWidth = 88,
+                IsDefault = initial != null && choice == MessageBoxResult.OK,
                 Margin = new Thickness(8, 4, 0, 0),
                 Style = (Style)main.FindResource(primary ? "Flick.Button.Primary" : "Flick.Button.Secondary") };
             button.Click += (_, _) => Finish(choice);

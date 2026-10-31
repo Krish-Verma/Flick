@@ -126,7 +126,14 @@ public partial class TrimRangeControl : UserControl
         RangeChanging?.Invoke(this, EventArgs.Empty);
     }
 
-    private void Handle_DragCompleted(object sender, DragCompletedEventArgs e) => Commit();
+    private void Handle_DragCompleted(object sender, DragCompletedEventArgs e)
+    {
+        if (!e.Canceled) { Commit(); return; }
+        _start = _committedStart;
+        _end = _committedEnd;
+        RefreshControls();
+        RangeReverted?.Invoke(this, EventArgs.Empty);
+    }
 
     private void Handle_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e) =>
         ((Thumb)sender).Focus();

@@ -5,6 +5,7 @@ param([switch]$SkipNativeBuild)
 $ErrorActionPreference = "Stop"
 
 $RootDir = (Get-Item $PSScriptRoot).Parent.FullName
+. (Join-Path $PSScriptRoot 'FlickPackageStaging.ps1')
 $DistDir = Join-Path $RootDir "dist"
 $PackageName = "Flick-v1.0.13-win-x64"
 $PackageDir = Join-Path $DistDir $PackageName
@@ -54,15 +55,14 @@ else {
 
 Write-Host "=== Step 3: Publishing WPF Application (Release win-x64) ===" -ForegroundColor Cyan
 $AppCsproj = Join-Path $RootDir "src\LocalClip.App\LocalClip.App.csproj"
-dotnet publish "$AppCsproj" -c Release -r win-x64 --self-contained true -o (Join-Path $DistDir "app") --nologo
-
-if ($LASTEXITCODE -ne 0) {
-    throw "Dotnet publish failed"
+$publishStage = New-FlickPublishStage $DistDir
+try {
+    dotnet publish "$AppCsproj" -c Release -r win-x64 --self-contained true -o $publishStage.Path --nologo
+    if ($LASTEXITCODE -ne 0) { throw "Dotnet publish failed" }
+    Write-Host "=== Step 4: Assembling Portable Package ===" -ForegroundColor Cyan
+    Copy-FlickPublishedApplication $publishStage $PackageDir
 }
-
-Write-Host "=== Step 4: Assembling Portable Package ===" -ForegroundColor Cyan
-# Copy Application Binaries
-Copy-Item -Path (Join-Path $DistDir "app\*") -Destination $PackageDir -Recurse -Force
+finally { Remove-FlickPublishStage $publishStage }
 
 # Create Tools directory structure
 $ToolsDest = Join-Path $PackageDir "tools"
@@ -141,7 +141,7 @@ Settings, the library index and bounded local diagnostics live separately from i
 
 Installed copies can check Settings > General > Software Updates; preview updates require the preview channel and an actually published matching release. Portable copies require quitting Flick before replacing the extracted app folder. Updates are available only after a matching verified release is published. Older versions may need a one-time manual installer upgrade.
 
-Use Uninstall Flick or Windows Installed Apps to remove the program. Silent uninstall preserves user data. The interactive uninstaller separately asks whether to remove app-owned preferences/index/cache; recordings and exports are retained. Do not use historical LocalClip uninstall scripts.
+Use Uninstall Flick or Windows Installed Apps to remove the program. Silent uninstall preserves user data. The interactive uninstaller separately asks whether to remove app-owned preferences and the library index. Nonempty thumbnail and cache folders are kept because they may contain recordings, exports or imported files. Do not use historical LocalClip uninstall scripts.
 
 ## Requirements and qualification limits
 

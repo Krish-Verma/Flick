@@ -15,3 +15,7 @@ Verify ordinary source identity against the current helper before normal startup
 Exercise the real managed startup and background Replay routes with an owned metadata-only IPC helper. Cover a stopped helper after target refresh, fresh capability negotiation, ordered requests, exact monitor identity, missing capabilities, helper replacement/exit, diagnostic preverification, Buffering versus Armed, and published failure health. Retain existing native negotiation, generated-media, installer lifecycle and rendered UI checks.
 
 A timed-out SSH connection currently prevents inspection of the affected Windows session. Automated fake-helper tests demonstrate the managed handshake and failure handling; they do not establish physical GPU/audio or gameplay success on that PC.
+
+## Tray and global command follow-up
+
+The owner also requested that commands continue to work while Flick is in the tray. Hide/minimize/start-in-tray must preserve the native hotkey hook and configured shortcuts, cancel only transient shortcut editing, and preserve preference drafts. Global and tray commands share the same diagnostic, pending-save, update, dialog and shutdown safeguards. Synthetic WM_HOTKEY messages and actual tray click handlers exercise hidden start/stop/save routes with a metadata-only helper; real OS key presses on the owner PC are not claimed.

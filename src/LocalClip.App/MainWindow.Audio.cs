@@ -20,6 +20,7 @@ public partial class MainWindow
         var cancellation = new CancellationTokenSource();
         _previewCancellation = cancellation;
         string fingerprint = ExportFingerprint.Compute(clip.OriginalFilePath, clip.TrimStartSeconds, clip.TrimEndSeconds, clip.AudioTracks, _vm.TargetSizeMb);
+        double previewOrigin = clip.TrimStartSeconds;
         BtnAudioMixPreview.IsEnabled = false;
         _vm.StatusDetails = "Creating a local preview of the selected audio mix…";
         try
@@ -28,7 +29,7 @@ public partial class MainWindow
             if (cancellation.IsCancellationRequested || !_vm.CanPresentAudioMixPreview || _vm.SelectedClip?.Id != clip.Id || fingerprint !=
                 ExportFingerprint.Compute(clip.OriginalFilePath, clip.TrimStartSeconds, clip.TrimEndSeconds, clip.AudioTracks, _vm.TargetSizeMb)) return;
             _previewWasReencoded = true;
-            SetPreviewSource(path, PlayerView.AudioMix, true);
+            SetPreviewSource(path, PlayerView.AudioMix, true, originalStartSeconds: previewOrigin);
             _vm.StatusDetails = "Audio mix preview · trim and levels applied · up to 3 minutes · original unchanged";
         }
         catch (OperationCanceledException) { }

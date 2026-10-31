@@ -460,6 +460,9 @@ public partial class SettingsWindow : UserControl
 
     private void CancelShortcutEdit() => FinishShortcutEdit();
 
+    // Preserve all staged settings while releasing the transient key-capture lease.
+    internal void CancelShortcutEditingForHide() => CancelShortcutEdit();
+
     private void CancelShortcut_Click(object sender, RoutedEventArgs e) => CancelShortcutEdit();
 
     private void Shortcut_LostKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e)

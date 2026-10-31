@@ -46,7 +46,7 @@ adds a Start Menu shortcut and registers a normal Windows uninstaller.
 
 To remove Flick, choose Uninstall Flick in Settings > General, the
 Start Menu shortcut, or Windows Settings > Apps > Installed Apps.
-The uninstaller asks separately whether to erase Flick settings/cache,
+The uninstaller asks separately whether to erase Flick settings/library metadata,
 with NO selected by default. Clips and exports are not removed.
 
 This unreleased candidate is unsigned. Windows Smart App Control may block

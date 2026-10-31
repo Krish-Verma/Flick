@@ -847,12 +847,14 @@ public partial class MainViewModel : INotifyPropertyChanged, IDisposable
         set { _readyExportFilePath = value; OnPropertyChanged(); }
     }
 
-    public MainViewModel()
+    public MainViewModel() : this(AppSettings.Load()) { }
+
+    internal MainViewModel(AppSettings settings, string? metadataDirectory = null)
     {
-        _settings = AppSettings.Load();
+        _settings = settings ?? throw new ArgumentNullException(nameof(settings));
         _captureHost = new CaptureHostClient();
         _prober = new MediaProber();
-        _storage = new ClipStorage(_settings, _prober);
+        _storage = new ClipStorage(_settings, _prober, metadataDirectory);
         _exporter = new ClipExporter(prober: _prober);
         _resourceMonitor = new ResourceMonitor();
         InitializeResourceSampling();
@@ -1497,13 +1499,14 @@ public partial class MainViewModel : INotifyPropertyChanged, IDisposable
         if (_pollInProgress || CaptureStatus is "Starting" or "Stopping") return;
         if (!_captureHost.IsRunning)
         {
-            _health.ObserveHost(_healthSession, CaptureHostHealth.Exited);
+            bool hostChanged = _health.Snapshot.HostHealth != CaptureHostHealth.Exited &&
+                _health.ObserveHost(_healthSession, CaptureHostHealth.Exited);
             if (CaptureActive)
             {
                 CaptureStatus = "Faulted";
                 RecordCaptureFailure("host-exited", "The recording helper exited. Review the source and restart replay.");
             }
-            else PublishHealth(); // Publish confirmed idle/faulted helper exit too.
+            else if (hostChanged) PublishHealth(); // Idle repeats must not repaint unchanged health.
             return;
         }
         _pollInProgress = true;

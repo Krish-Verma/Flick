@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.IO;
 using LocalClip.Core.Ipc;
 
 namespace LocalClip.Testing;

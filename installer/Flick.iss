@@ -113,12 +113,14 @@ begin
   Result := True;
   RemoveFlickProfile := False;
   // Silent/unattended Windows removal keeps all user data.
-  // A human may separately opt in to removing app-owned metadata/cache.
+  // A human may separately opt in to removing app-owned metadata.
   if not UninstallSilent then
     RemoveFlickProfile :=
-      MsgBox('Also remove Flick settings, the clip-library index, thumbnails and temporary cache?' +
+      MsgBox('Also remove Flick settings and the clip-library index?' +
         Chr(13) + Chr(10) + Chr(13) + Chr(10) +
         'This cannot be undone. Original recordings, exports, and imported clips will NOT be deleted.' +
+        Chr(13) + Chr(10) + Chr(13) + Chr(10) +
+        'Nonempty thumbnail and cache folders will be kept because they may contain files you chose to store there.' +
         Chr(13) + Chr(10) + Chr(13) + Chr(10) +
         'Choose No to keep your preferences and library for a later reinstall.',
         mbConfirmation, MB_YESNO or MB_DEFBUTTON2) = IDYES;
@@ -157,8 +159,11 @@ begin
   DeleteFile(ProfileDir + '\game-replay-state.json');
   DeleteFile(ProfileDir + '\connected_sources.json');
   DeleteFile(ProfileDir + '\connected_sources.json.tmp');
-  DelTree(ProfileDir + '\Thumbnails', True, True, True);
-  DelTree(ProfileDir + '\Temp', True, True, True);
-  DelTree(ProfileDir + '\PreviewCache', True, True, True);
+  // Media and imported folders may legally overlap these locations. A folder
+  // name alone cannot establish ownership of its contents. Remove only empty
+  // directories; preserve every nonempty cache instead of guessing from JSON.
+  RemoveDir(ProfileDir + '\Thumbnails');
+  RemoveDir(ProfileDir + '\Temp');
+  RemoveDir(ProfileDir + '\PreviewCache');
   RemoveDir(ProfileDir); // Succeeds only when empty; preserves unknown data.
 end;

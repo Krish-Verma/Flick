@@ -33,13 +33,16 @@ public partial class MainWindow
         }
         finally { selector.SelectedIndex = -1; _selectingRecentExport = false; }
     }
-    private double OriginalPlayhead => Math.Clamp(PlayerSlider.Value + (_playerView == PlayerView.Exported
-        ? _vm.SelectedClip?.TrimStartSeconds ?? 0 : 0), 0, _vm.SelectedClip?.DurationSeconds ?? 0);
+    private double OriginalPlayhead => Math.Clamp(PlayerSlider.Value +
+        (_playerView is PlayerView.Exported or PlayerView.AudioMix ? _previewOriginalStartSeconds : 0),
+        0, _vm.SelectedClip?.DurationSeconds ?? 0);
     private void SeekOriginal(double seconds)
     {
         if (_vm.SelectedClip is not { } clip || !clip.IsAvailableForUi || _vm.IsCaptureActive) return;
         seconds = Math.Clamp(seconds, 0, clip.DurationSeconds);
-        if (_playerView == PlayerView.Exported || VideoPlayer.Source == null) ShowOriginalPreview(startPlaying: false);
+        if (_playerView is PlayerView.Exported or PlayerView.AudioMix || VideoPlayer.Source == null)
+            SetPreviewSource(clip.OriginalFilePath, PlayerView.Original, startPlaying: false);
+        if (_playerView != PlayerView.Original || VideoPlayer.Source == null) return;
         PlayerSlider.Maximum = Math.Max(.25, clip.DurationSeconds); PlayerSlider.Value = seconds;
         VideoPlayer.Position = TimeSpan.FromSeconds(seconds); TrimTimeline.SetPlayhead(seconds);
     }

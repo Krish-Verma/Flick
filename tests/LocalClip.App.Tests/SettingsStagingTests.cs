@@ -47,6 +47,8 @@ public partial class SettingsStagingTests
                     });
                 ResourceUsageSettingsAssertions.Run();
                 CaptureStartupAssertions.Run();
+                TrayGlobalAssertions.Run();
+                BugAuditUiAssertions.Run();
                 SettingsPersistenceAssertions.Run();
                 ShortcutCaptureAssertions.Run();
                 TrimHandleAssertions.Run();
