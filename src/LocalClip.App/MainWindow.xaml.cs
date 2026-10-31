@@ -1455,7 +1455,7 @@ public partial class MainWindow : Window
         {
             if (_vm.SelectedClip?.Id == clip.Id && _vm.CanPresentAudioMixPreview)
             {
-                _vm.StatusDetails = "Couldn't Create Local Preview: " + ex.Message;
+                _vm.StatusDetails = ex is PlaybackPreviewCacheLimitException ? ex.Message : "Couldn't create local preview: " + ex.Message;
                 PreviewFallbackPanel.Visibility = Visibility.Visible;
             }
         }

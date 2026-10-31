@@ -27,6 +27,7 @@ internal static class LibraryMutationAssertions
         {
             SourcePersistenceFailureKeepsLiveSource();
             foreach (bool unlink in new[] { false, true }) ExportCompletionCannotRestoreRemovedClip(unlink);
+            foreach (bool unlink in new[] { false, true }) PendingAudioCannotRestoreRemovedClip(unlink);
             foreach (bool quit in new[] { false, true }) RescanCleanupFinishesBeforeCaptureOrQuit(quit);
             RescanCleanupTimeoutRefusesCaptureUntilExplicitRetry();
             SettledUnconfirmedScanBlocksRecordingButAllowsQuit();
@@ -41,8 +42,8 @@ internal static class LibraryMutationAssertions
         var old = new TargetItem { Type = "Monitor", MonitorIndex = 7, MonitorDevice = "fixture-monitor-id", DisplayName = "Old display" };
         var next = new TargetItem { Type = "Monitor", MonitorIndex = 8, MonitorDevice = "different-display", DisplayName = "New display" };
         vm.Targets.Clear(); vm.Targets.Add(old); vm.Targets.Add(next); Set(vm, "_selectedTarget", old);
-        fixture.Client.StateChanged += typeof(MainViewModel).GetMethod("OnHostStateChanged", Hidden)!.CreateDelegate<Action<string>>(vm);
-        fixture.Client.CaptureConfigured += typeof(MainViewModel).GetMethod("OnCaptureConfigured", Hidden)!.CreateDelegate<Action<CaptureEncodingProfile>>(vm);
+        fixture.Client.StateChanged += RequireMethod(typeof(MainViewModel), "OnHostStateChanged").CreateDelegate<Action<string>>(vm);
+        fixture.Client.CaptureConfigured += RequireMethod(typeof(MainViewModel), "OnCaptureConfigured").CreateDelegate<Action<CaptureEncodingProfile>>(vm);
         Set(vm, "_captureHost", fixture.Client);
         string saved = Path.Combine(fixture.Root, "settings.json");
         vm.Settings.SaveToFile(saved); byte[] before = File.ReadAllBytes(saved);
@@ -76,7 +77,7 @@ internal static class LibraryMutationAssertions
             Width = 1920, Height = 1080, ThumbnailPath = thumbnail, SourceKind = "Imported", ConnectedFolderId = folder.Id,
             AudioTracks = [new AudioTrackInfo { TrackIndex = 0, Codec = "aac" }] };
         fixture.Storage.AddOrUpdateClip(clip);
-        Invoke(vm, "ReloadClips"); vm.SelectedClip = clip; LibraryObservationAssertions.Settle(vm);
+        vm.ReloadClips(); vm.SelectedClip = clip; LibraryObservationAssertions.Settle(vm);
         var held = new HeldExporter(); Set(vm, "_exporter", held);
         Assert.True(vm.CanStartExport);
         Task export = vm.ExportForDiscordAsync();
@@ -84,7 +85,7 @@ internal static class LibraryMutationAssertions
         try
         {
             if (unlink) Assert.True(vm.RemoveConnectedFolder(folder.Id));
-            else { Assert.True(fixture.Storage.DeleteClip(clip.Id)); Invoke(vm, "ReloadClips"); }
+            else { Assert.True(fixture.Storage.DeleteClip(clip.Id)); vm.ReloadClips(); }
             held.Release.TrySetResult(); Pump(export);
             Assert.Empty(fixture.Storage.GetAllClips());
             Assert.Empty(new ClipStorage(vm.Settings, metadataDirectory: fixture.Metadata).GetAllClips());
@@ -96,6 +97,40 @@ internal static class LibraryMutationAssertions
         finally { held.Release.TrySetResult(); Pump(export); }
     }
 
+    private static void PendingAudioCannotRestoreRemovedClip(bool unlink)
+    {
+        using var fixture = new Fixture();
+        var vm = fixture.Vm;
+        string source = Path.Combine(fixture.Root, "source.mkv"), thumbnail = Path.Combine(fixture.Root, "existing.jpg");
+        byte[] original = [7, 8, 9]; File.WriteAllBytes(source, original); File.WriteAllBytes(thumbnail, [1]);
+        var folder = fixture.Storage.ConnectFolder(fixture.Root);
+        var track = new AudioTrackInfo { TrackIndex = 0, Codec = "aac" };
+        var clip = new ClipMetadata { OriginalFilePath = source, DurationSeconds = 10, TrimEndSeconds = 10,
+            ThumbnailPath = thumbnail, SourceKind = "Imported", ConnectedFolderId = folder.Id, AudioTracks = [track] };
+        fixture.Storage.AddOrUpdateClip(clip);
+        vm.ReloadClips(); vm.SelectedClip = clip; LibraryObservationAssertions.Settle(vm);
+        Assert.True(clip.IsAvailableForUi);
+        track.Gain = .5; // Actual subscribed track event schedules the production debounce.
+        var timer = (DispatcherTimer)Get(vm, "_audioEditCommitTimer");
+        Assert.True(timer.IsEnabled); timer.Stop();
+        Assert.Same(clip, Get(vm, "_pendingAudioClip"));
+        if (unlink) Assert.True(vm.RemoveConnectedFolder(folder.Id));
+        else
+        {
+            Assert.True(fixture.Storage.DeleteClip(clip.Id));
+            vm.SelectedClip = null; // This production setter flushes the old pending audio before changing selection.
+            vm.ReloadClips();
+        }
+        vm.FlushPendingAudioEdits(); // A later timer/dispose flush is harmless too.
+        Assert.Null(vm.SelectedClip);
+        Assert.Empty(vm.FilteredClips);
+        Assert.Empty(fixture.Storage.GetAllClips());
+        Assert.Empty(new ClipStorage(vm.Settings, metadataDirectory: fixture.Metadata).GetAllClips());
+        Assert.Equal(original, File.ReadAllBytes(source));
+        Assert.False(timer.IsEnabled);
+        Assert.Null(typeof(MainViewModel).GetField("_pendingAudioClip", Hidden)!.GetValue(vm));
+    }
+
     private static void RescanCleanupFinishesBeforeCaptureOrQuit(bool quit)
     {
         using var fixture = new Fixture();
@@ -105,8 +140,8 @@ internal static class LibraryMutationAssertions
         File.WriteAllBytes(Path.Combine(vm.Settings.OriginalsFolder, "pending.mkv"), [1, 2]);
         var target = new TargetItem { Type = "Monitor", MonitorIndex = 7, MonitorDevice = "fixture-monitor-id", DisplayName = "Owned monitor" };
         vm.Targets.Clear(); vm.Targets.Add(target); Set(vm, "_selectedTarget", target);
-        fixture.Client.StateChanged += typeof(MainViewModel).GetMethod("OnHostStateChanged", Hidden)!.CreateDelegate<Action<string>>(vm);
-        fixture.Client.CaptureConfigured += typeof(MainViewModel).GetMethod("OnCaptureConfigured", Hidden)!.CreateDelegate<Action<CaptureEncodingProfile>>(vm);
+        fixture.Client.StateChanged += RequireMethod(typeof(MainViewModel), "OnHostStateChanged").CreateDelegate<Action<string>>(vm);
+        fixture.Client.CaptureConfigured += RequireMethod(typeof(MainViewModel), "OnCaptureConfigured").CreateDelegate<Action<CaptureEncodingProfile>>(vm);
         Set(vm, "_captureHost", fixture.Client);
         Task scan = vm.RescanLibraryAsync();
         Until(() => held.Started.Task.IsCompleted);
@@ -140,8 +175,8 @@ internal static class LibraryMutationAssertions
         File.WriteAllBytes(Path.Combine(vm.Settings.OriginalsFolder, "pending.mkv"), [1]);
         var target = new TargetItem { Type = "Monitor", MonitorDevice = "fixture-monitor-id", MonitorIndex = 7, DisplayName = "Owned monitor" };
         vm.Targets.Clear(); vm.Targets.Add(target); Set(vm, "_selectedTarget", target);
-        fixture.Client.StateChanged += typeof(MainViewModel).GetMethod("OnHostStateChanged", Hidden)!.CreateDelegate<Action<string>>(vm);
-        fixture.Client.CaptureConfigured += typeof(MainViewModel).GetMethod("OnCaptureConfigured", Hidden)!.CreateDelegate<Action<CaptureEncodingProfile>>(vm);
+        fixture.Client.StateChanged += RequireMethod(typeof(MainViewModel), "OnHostStateChanged").CreateDelegate<Action<string>>(vm);
+        fixture.Client.CaptureConfigured += RequireMethod(typeof(MainViewModel), "OnCaptureConfigured").CreateDelegate<Action<CaptureEncodingProfile>>(vm);
         Set(vm, "_captureHost", fixture.Client);
         Task scan = vm.RescanLibraryAsync(); Until(() => held.Started.Task.IsCompleted);
         try
@@ -238,7 +273,9 @@ internal static class LibraryMutationAssertions
                 TempFolder = Path.Combine(Root, "Temp"), MonitorIndex = 7, MonitorDevice = "fixture-monitor-id", DiscordTargetSizeMb = 2,
                 ShowClipSavedOverlay = false, PlayClipSavedSound = false };
             foreach (string path in new[] { seed.OriginalsFolder, seed.ExportsFolder, seed.TempFolder }) Directory.CreateDirectory(path);
-            Vm = (MainViewModel)typeof(MainViewModel).GetConstructor(Hidden, null, [typeof(AppSettings), typeof(string)], null)!.Invoke([seed, Metadata]);
+            var constructor = typeof(MainViewModel).GetConstructor(Hidden, null, [typeof(AppSettings), typeof(string)], null)
+                ?? throw new InvalidOperationException("Owned MainViewModel(AppSettings, metadataDirectory) constructor is missing.");
+            Vm = (MainViewModel)constructor.Invoke([seed, Metadata]);
             StopTimers(); LibraryObservationAssertions.Settle(Vm);
             _original = Vm.CaptureHost; Client = Pipe.CreateClient();
         }
@@ -247,7 +284,9 @@ internal static class LibraryMutationAssertions
     }
     private static object Get(object value, string name) => value.GetType().GetField(name, Hidden)!.GetValue(value)!;
     private static void Set(object value, string name, object? data) => value.GetType().GetField(name, Hidden)!.SetValue(value, data);
-    private static void Invoke(object value, string name) => value.GetType().GetMethod(name, Hidden)!.Invoke(value, null);
+    private static MethodInfo RequireMethod(Type type, string name) =>
+        type.GetMethod(name, Hidden | BindingFlags.Public)
+        ?? throw new InvalidOperationException($"Required fixture production handler {type.Name}.{name} is missing.");
     private static void Pump(Task task) => LibraryObservationAssertions.Pump(task.WaitAsync(TimeSpan.FromSeconds(12)));
     private static void Until(Func<bool> complete) => LibraryObservationAssertions.PumpUntil(complete, Application.Current.Dispatcher);
 }

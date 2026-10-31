@@ -48,6 +48,8 @@ public partial class MainViewModel : INotifyPropertyChanged, IDisposable
     // Audio UI changes are reflected instantly but index writes are debounced.
     private readonly DispatcherTimer _audioEditCommitTimer;
     private ClipMetadata? _pendingAudioClip;
+    private string _pendingAudioOriginalPath = "";
+    private string _pendingAudioFolderId = "";
     private readonly System.Collections.Generic.List<AudioTrackInfo> _subscribedAudioTracks = new();
 
     // Diagnostics initialize only for an explicitly opened app session, never
@@ -1830,6 +1832,8 @@ public partial class MainViewModel : INotifyPropertyChanged, IDisposable
         if (SelectedClip is null || !SelectedClip.IsAvailableForUi) return;
         InvalidateExportReady(); // Never let stale exported audio look ready.
         _pendingAudioClip = SelectedClip;
+        _pendingAudioOriginalPath = SelectedClip.OriginalFilePath;
+        _pendingAudioFolderId = SelectedClip.ConnectedFolderId;
         EditorSaveState = "Saving audio mix…";
         _audioEditCommitTimer.Stop();
         _audioEditCommitTimer.Start();
@@ -1839,12 +1843,18 @@ public partial class MainViewModel : INotifyPropertyChanged, IDisposable
     {
         _audioEditCommitTimer?.Stop();
         var clip = _pendingAudioClip;
+        string originalPath = _pendingAudioOriginalPath, folderId = _pendingAudioFolderId;
         _pendingAudioClip = null;
+        _pendingAudioOriginalPath = _pendingAudioFolderId = "";
         if (clip is null) return;
         try
         {
-            _storage.AddOrUpdateClip(clip);
-            if (ReferenceEquals(clip, SelectedClip)) EditorSaveState = "Audio mix saved · original unchanged";
+            // Gain/mute already changed the live model. A debounce callback or
+            // selection-clear flush must never register a removed source again.
+            bool saved = _storage.TryUpdateExistingClip(clip, originalPath, folderId, _ => { });
+            if (ReferenceEquals(clip, SelectedClip)) EditorSaveState = saved
+                ? "Audio mix saved · original unchanged"
+                : "Audio mix not saved · clip removed or source changed";
         }
         catch (Exception ex)
         {

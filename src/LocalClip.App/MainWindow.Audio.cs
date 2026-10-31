@@ -33,6 +33,10 @@ public partial class MainWindow
             _vm.StatusDetails = "Audio mix preview · trim and levels applied · up to 3 minutes · original unchanged";
         }
         catch (OperationCanceledException) { }
+        catch (PlaybackPreviewCacheLimitException error)
+        {
+            if (_vm.SelectedClip?.Id == clip.Id) _vm.StatusDetails = error.Message;
+        }
         catch (Exception) { if (_vm.SelectedClip?.Id == clip.Id) _vm.StatusDetails = "The audio mix preview could not be created. Check the original and try again."; }
         finally
         {
