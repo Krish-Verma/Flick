@@ -24,6 +24,7 @@ public partial class SettingsStagingTests
     public void ActualWpfSettingsCancelDoesNotCommitShortcutOrSoundChanges()
     {
         Exception? failure = null;
+        string phase = "Create WPF application";
         var thread = new Thread(() =>
         {
             try
@@ -45,16 +46,22 @@ public partial class SettingsStagingTests
                     app.Resources.MergedDictionaries.Add(new ResourceDictionary {
                         Source = new Uri($"/Flick;component/Resources/Theme/Flick.{dictionary}.xaml", UriKind.Relative)
                     });
-                ResourceUsageSettingsAssertions.Run();
-                CaptureStartupAssertions.Run();
-                TrayGlobalAssertions.Run();
-                BugAuditUiAssertions.Run();
-                LibraryMutationAssertions.Run();
-                SettingsPersistenceAssertions.Run();
-                ShortcutCaptureAssertions.Run();
-                TrimHandleAssertions.Run();
-                FlickHoverStyleAssertions.Run();
-                ScrollRoutingAssertions.Run();
+                void RunPhase(string name, Action action)
+                {
+                    Volatile.Write(ref phase, name);
+                    action();
+                }
+                RunPhase(nameof(ResourceUsageSettingsAssertions), ResourceUsageSettingsAssertions.Run);
+                RunPhase(nameof(CaptureStartupAssertions), CaptureStartupAssertions.Run);
+                RunPhase(nameof(TrayGlobalAssertions), TrayGlobalAssertions.Run);
+                RunPhase(nameof(BugAuditUiAssertions), BugAuditUiAssertions.Run);
+                RunPhase(nameof(LibraryMutationAssertions), () => LibraryMutationAssertions.Run(name => Volatile.Write(ref phase, "Library mutation: " + name)));
+                RunPhase(nameof(SettingsPersistenceAssertions), () => SettingsPersistenceAssertions.Run());
+                RunPhase(nameof(ShortcutCaptureAssertions), () => ShortcutCaptureAssertions.Run());
+                RunPhase(nameof(TrimHandleAssertions), () => TrimHandleAssertions.Run());
+                RunPhase(nameof(FlickHoverStyleAssertions), () => FlickHoverStyleAssertions.Run());
+                RunPhase(nameof(ScrollRoutingAssertions), () => ScrollRoutingAssertions.Run());
+                Volatile.Write(ref phase, "Existing settings and workspace assertions");
                 var settings = AppSettings.CreateDefault();
                 var page = new SettingsWindow(settings, () => false);
                 T Find<T>(string name) => (T)page.FindName(name);
@@ -688,15 +695,15 @@ public partial class SettingsStagingTests
                     Assert.True(escape.Handled);
                     Assert.Equal(Visibility.Collapsed, healthPanel.Visibility);
                     workspacePage.Visibility = Visibility.Collapsed;
-                    OrganizationEditorAssertions.Run(vm);
-                    LibraryBrowseAssertions.Run(vm);
-                    LibraryObservationAssertions.Run(vm);
-                    ResearchPresentationAssertions.Run(window, vm);
-                    PreviewEligibilityAssertions.Run(window, vm);
-                    LibraryLifecycleAssertions.Run(window, vm);
-                    ThumbnailOperationAssertions.Run(vm);
-                    SharePresentationAssertions.AssertStaleNotificationsAndSamePathRepair(window, vm);
-                    ResourceSamplingAssertions.RunLastAndDispose(vm);
+                    RunPhase(nameof(OrganizationEditorAssertions), () => OrganizationEditorAssertions.Run(vm));
+                    RunPhase(nameof(LibraryBrowseAssertions), () => LibraryBrowseAssertions.Run(vm));
+                    RunPhase(nameof(LibraryObservationAssertions), () => LibraryObservationAssertions.Run(vm));
+                    RunPhase(nameof(ResearchPresentationAssertions), () => ResearchPresentationAssertions.Run(window, vm));
+                    RunPhase(nameof(PreviewEligibilityAssertions), () => PreviewEligibilityAssertions.Run(window, vm));
+                    RunPhase(nameof(LibraryLifecycleAssertions), () => LibraryLifecycleAssertions.Run(window, vm));
+                    RunPhase(nameof(ThumbnailOperationAssertions), () => ThumbnailOperationAssertions.Run(vm));
+                    RunPhase(nameof(SharePresentationAssertions), () => SharePresentationAssertions.AssertStaleNotificationsAndSamePathRepair(window, vm));
+                    RunPhase(nameof(ResourceSamplingAssertions), () => ResourceSamplingAssertions.RunLastAndDispose(vm));
                 }
                 finally { vm.Dispose(); }
                 app.Shutdown();
@@ -707,7 +714,7 @@ public partial class SettingsStagingTests
         thread.Start();
         // Startup scenarios add isolated metadata-only helper launches. Every
         // IPC operation retains its own short bound within this STA deadline.
-        Assert.True(thread.Join(TimeSpan.FromSeconds(120)), "WPF staging test timed out.");
+        Assert.True(thread.Join(TimeSpan.FromSeconds(120)), $"WPF staging test timed out during {Volatile.Read(ref phase)}.");
         if (failure != null) ExceptionDispatchInfo.Capture(failure).Throw();
     }
 

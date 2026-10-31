@@ -19,18 +19,28 @@ namespace LocalClip.App.Tests;
 internal static class LibraryMutationAssertions
 {
     private const BindingFlags Hidden = BindingFlags.Instance | BindingFlags.NonPublic;
-    public static void Run()
+    public static void Run(Action<string>? reportStage = null)
     {
         var previous = SynchronizationContext.Current;
         SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(Application.Current.Dispatcher));
         try
         {
-            SourcePersistenceFailureKeepsLiveSource();
-            foreach (bool unlink in new[] { false, true }) ExportCompletionCannotRestoreRemovedClip(unlink);
-            foreach (bool unlink in new[] { false, true }) PendingAudioCannotRestoreRemovedClip(unlink);
-            foreach (bool quit in new[] { false, true }) RescanCleanupFinishesBeforeCaptureOrQuit(quit);
-            RescanCleanupTimeoutRefusesCaptureUntilExplicitRetry();
-            SettledUnconfirmedScanBlocksRecordingButAllowsQuit();
+            RunStage("Source persistence failure keeps live source", SourcePersistenceFailureKeepsLiveSource);
+            foreach (bool unlink in new[] { false, true })
+                RunStage("Held export after " + (unlink ? "unlink" : "remove"), () => ExportCompletionCannotRestoreRemovedClip(unlink));
+            foreach (bool unlink in new[] { false, true })
+                RunStage("Pending audio after " + (unlink ? "unlink" : "remove"), () => PendingAudioCannotRestoreRemovedClip(unlink));
+            foreach (bool quit in new[] { false, true })
+                RunStage("Held rescan before " + (quit ? "quit" : "capture"), () => RescanCleanupFinishesBeforeCaptureOrQuit(quit));
+            RunStage("Rescan timeout refuses capture until explicit retry", RescanCleanupTimeoutRefusesCaptureUntilExplicitRetry);
+            RunStage("Settled uncertain scan permits quit", SettledUnconfirmedScanBlocksRecordingButAllowsQuit);
+            reportStage?.Invoke("All nine library mutation scenarios completed");
+            void RunStage(string name, Action scenario)
+            {
+                reportStage?.Invoke(name + " · starting");
+                scenario();
+                reportStage?.Invoke(name + " · completed");
+            }
         }
         finally { SynchronizationContext.SetSynchronizationContext(previous); }
     }
