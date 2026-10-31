@@ -1,11 +1,13 @@
-# Flick 1.0.13 Preview 1 — Replay Startup Fix (UNSIGNED)
+# Flick 1.0.13 Preview 1 — Replay and Reliability Fixes (UNSIGNED)
 
-- Fixed normal monitor Replay being rejected by a recording-test capability check before the capture helper or encoder started. Fresh manual and background Replay now verify the selected display on the current helper before recording.
-- Diagnostic recordings retain their separate consent and verified-helper checks. Missing or changed displays never silently fall back to a different source.
-- Recording health now updates the helper state after startup failure instead of leaving “Host: Starting” visible. Background Replay retains the underlying startup error for review.
-- Global Save Clip and Replay toggle shortcuts remain available in the tray. Hiding or minimizing ends unfinished shortcut editing without discarding Settings drafts. Tray and shortcut actions share the same busy/diagnostic/shutdown guards.
-- The existing interface, recording options, microphone consent, clips and preferences are retained.
+- Fixed normal monitor/background Replay being rejected before the capture helper started. Source identity is verified on the current helper; diagnostic consent remains separate. Failed starts report the actual helper state, release reservations and permit an explicit retry.
+- Save Clip and Replay toggle shortcuts remain available while Flick is in the tray. Hiding/minimizing ends unfinished shortcut editing without losing Settings drafts. Tray/global controls share diagnostic, pending-save, update and shutdown safeguards.
+- A failed source-preference write keeps the selected source, saved preferences and active recorder aligned. Late export/thumbnail completion cannot restore removed or unlinked clips.
+- Library rescans stop their media workers before Replay or shutdown proceeds. Bounded folder discovery reports depth, directory and file limits honestly.
+- Audio-mix preview positions now map to the original timeline for trim/markers. Cancelled trim drags restore the previous range without saving. Audio-device Refresh recovers after folder navigation; Rename accepts Enter.
+- Uninstall removes only explicitly selected app metadata and empty cache directories; nonempty folders are retained to protect custom media locations.
+- Packaging uses a fresh owned staging directory. Cached OBS runtime files are checked against the hash-verified pinned archive; stale or mixed upstream bytes cannot silently enter a package.
 
-Quit Flick, then install **Flick-Setup.exe** over the current installation. Portable users should replace the complete extracted folder. Previous releases, assets and tags remain available.
+Quit Flick, then install **Flick-Setup.exe** over the current installation. Portable users should replace the complete extracted folder. Clips and preferences are retained. Previous releases, assets and tags remain available.
 
-This is an unsigned preview. Startup regressions are checked with an owned metadata-only helper; they do not record the desktop or exercise GPU/audio hardware. Automated Windows/native/media/installer and render checks accompany the build. Physical gameplay, GPU/audio and real desktop acceptance remain separate.
+This is an unsigned preview. Metadata-only helper tests cover managed startup, tray commands and failure recovery without recording a desktop or using GPU/audio devices. Automated Windows/native/media/installer, UI render and matched synthetic diagnostics accompany the build. Physical gameplay/GPU/audio, actual OS shortcut presses, Discord, Narrator and per-monitor DPI acceptance remain separate.

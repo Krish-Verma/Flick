@@ -1,8 +1,14 @@
 # Payload completeness for the pinned OBS 32.2.2 Windows x64 runtime.
 # This does not load plugins or qualify a GPU/driver. Keep the full upstream
 # runtime: these are minimum required capture/encoder dependencies, not a prune list.
-param([Parameter(Mandatory=$true)][string]$RuntimeRoot)
+param([Parameter(Mandatory=$true)][string]$RuntimeRoot, [string]$VerifiedArchivePath = '')
 $ErrorActionPreference = "Stop"
+$repository = (Get-Item -LiteralPath $PSScriptRoot).Parent.FullName
+$pin = (Get-Content -LiteralPath (Join-Path $repository 'dependencies.lock.json') -Raw | ConvertFrom-Json).pinnedDependencies.libobs
+if ($pin.version -notmatch '^\d+\.\d+\.\d+$') { throw 'Invalid pinned OBS version.' }
+if (-not $VerifiedArchivePath) { $VerifiedArchivePath = Join-Path $repository ("dist/obs-upstream-{0}.zip" -f $pin.version) }
+. (Join-Path $PSScriptRoot 'FlickObsArchive.ps1')
+$verifiedFiles = Invoke-FlickObsArchive -ArchivePath $VerifiedArchivePath -ExpectedSha256 $pin.sha256 -RuntimeRoot $RuntimeRoot
 $runtime = [IO.Path]::GetFullPath($RuntimeRoot)
 
 $required = @(
@@ -73,4 +79,4 @@ foreach ($relative in $required) {
     }
     finally { $reader.Dispose() }
 }
-Write-Host "OBS 32.2.2 capture, NVENC/AMF/QSV/x264 payload completeness PASS; hardware qualification is separate." -ForegroundColor Green
+Write-Host "OBS $($pin.version): $verifiedFiles upstream files match the pinned archive; capture/encoder payload completeness PASS. Hardware qualification is separate." -ForegroundColor Green

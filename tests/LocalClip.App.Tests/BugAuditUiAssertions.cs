@@ -89,6 +89,7 @@ internal static class BugAuditUiAssertions
         using var vm = (MainViewModel)typeof(MainViewModel).GetConstructor(Hidden, null,
             [typeof(AppSettings), typeof(string)], null)!.Invoke([settings, System.IO.Path.Combine(owned.Root, "Metadata")]);
         var window = (MainWindow)typeof(MainWindow).GetConstructor(Hidden, null, [typeof(MainViewModel)], null)!.Invoke([vm]); // Unshown; no native registration or device discovery.
+        window.Closing -= typeof(MainWindow).GetMethod("Window_Closing", Hidden)!.CreateDelegate<CancelEventHandler>(window);
         var app = Application.Current; var previousMain = app.MainWindow;
         try
         {
@@ -111,7 +112,7 @@ internal static class BugAuditUiAssertions
             Assert.Null(((MediaElement)window.FindName("VideoPlayer")).Source);
 
             Exception? failure = null;
-            app.Dispatcher.BeginInvoke(DispatcherPriority.ContextIdle, new Action(() => {
+            app.Dispatcher.BeginInvoke(DispatcherPriority.Loaded, new Action(() => {
                 try
                 {
                     var buttons = Descendants(((ContentControl)window.FindName("DialogContentHost")).Content).OfType<Button>().ToArray();
@@ -119,14 +120,15 @@ internal static class BugAuditUiAssertions
                     Assert.True(save.IsDefault);
                     var input = Assert.Single(Descendants(((ContentControl)window.FindName("DialogContentHost")).Content).OfType<TextBox>());
                     input.Text = "New title";
-                    ((IInvokeProvider)new ButtonAutomationPeer(save).GetPattern(PatternInterface.Invoke)!).Invoke();
+                    Assert.True(save.IsEnabled);
+                    save.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                 }
                 catch (Exception error)
                 {
                     failure = error;
                     var cancel = Descendants(((ContentControl)window.FindName("DialogContentHost")).Content).OfType<Button>().FirstOrDefault(b => Equals(b.Content, "Cancel"));
                     if (cancel != null)
-                        ((IInvokeProvider)new ButtonAutomationPeer(cancel).GetPattern(PatternInterface.Invoke)!).Invoke();
+                        cancel.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                     else
                     {
                         window.Closing -= typeof(MainWindow).GetMethod("Window_Closing", Hidden)!.CreateDelegate<CancelEventHandler>(window);
@@ -134,8 +136,14 @@ internal static class BugAuditUiAssertions
                     }
                 }
             }));
-            Assert.Equal("New title", FlickDialog.Prompt("Rename clip", "Enter a clip title", "Old title"));
+            var guard = new DispatcherTimer(DispatcherPriority.Send, app.Dispatcher) { Interval = TimeSpan.FromSeconds(5) };
+            guard.Tick += (_, _) => { failure = new TimeoutException("Owned Rename dialog did not complete."); window.Close(); };
+            guard.Start();
+            string? renamed;
+            try { renamed = FlickDialog.Prompt("Rename clip", "Enter a clip title", "Old title"); }
+            finally { guard.Stop(); }
             if (failure != null) throw failure;
+            Assert.Equal("New title", renamed);
         }
         finally
         {

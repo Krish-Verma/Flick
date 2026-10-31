@@ -171,6 +171,27 @@ public sealed class ClipStorage
         }
     }
 
+    /// <summary>Commit a late worker result only to its still-indexed source.
+    /// This cannot register a new capture or revive a removed/unlinked item.</summary>
+    public bool TryUpdateExistingClip(ClipMetadata expected, string originalPath,
+        string connectedFolderId, Action<ClipMetadata> update)
+    {
+        ArgumentNullException.ThrowIfNull(expected);
+        ArgumentNullException.ThrowIfNull(update);
+        lock (_lock)
+        {
+            var current = _clips.FirstOrDefault(item => item.Id == expected.Id);
+            if (!ReferenceEquals(current, expected) ||
+                !ClipLibraryPaths.FileComparer.Equals(SafeNormalize(current!.OriginalFilePath), SafeNormalize(originalPath)) ||
+                current.ConnectedFolderId != connectedFolderId ||
+                (current.IsImported && !_folders.Any(folder => folder.Id == connectedFolderId))) return false;
+            update(current);
+            ValidateOrganization(current);
+            SaveIndexLocked();
+            return true;
+        }
+    }
+
     private static void ValidateOrganization(ClipMetadata clip)
     {
         if (clip.GameName == null) throw new InvalidDataException("Clip index contains an invalid game label.");
@@ -271,6 +292,7 @@ public sealed class ClipStorage
                 clip.ThumbnailPath = generated;
             }
             catch (OperationCanceledException) { throw; }
+            catch (Exception error) when (error is MediaWorkerExitUnconfirmedException or LocalClip.Core.Audio.MediaWorkerCleanupException) { throw; }
             catch { /* Metadata and originals remain usable without a thumbnail. */ }
         }
 
@@ -317,8 +339,9 @@ public sealed class ClipStorage
                 return new ClipImportSummary { FolderUnavailable = true };
 
             // Explicit import only; enumeration is done on a worker thread.
-            var media = await Task.Run(() => ClipLibraryPaths.DiscoverVideos(
+            var discovery = await Task.Run(() => ClipLibraryPaths.DiscoverVideosWithLimits(
                 source.Path, source.IncludeSubfolders, cancellationToken), cancellationToken);
+            var media = discovery.Videos;
             int imported = 0, already = 0, skipped = 0, failed = 0, examined = 0;
             foreach (var path in media)
             {
@@ -335,6 +358,7 @@ public sealed class ClipStorage
                         imported++;
                     }
                     catch (OperationCanceledException) { throw; }
+                    catch (Exception error) when (error is MediaWorkerExitUnconfirmedException or LocalClip.Core.Audio.MediaWorkerCleanupException) { throw; }
                     catch (Exception)
                     {
                         failed++;
@@ -357,7 +381,8 @@ public sealed class ClipStorage
             {
                 TotalDiscovered = media.Count, Imported = imported,
                 AlreadyIndexed = already, Ignored = skipped, Failed = failed,
-                ScanLimitReached = media.Count >= ClipLibraryPaths.MaximumMediaFilesPerScan
+                ScanLimitReached = discovery.ScanLimitReached,
+                ScanLimitDescription = discovery.LimitDescription
             };
         }
         finally
@@ -398,14 +423,17 @@ public sealed class ClipStorage
         if (clip is null || !clip.IsAvailable) return "";
         if (!string.IsNullOrWhiteSpace(clip.ThumbnailPath) &&
             File.Exists(clip.ThumbnailPath)) return clip.ThumbnailPath;
+        string originalPath = clip.OriginalFilePath;
+        string folderId = clip.ConnectedFolderId;
         string target = Path.Combine(_thumbnailsDir, clip.Id + ".jpg");
         string generated = await _prober.GenerateThumbnailAsync(
-            clip.OriginalFilePath, target, Math.Min(1d, clip.DurationSeconds / 2d),
+            originalPath, target, Math.Min(1d, clip.DurationSeconds / 2d),
             cancellationToken);
         if (File.Exists(generated))
         {
-            clip.ThumbnailPath = generated;
-            AddOrUpdateClip(clip);
+            cancellationToken.ThrowIfCancellationRequested();
+            if (!TryUpdateExistingClip(clip, originalPath, folderId, current => current.ThumbnailPath = generated))
+                return "";
         }
         return generated;
     }

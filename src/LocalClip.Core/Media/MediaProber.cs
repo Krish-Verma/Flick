@@ -53,7 +53,7 @@ public class MediaProber
         return name;
     }
 
-    public async Task<ProbeResult> ProbeFileAsync(string filePath,
+    public virtual async Task<ProbeResult> ProbeFileAsync(string filePath,
         CancellationToken cancellationToken = default)
     {
         if (!File.Exists(filePath))

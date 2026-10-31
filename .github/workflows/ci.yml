@@ -172,6 +172,7 @@ jobs:
         run: |
           ./scripts/check_flick_release_source.ps1
           ./scripts/test_shipping_safety.ps1
+          ./scripts/test_obs_runtime_integrity.ps1
       - name: Build solution (Release)
         run: dotnet build LocalClip.slnx --configuration Release --no-restore --warnaserror
       - name: Run hardware-independent tests

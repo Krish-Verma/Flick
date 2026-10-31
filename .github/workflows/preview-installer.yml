@@ -16,6 +16,8 @@ on:
       - 'scripts/test_flick_installer_update.ps1'
       - 'scripts/FlickPackageStaging.ps1'
       - 'scripts/test_shipping_safety.ps1'
+      - 'scripts/FlickObsArchive.ps1'
+      - 'scripts/test_obs_runtime_integrity.ps1'
       - 'scripts/check_ffmpeg_runtime.ps1'
       - 'scripts/run_recording_qualification.ps1'
       - 'scripts/RecordingHarnessSession.cs'
@@ -139,6 +141,7 @@ jobs:
           ./scripts/check_gui_slice6.ps1
           ./scripts/check_flick_release_source.ps1
           ./scripts/test_shipping_safety.ps1
+          ./scripts/test_obs_runtime_integrity.ps1
       - name: Build portable ZIP and conventional per-user Setup EXE
         shell: pwsh
         run: ./scripts/build_installer.ps1 -SkipNativeBuild
