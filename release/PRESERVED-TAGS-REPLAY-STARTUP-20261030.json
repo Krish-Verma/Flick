@@ -1,0 +1,77 @@
+[
+  {
+    "ref": "refs/tags/ui-refresh-preview-20261023",
+    "type": "commit",
+    "sha": "79204f67ca9318526873730946d82556eee9ce9c"
+  },
+  {
+    "ref": "refs/tags/v1.0.0",
+    "type": "commit",
+    "sha": "3ccb0f4b1afadceeff76a96ed3e7f4903c1b1dc1"
+  },
+  {
+    "ref": "refs/tags/v1.0.1-preview.1",
+    "type": "commit",
+    "sha": "02ef061200762bdd22bf53ed633ae96ffd6d7761"
+  },
+  {
+    "ref": "refs/tags/v1.0.10-preview.1",
+    "type": "commit",
+    "sha": "444c90893a1d9eab22c644adbc1a18ef7af46e13"
+  },
+  {
+    "ref": "refs/tags/v1.0.11-preview.1",
+    "type": "commit",
+    "sha": "49844256bf5f160b4777d0fa057cd79ddcf27eaf"
+  },
+  {
+    "ref": "refs/tags/v1.0.12-preview.1",
+    "type": "commit",
+    "sha": "2202fa7ef8a491b94fa32446c812323fe46be4cd"
+  },
+  {
+    "ref": "refs/tags/v1.0.2-preview.1",
+    "type": "commit",
+    "sha": "23ab791d5b000d90d5457fa35323594c4b31cc5d"
+  },
+  {
+    "ref": "refs/tags/v1.0.2-preview.2",
+    "type": "commit",
+    "sha": "346eca07170f4b4d561044a3898bf789bdf4fc3b"
+  },
+  {
+    "ref": "refs/tags/v1.0.3-preview.1",
+    "type": "commit",
+    "sha": "7123509de13dc302a632bda5ac3cc986a38d9d22"
+  },
+  {
+    "ref": "refs/tags/v1.0.4-preview.1",
+    "type": "commit",
+    "sha": "f5e701cdacfd57e477a2cced7dcf1e9f3bd835db"
+  },
+  {
+    "ref": "refs/tags/v1.0.5-preview.1",
+    "type": "commit",
+    "sha": "a6d2cd880c9716e96e9957279b4848eb8d3ca076"
+  },
+  {
+    "ref": "refs/tags/v1.0.6-preview.1",
+    "type": "commit",
+    "sha": "d63043519eb7348d32efd129835cad9c2bb26fe7"
+  },
+  {
+    "ref": "refs/tags/v1.0.7-preview.1",
+    "type": "commit",
+    "sha": "cd4ad99867da9c5c6e5a828d95667159aac4b306"
+  },
+  {
+    "ref": "refs/tags/v1.0.8-preview.1",
+    "type": "commit",
+    "sha": "dc656115274472ce0f7ecf01feb9a736ea8ffd3e"
+  },
+  {
+    "ref": "refs/tags/v1.0.9-preview.1",
+    "type": "commit",
+    "sha": "6dc06b484ab25930375eac80b744e4563a16ea19"
+  }
+]
