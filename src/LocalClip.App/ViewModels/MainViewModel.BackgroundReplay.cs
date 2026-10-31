@@ -197,12 +197,21 @@ public partial class MainViewModel
         {
             // The normal start path performs the same exact-window and audio
             // validation as a user start. It never substitutes another source.
+            var previousIssue = _health.Snapshot.LastRecordingIssue;
             await StartCaptureAsync();
+            var resultHealth = _health.Snapshot;
+            // A guard can return before a new session/issue exists. Historical
+            // errors remain in Health but must not become this attempt's cause.
+            string? startupFailure = resultHealth.LastRecordingIssue is { } issue &&
+                issue.SessionId == resultHealth.SessionId && !ReferenceEquals(issue, previousIssue)
+                    ? issue.Message : null;
             _backgroundReplayOwned = CaptureActive && _automaticReplaySession.BackgroundEnabled &&
                 !_automaticReplaySession.BackgroundPaused;
             _backgroundReplayStartFailed = !CaptureActive && !_automaticReplaySession.BackgroundPaused;
             PublishGameAutomation(CaptureActive ? (_backgroundReplayOwned ? "Replay active in the tray." : "Replay active.")
-                : "Background replay couldn't start. Choose a source or start replay to retry.");
+                : startupFailure is { Length: > 0 } failure
+                    ? "Background replay couldn't start. " + failure
+                    : "Background replay couldn't start. Finish any pending work, then start replay to retry.");
         }
         finally
         {

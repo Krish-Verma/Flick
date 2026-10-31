@@ -15,6 +15,11 @@ using LocalClip.Core.Rules;
 namespace LocalClip.Core.Media;
 
 public sealed class MediaWorkerExitUnconfirmedException(string message) : IOException(message);
+public sealed class PlaybackPreviewCacheLimitException(string cacheDirectory) : IOException(
+    "Local preview storage is full. Manage files in the preview folder before creating another preview.")
+{
+    public string CacheDirectory { get; } = cacheDirectory;
+}
 
 public class ProbeResult
 {
@@ -33,6 +38,10 @@ public class MediaProber
 {
     private readonly string _ffprobePath;
     private readonly string _ffmpegPath;
+    private static readonly object PlaybackCacheGate = new();
+    private readonly Dictionary<string, (string Path, string Hash)> _playbackPreviews = new(StringComparer.Ordinal);
+    internal const string PlaybackPreviewNamespace = "Flick-Playback-v4";
+    internal const int MaximumCachedPlaybackPreviews = 24;
 
     public MediaProber(string? ffprobePath = null, string? ffmpegPath = null)
     {
@@ -53,7 +62,7 @@ public class MediaProber
         return name;
     }
 
-    public async Task<ProbeResult> ProbeFileAsync(string filePath,
+    public virtual async Task<ProbeResult> ProbeFileAsync(string filePath,
         CancellationToken cancellationToken = default)
     {
         if (!File.Exists(filePath))
@@ -289,7 +298,7 @@ public class MediaProber
     }
     /// <summary>
     /// Explicit, on-demand WPF-compatible preview for MKVs that the Windows
-    /// MediaElement cannot decode. Originals remain immutable; bounded cache
+    /// MediaElement cannot decode. Originals remain immutable; bounded admission
     /// and one owned FFmpeg worker are created only after the user's request.
     /// Longer imported videos are limited to the first three minutes for preview.
     /// </summary>
@@ -304,9 +313,13 @@ public class MediaProber
         if (!media.IsValid || !double.IsFinite(media.DurationSeconds) || media.DurationSeconds <= 0)
             throw new InvalidDataException("The original video is not a valid preview source.");
 
-        string cache = cacheDirectory ?? Path.Combine(
+        string cacheRoot = cacheDirectory ?? Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "LocalClip", "PreviewCache");
+        // Legacy files can be valid user media. A directory name or hash-shaped
+        // filename is never permission to reuse, overwrite or delete them.
+        string cache = Path.Combine(cacheRoot, PlaybackPreviewNamespace);
+        AssertPreviewPathHasNoReparseEntries(cache);
         Directory.CreateDirectory(cache);
         if (!double.IsFinite(trimStart) || trimStart < 0 || trimStart >= media.DurationSeconds ||
             (trimEnd.HasValue && (!double.IsFinite(trimEnd.Value) || trimEnd.Value <= trimStart || trimEnd.Value > media.DurationSeconds + .1)))
@@ -317,28 +330,27 @@ public class MediaProber
                              (forceTranscode ? "|preview-safe-v3" : "|preview-copy-v3") +
                              "|" + mixFilter + "|" + trimStart.ToString("R", CultureInfo.InvariantCulture) + "|" + trimEnd?.ToString("R", CultureInfo.InvariantCulture);
         string key = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(fingerprint)));
-        string resultFile = Path.Combine(cache, key + ".mp4");
-
-        if (File.Exists(resultFile) && new FileInfo(resultFile).Length > 1024)
+        string cacheKey = Path.GetFullPath(cache) + "|" + key;
+        (string Path, string Hash) previous;
+        bool known;
+        lock (PlaybackCacheGate) known = _playbackPreviews.TryGetValue(cacheKey, out previous);
+        if (known)
         {
-            var existing = await ProbeFileAsync(resultFile, cancellationToken);
-            if (existing.IsValid && existing.VideoCodec.Equals("h264",
-                    StringComparison.OrdinalIgnoreCase))
-                return resultFile;
-        }
-
-        // Keep the app's cache from growing on the first user-requested preview.
-        try
-        {
-            foreach (var old in new DirectoryInfo(cache).EnumerateFiles("*.mp4")
-                .OrderByDescending(x => x.LastWriteTimeUtc)
-                .Skip(24).Take(80))
+            try
             {
-                try { old.Delete(); } catch (IOException) { }
+                AssertPreviewPathHasNoReparseEntries(previous.Path);
+                if (await HashPreviewAsync(previous.Path, cancellationToken) == previous.Hash)
+                    return previous.Path;
             }
+            catch (Exception error) when (error is IOException or UnauthorizedAccessException) { }
+            lock (PlaybackCacheGate) _playbackPreviews.Remove(cacheKey);
         }
-        catch (IOException) { }
 
+        lock (PlaybackCacheGate) AssertPreviewCapacity(cache);
+        if (Path.IsPathFullyQualified(_ffmpegPath) && !File.Exists(_ffmpegPath))
+            throw new FileNotFoundException("The local preview encoder is unavailable.", _ffmpegPath);
+
+        string resultFile = Path.Combine(cache, Guid.NewGuid().ToString("N") + ".mp4");
         string temp = Path.Combine(cache, ".preview-" + Guid.NewGuid().ToString("N") + ".mp4");
         double seconds = PlaybackPreviewPolicy.PreviewSeconds((trimEnd ?? media.DurationSeconds) - trimStart);
         bool copyH264 = !forceTranscode && trimStart == 0 && PlaybackPreviewPolicy.CanStreamCopy(
@@ -383,9 +395,12 @@ public class MediaProber
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(
             cancellationToken, maxTime.Token);
         bool workerStarted = false;
+        bool tempReserved = false;
 
         try
         {
+            ReservePlaybackPreviewFile(temp);
+            tempReserved = true;
             workerStarted = process.Start();
             if (!workerStarted)
                 throw new IOException("Could not start the local preview encoder.");
@@ -415,7 +430,14 @@ public class MediaProber
                     "h264", StringComparison.OrdinalIgnoreCase))
                 throw new IOException("Generated preview failed H.264 media verification.");
 
-            File.Move(temp, resultFile, overwrite: true);
+            PublishPlaybackPreviewFile(temp, resultFile);
+            string outputHash = await HashPreviewAsync(resultFile, cancellationToken);
+            lock (PlaybackCacheGate)
+            {
+                if (_playbackPreviews.Count >= MaximumCachedPlaybackPreviews)
+                    _playbackPreviews.Remove(_playbackPreviews.Keys.First()); // Metadata only; never evict a file.
+                _playbackPreviews[cacheKey] = (resultFile, outputHash);
+            }
             return resultFile;
         }
         finally
@@ -430,8 +452,49 @@ public class MediaProber
                     catch (Exception) { throw new LocalClip.Core.Audio.MediaWorkerCleanupException(); }
                 }
             }
-            finally { try { if (File.Exists(temp)) File.Delete(temp); } catch { } }
+            finally { try { if (tempReserved && File.Exists(temp)) File.Delete(temp); } catch { } }
         }
     }
 
+    private static async Task<string> HashPreviewAsync(string path, CancellationToken cancellationToken)
+    {
+        await using var input = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read,
+            81920, FileOptions.Asynchronous | FileOptions.SequentialScan);
+        return Convert.ToHexString(await SHA256.HashDataAsync(input, cancellationToken));
+    }
+
+    internal static void ReservePlaybackPreviewFile(string path)
+    {
+        lock (PlaybackCacheGate)
+        {
+            AssertPreviewPathHasNoReparseEntries(path);
+            AssertPreviewCapacity(Path.GetDirectoryName(path)!);
+            using var reserved = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.Read);
+        }
+    }
+
+    internal static void PublishPlaybackPreviewFile(string temporary, string destination) =>
+        File.Move(temporary, destination, overwrite: false);
+
+    private static void AssertPreviewCapacity(string directory)
+    {
+        int count = 0;
+        long remaining = MaximumCachedPlaybackPreviews * PlaybackPreviewPolicy.MaximumOutputBytes;
+        foreach (var file in new DirectoryInfo(directory).EnumerateFiles("*.mp4", SearchOption.TopDirectoryOnly))
+        {
+            long reservation = Math.Max(file.Length, PlaybackPreviewPolicy.MaximumOutputBytes);
+            if (++count >= MaximumCachedPlaybackPreviews || reservation > remaining)
+                throw new PlaybackPreviewCacheLimitException(directory);
+            remaining -= reservation;
+        }
+        if (remaining < PlaybackPreviewPolicy.MaximumOutputBytes)
+            throw new PlaybackPreviewCacheLimitException(directory);
+    }
+
+    private static void AssertPreviewPathHasNoReparseEntries(string path)
+    {
+        for (string? entry = Path.GetFullPath(path); !string.IsNullOrEmpty(entry); entry = Path.GetDirectoryName(entry))
+            if ((File.Exists(entry) || Directory.Exists(entry)) && (File.GetAttributes(entry) & FileAttributes.ReparsePoint) != 0)
+                throw new IOException("Preview storage cannot traverse a reparse entry.");
+    }
 }

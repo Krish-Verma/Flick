@@ -6,6 +6,35 @@ using System.Threading;
 
 namespace LocalClip.Core.Storage;
 
+[Flags]
+public enum VideoDiscoveryLimits
+{
+    None = 0,
+    DirectoryDepth = 1,
+    DirectoryCount = 2,
+    MediaFileCount = 4
+}
+
+public sealed record VideoDiscoveryResult(IReadOnlyList<string> Videos, VideoDiscoveryLimits ReachedLimits)
+{
+    public bool ScanLimitReached => ReachedLimits != VideoDiscoveryLimits.None;
+
+    public string LimitDescription
+    {
+        get
+        {
+            var reasons = new List<string>(3);
+            if ((ReachedLimits & VideoDiscoveryLimits.DirectoryDepth) != 0)
+                reasons.Add($"maximum folder depth of {ClipLibraryPaths.MaximumDirectoryDepth}");
+            if ((ReachedLimits & VideoDiscoveryLimits.DirectoryCount) != 0)
+                reasons.Add($"maximum of {ClipLibraryPaths.MaximumDirectoriesPerScan} folders");
+            if ((ReachedLimits & VideoDiscoveryLimits.MediaFileCount) != 0)
+                reasons.Add($"maximum of {ClipLibraryPaths.MaximumMediaFilesPerScan} videos");
+            return string.Join("; ", reasons);
+        }
+    }
+}
+
 /// <summary>
 /// Local library path and enumeration rules. No traversal into junctions or
 /// symbolic links; no unbounded walk of arbitrary drives.
@@ -56,10 +85,17 @@ public static class ClipLibraryPaths
     public static IReadOnlyList<string> DiscoverVideos(
         string folder,
         bool includeSubfolders,
+        CancellationToken cancellationToken = default) =>
+        DiscoverVideosWithLimits(folder, includeSubfolders, cancellationToken).Videos;
+
+    public static VideoDiscoveryResult DiscoverVideosWithLimits(
+        string folder,
+        bool includeSubfolders,
         CancellationToken cancellationToken = default)
     {
         ValidateImportRoot(folder);
         var results = new List<string>();
+        var reachedLimits = VideoDiscoveryLimits.None;
         var visited = new HashSet<string>(FileComparer);
         var pending = new Queue<(string Directory, int Depth)>();
         pending.Enqueue((Normalize(folder), 0));
@@ -70,7 +106,10 @@ public static class ClipLibraryPaths
             var (directory, depth) = pending.Dequeue();
             if (!visited.Add(directory)) continue;
             if (visited.Count > MaximumDirectoriesPerScan)
+            {
+                reachedLimits |= VideoDiscoveryLimits.DirectoryCount;
                 break;
+            }
 
             try
             {
@@ -85,16 +124,27 @@ public static class ClipLibraryPaths
 
                     if ((attributes & FileAttributes.Directory) != 0)
                     {
-                        if (includeSubfolders && depth < MaximumDirectoryDepth &&
-                            visited.Count + pending.Count < MaximumDirectoriesPerScan)
+                        if (!includeSubfolders) continue;
+                        if (depth >= MaximumDirectoryDepth)
                         {
-                            pending.Enqueue((Normalize(entry), depth + 1));
+                            reachedLimits |= VideoDiscoveryLimits.DirectoryDepth;
+                            continue;
                         }
+                        if (visited.Count + pending.Count >= MaximumDirectoriesPerScan)
+                        {
+                            reachedLimits |= VideoDiscoveryLimits.DirectoryCount;
+                            continue;
+                        }
+                        pending.Enqueue((Normalize(entry), depth + 1));
                     }
                     else if (IsSupportedVideo(entry))
                     {
                         results.Add(Normalize(entry));
-                        if (results.Count >= MaximumMediaFilesPerScan) break;
+                        if (results.Count >= MaximumMediaFilesPerScan)
+                        {
+                            reachedLimits |= VideoDiscoveryLimits.MediaFileCount;
+                            break;
+                        }
                     }
                 }
             }
@@ -102,6 +152,6 @@ public static class ClipLibraryPaths
             catch (UnauthorizedAccessException) { /* Don't escalate access. */ }
         }
 
-        return results;
+        return new(results.AsReadOnly(), reachedLimits);
     }
 }

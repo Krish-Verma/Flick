@@ -122,7 +122,7 @@ internal static class PreviewEligibilityAssertions
         {
             const string sentinel = "Synthetic blocked preview sentinel";
             vm.StatusDetails = sentinel;
-            Call("SetPreviewSource", missing, originalMode, true);
+            Call("SetPreviewSource", missing, originalMode, true, null);
             Assert.Equal(sentinel, vm.StatusDetails); // Blocked before even the missing-file fallback.
             AssertNoMedia();
             Call("BtnPlayPause_Click", buttons["BtnPlayPause"], new RoutedEventArgs());

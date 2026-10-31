@@ -19,12 +19,13 @@ public sealed class WpfDispatcherBindingTests
             try
             {
                 // No Application, Window, MainViewModel, profile or native host.
+                AssertIdleTailIsPumped(dispatcher);
                 var source = new BindingProbe();
                 var writable = new TextBlock();
                 var computed = new TextBlock();
-                writable.SetBinding(TextBlock.TextProperty, new Binding(nameof(BindingProbe.Text)) { Source = source });
-                computed.SetBinding(TextBlock.TextProperty, new Binding(nameof(BindingProbe.ComputedText)) { Source = source });
-                DrainToIdle(dispatcher);
+                var writableBinding = writable.SetBinding(TextBlock.TextProperty, new Binding(nameof(BindingProbe.Text)) { Source = source });
+                var computedBinding = computed.SetBinding(TextBlock.TextProperty, new Binding(nameof(BindingProbe.ComputedText)) { Source = source });
+                SettleBindings("initial");
                 Assert.Equal("initial", writable.Text);
                 Assert.Equal("computed:initial", computed.Text);
                 Assert.Equal(BindingStatus.Active, computed.GetBindingExpression(TextBlock.TextProperty)!.Status);
@@ -50,11 +51,11 @@ public sealed class WpfDispatcherBindingTests
                     // Reading/laying out the target must not replace/rebind it.
                     // Pump the real queue where WPF schedules worker transfers;
                     // it must read the newest source rather than the old event.
-                    DrainToIdle(dispatcher);
+                    SettleBindings("latest-ui");
                     Assert.Equal("latest-ui", writable.Text);
                     Assert.Equal("computed:latest-ui", computed.Text);
                     source.Text = "after-idle";
-                    DrainToIdle(dispatcher);
+                    SettleBindings("after-idle");
                     Assert.Equal("after-idle", writable.Text);
                     Assert.Equal("computed:after-idle", computed.Text);
                 }
@@ -62,6 +63,15 @@ public sealed class WpfDispatcherBindingTests
                 {
                     ((INotifyPropertyChanged)source).PropertyChanged -= direct;
                     PropertyChangedEventManager.RemoveHandler(source, weak, nameof(BindingProbe.ComputedText));
+                }
+
+                void SettleBindings(string expected)
+                {
+                    PumpUntil(dispatcher, () => writable.Text == expected && computed.Text == "computed:" + expected,
+                        () => $"Source='{source.Text}', writable='{writable.Text}' ({writableBinding.Status}), " +
+                            $"computed='{computed.Text}' ({computedBinding.Status}).");
+                    Assert.Same(writableBinding, writable.GetBindingExpression(TextBlock.TextProperty));
+                    Assert.Same(computedBinding, computed.GetBindingExpression(TextBlock.TextProperty));
                 }
             }
             catch (Exception error) { failure = error; }
@@ -71,6 +81,37 @@ public sealed class WpfDispatcherBindingTests
         thread.Start();
         Assert.True(thread.Join(TimeSpan.FromSeconds(15)), "The isolated WPF binding regression timed out.");
         if (failure != null) ExceptionDispatchInfo.Capture(failure).Throw();
+    }
+
+    private static void AssertIdleTailIsPumped(Dispatcher dispatcher)
+    {
+        bool tailReached = false;
+        dispatcher.BeginInvoke(DispatcherPriority.ContextIdle, new Action(() =>
+            dispatcher.BeginInvoke(DispatcherPriority.ContextIdle, new Action(() => tailReached = true))));
+        DrainToIdle(dispatcher);
+        // An operation can enqueue more work behind an already queued sentinel.
+        // WPF's DataBindEngine does exactly this when its cross-thread time slice expires.
+        Assert.False(tailReached);
+        PumpUntil(dispatcher, () => tailReached, () => "A dynamically queued ContextIdle tail did not execute.");
+        Assert.True(tailReached);
+    }
+
+    private static void PumpUntil(Dispatcher dispatcher, Func<bool> settled, Func<string> failureDetails)
+    {
+        if (settled()) return;
+        var frame = new DispatcherFrame();
+        // Wait for the actual binding transfer, including later ContextIdle slices.
+        // Neither the source nor a binding expression is refreshed by this pump.
+        var observation = new DispatcherTimer(DispatcherPriority.ContextIdle, dispatcher) {
+            Interval = TimeSpan.FromMilliseconds(1) };
+        var guard = new DispatcherTimer(DispatcherPriority.Send, dispatcher) {
+            Interval = TimeSpan.FromSeconds(3) };
+        observation.Tick += (_, _) => { if (settled()) frame.Continue = false; };
+        guard.Tick += (_, _) => frame.Continue = false;
+        observation.Start(); guard.Start();
+        try { Dispatcher.PushFrame(frame); }
+        finally { observation.Stop(); guard.Stop(); }
+        Assert.True(settled(), "The isolated dispatcher did not settle within three seconds. " + failureDetails());
     }
 
     private static void DrainToIdle(Dispatcher dispatcher)

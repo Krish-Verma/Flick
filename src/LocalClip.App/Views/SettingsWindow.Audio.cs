@@ -16,6 +16,7 @@ public partial class SettingsWindow
     private IReadOnlyList<AudioEndpoint> _availableInputs = Array.Empty<AudioEndpoint>();
     private bool _audioDevicesLoaded;
     private int _audioDevicesEpoch;
+    private int _audioDevicesRequest;
 
     private sealed record AudioChoice(AudioProcessIdentity? Identity)
     {
@@ -69,6 +70,7 @@ public partial class SettingsWindow
     private async Task RefreshAudioDevicesAsync()
     {
         if (!BtnRefreshAudioDevices.IsEnabled) return;
+        int request = ++_audioDevicesRequest;
         int epoch = ++_audioDevicesEpoch;
         BtnRefreshAudioDevices.IsEnabled = false;
         TxtAudioDeviceStatus.Text = "Finding devices…";
@@ -101,8 +103,13 @@ public partial class SettingsWindow
         }
         finally
         {
-            if (epoch == _audioDevicesEpoch)
+            // Unloading invalidates the result, not ownership of the refresh
+            // button. The same staged page can be reattached after folders.
+            if (request == _audioDevicesRequest)
+            {
                 BtnRefreshAudioDevices.IsEnabled = true;
+                if (epoch != _audioDevicesEpoch) _audioDevicesLoaded = false;
+            }
         }
     }
 

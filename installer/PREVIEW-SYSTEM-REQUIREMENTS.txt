@@ -1,4 +1,4 @@
-Flick 1.0.12-preview.1 — UNRELEASED UNSIGNED replay and UX preview
+Flick 1.0.13-preview.1 — UNRELEASED UNSIGNED replay and UX preview
 
 THIS BUILD IS AN UNQUALIFIED DEVELOPMENT CANDIDATE:
 - Targets Windows 11 with a 64-bit x86-64 CPU and working Direct3D 11 graphics.
@@ -18,7 +18,7 @@ REQUIRED BEFORE RECORDING:
 
 NVIDIA, AMD, Intel, hybrid-GPU and CPU recording paths require physical
 Windows acceptance on this exact candidate. Historical RTX 5060 results
-and hosted CI for earlier versions are not qualification of this 1.0.12 build.
+and hosted CI for earlier versions are not qualification of this 1.0.13 build.
 
 NOT QUALIFIED:
 - Windows on ARM/Snapdragon, 32-bit Windows, macOS and Linux.
@@ -46,7 +46,7 @@ adds a Start Menu shortcut and registers a normal Windows uninstaller.
 
 To remove Flick, choose Uninstall Flick in Settings > General, the
 Start Menu shortcut, or Windows Settings > Apps > Installed Apps.
-The uninstaller asks separately whether to erase Flick settings/cache,
+The uninstaller asks separately whether to erase Flick settings/library metadata,
 with NO selected by default. Clips and exports are not removed.
 
 This unreleased candidate is unsigned. Windows Smart App Control may block

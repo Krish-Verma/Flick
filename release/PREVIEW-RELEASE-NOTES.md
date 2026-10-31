@@ -1,13 +1,13 @@
-# Flick 1.0.12 Preview 1 — Design Research (UNSIGNED)
+# Flick 1.0.13 Preview 1 — Replay and Reliability Fixes (UNSIGNED)
 
-- Replay and save labels distinguish requests, acceptance, unconfirmed acknowledgement, video checking and verified saves. Checking remains visible when replay stops.
-- Share has a larger original still and a clear ready-MP4 tile. Copy file becomes the primary action when ready; real encoding and validation stages replace generic progress. Drag, Copy, Open folder, size limits and export options remain available in the complete card.
-- Settings show changed/reverted drafts and errors beside the relevant fields. Unchanged valid settings need no save; startup repair and recovered-settings review remain available. Verified Save returns to the dashboard; failed saves retain the draft.
-- Search has Clear, active filters show their count, and Reset restores the full library. Empty and no-match states explain the next action. Clip rows use concise duration/date metadata and retain offline/source information.
-- Library stills load in a bounded background queue and pixel cache. The player shows an explicit Play action; browsing never starts a video decoder.
-- Shared controls use clearer type, stable keyboard focus, meaningful disabled states and the established purple/graphite identity. High Contrast, reduced motion and the approved logo are preserved.
-- Trim handles have larger hit areas and clearer In/Out labels. Leaving an untouched time field no longer rounds its stored precision. Originals remain unchanged.
+- Fixed normal monitor/background Replay being rejected before the capture helper started. Source identity is verified on the current helper; diagnostic consent remains separate. Failed starts report the actual helper state, release reservations and permit an explicit retry.
+- Save Clip and Replay toggle shortcuts remain available while Flick is in the tray. Hiding/minimizing ends unfinished shortcut editing without losing Settings drafts. Tray/global controls share diagnostic, pending-save, update and shutdown safeguards.
+- A failed source-preference write keeps the selected source, saved preferences and active recorder aligned. Late export/thumbnail/audio-edit completion cannot restore removed or unlinked clips; failed unlink/removal writes roll back coherently.
+- Library rescans stop their media workers before Replay or shutdown proceeds. Bounded folder discovery reports depth, directory and file limits honestly.
+- Audio-mix preview positions now map to the original timeline for trim/markers. Cancelled trim drags restore the previous range without saving. Audio-device Refresh recovers after page navigation; Rename accepts Enter.
+- Uninstall removes only explicitly selected app metadata and empty cache directories. Preview creation no longer sweeps or overwrites existing MP4s; fresh previews use bounded admission and preserve ambiguous/legacy files. When preview storage fills, export remains available.
+- Packaging uses a fresh owned staging directory. Cached OBS runtime files are checked against the hash-verified pinned archive; stale or mixed upstream bytes cannot silently enter a package.
 
-Install **Flick-Setup.exe** over the current installation after quitting Flick. Portable users should replace the complete extracted folder. Clips and preferences are retained. Previous releases, assets and tags remain available.
+Quit Flick, then install **Flick-Setup.exe** over the current installation. Portable users should replace the complete extracted folder. Clips and preferences are retained. Previous releases, assets and tags remain available.
 
-This is an unsigned preview. Automated Windows/native/media/installer checks, actual WPF render checks and matched synthetic UI diagnostics are recorded with the build. Synthetic diagnostics do not establish normal idle or gameplay performance. Physical GPU/audio/gameplay, real Discord, Narrator and per-monitor DPI acceptance remain separate.
+This is an unsigned preview. Metadata-only helper tests cover managed startup, tray commands and failure recovery without recording a desktop or using GPU/audio devices. Automated Windows/native/media/installer, UI render and matched synthetic diagnostics accompany the build. Physical gameplay/GPU/audio, actual OS shortcut presses, Discord, Narrator and per-monitor DPI acceptance remain separate.

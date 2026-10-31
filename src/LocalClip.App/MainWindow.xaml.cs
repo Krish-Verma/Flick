@@ -49,6 +49,7 @@ public partial class MainWindow : Window
     private bool _updatingExportCap;
     private enum PlayerView { Original, Exported, LocalCopy, AudioMix }
     private PlayerView _playerView = PlayerView.Original;
+    private double _previewOriginalStartSeconds;
     private CancellationTokenSource? _previewCancellation;
     private bool _previewWasReencoded;
     private bool _playerIsPlaying;
@@ -66,11 +67,14 @@ public partial class MainWindow : Window
     private bool _updateInstallInProgress;
     private bool _quitInProgress;
     private bool _backgroundReplayContext;
+    private bool _runtimeInitialized;
 
-    public MainWindow()
+    public MainWindow() : this(null) { }
+
+    internal MainWindow(MainViewModel? viewModel)
     {
         InitializeComponent();
-        _vm = new MainViewModel();
+        _vm = viewModel ?? new MainViewModel();
         DataContext = _vm;
         ApplyShareAccessiblePalette(SystemParameters.HighContrast);
         Loaded += (_, _) => {
@@ -88,9 +92,9 @@ public partial class MainWindow : Window
 
         _hotkeyManager = new HotkeyManager();
         _hotkeyManager.OnCaptureToggleHotkeyPressed += async () =>
-        { if (!_updateInstallInProgress && !_quitInProgress) await _vm.ToggleCaptureAsync(DiagnosticControlOrigin.GlobalHotkey); };
+        { await RouteReplayControlAsync(DiagnosticControlOrigin.GlobalHotkey, save: false); };
         _hotkeyManager.OnSaveReplayHotkeyPressed += async () =>
-        { if (!_updateInstallInProgress && !_quitInProgress) await _vm.SaveReplayAsync(DiagnosticControlOrigin.GlobalHotkey); };
+        { await RouteReplayControlAsync(DiagnosticControlOrigin.GlobalHotkey, save: true); };
         _hotkeyManager.ShortcutRestoreFailed += error =>
         {
             _vm.ReportHotkeyHealth("Toggle replay", _vm.Settings.CaptureToggleHotkey,
@@ -110,8 +114,7 @@ public partial class MainWindow : Window
         {
             if (WindowState == WindowState.Minimized)
             {
-                SuspendPlayback(clearSource: true);
-                ReleasePosterWhileHidden();
+                PrepareWindowForBackground();
                 // Minimize to tray is a user preference, not only a
                 // launch-time flag. Capture continues safely in the tray.
                 if (_vm.Settings.StartMinimizedToTray)
@@ -136,6 +139,8 @@ public partial class MainWindow : Window
 
     private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
     {
+        if (_runtimeInitialized) return;
+        _runtimeInitialized = true;
         var hwnd = new WindowInteropHelper(this).Handle;
         _hotkeyManager.Initialize(hwnd);
 
@@ -152,7 +157,7 @@ public partial class MainWindow : Window
             a.Equals("--startup", StringComparison.OrdinalIgnoreCase));
         // Create the tray icon first, then hide before source discovery. A
         // background launch should not flash an empty dashboard on screen.
-        if (launchInTray) Hide();
+        if (launchInTray) { PrepareWindowForBackground(); Hide(); }
 
         // Initialize targets
         await _vm.InitializeAsync();
@@ -385,6 +390,14 @@ public partial class MainWindow : Window
             Visible = true
         };
 
+        _notifyIcon.ContextMenuStrip = CreateTrayMenu();
+        _notifyIcon.DoubleClick += (sender, args) =>
+            _ = Dispatcher.BeginInvoke(new Action(ShowAndRestoreWindow));
+        UpdateStatusBadgeColor(); // Initialize tray/menu from the same presentation as the capture bar.
+    }
+
+    private System.Windows.Forms.ContextMenuStrip CreateTrayMenu()
+    {
         var menu = new System.Windows.Forms.ContextMenuStrip();
         menu.Items.Add("Open Flick", null, (sender, args) =>
             _ = Dispatcher.BeginInvoke(new Action(ShowAndRestoreWindow)));
@@ -392,7 +405,7 @@ public partial class MainWindow : Window
 
         _trayReplayItem = new System.Windows.Forms.ToolStripMenuItem("Start replay");
         _trayReplayItem.Click += (sender, args) =>
-            _ = Dispatcher.BeginInvoke(new Action(async () => { if (!_updateInstallInProgress && !_quitInProgress) await _vm.ToggleCaptureAsync(DiagnosticControlOrigin.SystemTray); }));
+            _ = Dispatcher.BeginInvoke(new Action(async () => { await RouteReplayControlAsync(DiagnosticControlOrigin.SystemTray, save: false); }));
         menu.Items.Add(_trayReplayItem);
 
         _traySaveItem = new System.Windows.Forms.ToolStripMenuItem("Save last 30 seconds")
@@ -400,7 +413,7 @@ public partial class MainWindow : Window
             Enabled = false
         };
         _traySaveItem.Click += (sender, args) =>
-            _ = Dispatcher.BeginInvoke(new Action(async () => { if (!_updateInstallInProgress && !_quitInProgress) await _vm.SaveReplayAsync(DiagnosticControlOrigin.SystemTray); }));
+            _ = Dispatcher.BeginInvoke(new Action(async () => { await RouteReplayControlAsync(DiagnosticControlOrigin.SystemTray, save: true); }));
         menu.Items.Add(_traySaveItem);
         menu.Items.Add(new System.Windows.Forms.ToolStripSeparator());
 
@@ -409,10 +422,8 @@ public partial class MainWindow : Window
         menu.Items.Add("Quit Flick", null, (sender, args) =>
             _ = Dispatcher.BeginInvoke(new Action(RealQuit)));
 
-        _notifyIcon.ContextMenuStrip = menu;
-        _notifyIcon.DoubleClick += (sender, args) =>
-            _ = Dispatcher.BeginInvoke(new Action(ShowAndRestoreWindow));
-        UpdateStatusBadgeColor(); // Initialize tray/menu from the same presentation as the capture bar.
+        UpdateStatusBadgeColor();
+        return menu;
     }
 
     private void OnClipSavedConfirmed(ClipMetadata clip)
@@ -515,8 +526,28 @@ public partial class MainWindow : Window
         }
     }
 
+    private void PrepareWindowForBackground()
+    {
+        // Hidden settings must never keep global shortcuts suspended or keep
+        // interpreting the next key as a replacement chord when reopened.
+        _settingsPage?.CancelShortcutEditingForHide();
+        _hotkeyManager.IsShortcutEditing = false;
+        Keyboard.ClearFocus();
+        FocusManager.SetFocusedElement(this, null);
+        SuspendPlayback(clearSource: true);
+        ReleasePosterWhileHidden();
+    }
+
+    private async System.Threading.Tasks.Task RouteReplayControlAsync(DiagnosticControlOrigin origin, bool save)
+    {
+        if (_updateInstallInProgress || _quitInProgress || _isRealClosing || FlickDialog.IsOpen || _vm.IsRecordingDiagnosticRunning) return;
+        if (save) await _vm.SaveReplayAsync(origin);
+        else await _vm.ToggleCaptureAsync(origin);
+    }
+
     private void ShowAndRestoreWindow()
     {
+        if (_quitInProgress || _isRealClosing || _updateInstallInProgress) return;
         Show();
         WindowState = WindowState.Normal;
         RestorePosterAfterShow();
@@ -564,8 +595,7 @@ public partial class MainWindow : Window
         if (!_isRealClosing)
         {
             e.Cancel = true;
-            SuspendPlayback(clearSource: true);
-            ReleasePosterWhileHidden();
+            PrepareWindowForBackground();
             Hide();
             _backgroundReplayContext = true;
             _ = ApplyBackgroundReplayIntentAsync();
@@ -909,7 +939,7 @@ public partial class MainWindow : Window
         {
             _updateInstallInProgress = false;
             MainInteractionSurface.IsEnabled = wasEnabled;
-            _hotkeyManager.IsShortcutEditing = wasEditingShortcut;
+            _hotkeyManager.IsShortcutEditing = wasEditingShortcut && IsVisible && WindowState != WindowState.Minimized;
         }
     }
 
@@ -1155,7 +1185,7 @@ public partial class MainWindow : Window
         // Play(). Keep it null until playback is explicitly requested.
     }
 
-    private void SetPreviewSource(string path, PlayerView mode, bool startPlaying)
+    private void SetPreviewSource(string path, PlayerView mode, bool startPlaying, double? originalStartSeconds = null)
     {
         if (!NativePreviewAllowed) return;
         if (!File.Exists(path))
@@ -1171,6 +1201,8 @@ public partial class MainWindow : Window
         VideoPlayer.Source = new Uri(path);
         PlayerSlider.Value = 0;
         _playerView = mode;
+        _previewOriginalStartSeconds = mode is PlayerView.Exported or PlayerView.AudioMix
+            ? Math.Max(0, originalStartSeconds ?? _vm.SelectedClip?.TrimStartSeconds ?? 0) : 0;
         BtnPreviewMode.Content = mode switch
         {
             PlayerView.Exported => "Export preview",
@@ -1423,7 +1455,7 @@ public partial class MainWindow : Window
         {
             if (_vm.SelectedClip?.Id == clip.Id && _vm.CanPresentAudioMixPreview)
             {
-                _vm.StatusDetails = "Couldn't Create Local Preview: " + ex.Message;
+                _vm.StatusDetails = ex is PlaybackPreviewCacheLimitException ? ex.Message : "Couldn't create local preview: " + ex.Message;
                 PreviewFallbackPanel.Visibility = Visibility.Visible;
             }
         }

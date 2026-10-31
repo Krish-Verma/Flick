@@ -48,32 +48,34 @@ if (-not $reuseFfmpeg) {
     Write-Host "FFmpeg binaries already present in: $FfmpegDir" -ForegroundColor Green
 }
 
-# 2. Setup OBS Runtime
-$ObsRuntimeBin = Join-Path $ObsDir "runtime\bin\64bit\obs.dll"
-if (!(Test-Path $ObsRuntimeBin)) {
-    Write-Host "OBS Studio runtime not found. Downloading OBS Studio 32.2.2 Windows x64..." -ForegroundColor Yellow
-    $obsZip = Join-Path $env:TEMP "obs-32.2.2.zip"
-    $obsUrl = "https://github.com/obsproject/obs-studio/releases/download/32.2.2/OBS-Studio-32.2.2-Windows-x64.zip"
-    
-    Invoke-WebRequest -Uri $obsUrl -OutFile $obsZip -UseBasicParsing
-    $expected = "4D6E40E3AB155F56B30DE517380566A206D74B63CDF5AD49AA596924768F97E1"
-    if ((Get-FileHash -Path $obsZip -Algorithm SHA256).Hash -ne $expected) {
-        Remove-Item -Force $obsZip
-        throw "OBS runtime archive SHA-256 mismatch: refusing to install unverified binaries"
+# 2. Keep the pinned archive outside the distributable runtime. Reuse requires
+# comparing every upstream file against these verified bytes, not a marker JSON.
+$obsPin = (Get-Content -LiteralPath (Join-Path $RootDir 'dependencies.lock.json') -Raw | ConvertFrom-Json).pinnedDependencies.libobs
+if ($obsPin.version -notmatch '^\d+\.\d+\.\d+$') { throw 'Invalid pinned OBS version.' }
+$obsArchive = Join-Path $RootDir ("dist/obs-upstream-{0}.zip" -f $obsPin.version)
+if (-not (Test-Path -LiteralPath $obsArchive -PathType Leaf) -or
+    (Get-FileHash -LiteralPath $obsArchive -Algorithm SHA256).Hash -ine $obsPin.sha256) {
+    $obsDownload = Join-Path ([IO.Path]::GetTempPath()) ('flick-obs-' + [Guid]::NewGuid().ToString('N') + '.zip')
+    try {
+        Invoke-WebRequest -Uri $obsPin.source -OutFile $obsDownload -UseBasicParsing
+        if ((Get-FileHash -LiteralPath $obsDownload -Algorithm SHA256).Hash -ine $obsPin.sha256) {
+            throw 'OBS archive SHA-256 mismatch: refusing unverified runtime bytes.'
+        }
+        [IO.Directory]::CreateDirectory([IO.Path]::GetDirectoryName($obsArchive)) | Out-Null
+        Move-Item -LiteralPath $obsDownload -Destination $obsArchive -Force
     }
-    $targetRuntime = Join-Path $ObsDir "runtime"
-    New-Item -ItemType Directory -Path $targetRuntime -Force | Out-Null
-    Expand-Archive -Path $obsZip -DestinationPath $targetRuntime -Force
-    if (!(Test-Path (Join-Path $targetRuntime "bin\\64bit\\obs.dll"))) {
-        throw "OBS runtime extraction is missing bin/64bit/obs.dll; inspect ZIP layout before building"
-    }
-    
-    Remove-Item -Force $obsZip
-    Write-Host "OBS Studio 32.2.2 runtime installed to: $targetRuntime" -ForegroundColor Green
-} else {
-    Write-Host "OBS Studio runtime already present in: $(Join-Path $ObsDir 'runtime')" -ForegroundColor Green
+    finally { if (Test-Path -LiteralPath $obsDownload) { Remove-Item -LiteralPath $obsDownload -Force } }
 }
-
-& (Join-Path $PSScriptRoot "check_obs_runtime.ps1") -RuntimeRoot (Join-Path $ObsDir "runtime")
+$reuseObs = $false
+try {
+    & (Join-Path $PSScriptRoot 'check_obs_runtime.ps1') -RuntimeRoot (Join-Path $ObsDir 'runtime') -VerifiedArchivePath $obsArchive
+    $reuseObs = $true
+}
+catch { Write-Host 'Restoring changed or incomplete OBS files from the verified archive.' -ForegroundColor Yellow }
+if (-not $reuseObs) {
+    . (Join-Path $PSScriptRoot 'FlickObsArchive.ps1')
+    $null = Invoke-FlickObsArchive -ArchivePath $obsArchive -ExpectedSha256 $obsPin.sha256 -RuntimeRoot (Join-Path $ObsDir 'runtime') -Restore
+}
+& (Join-Path $PSScriptRoot 'check_obs_runtime.ps1') -RuntimeRoot (Join-Path $ObsDir 'runtime') -VerifiedArchivePath $obsArchive
 
 Write-Host "`nAll tools are ready for building and running Flick." -ForegroundColor Green

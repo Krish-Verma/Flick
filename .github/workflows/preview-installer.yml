@@ -14,6 +14,10 @@ on:
       - 'scripts/check_obs_runtime.ps1'
       - 'scripts/check_capture_host_runtime.ps1'
       - 'scripts/test_flick_installer_update.ps1'
+      - 'scripts/FlickPackageStaging.ps1'
+      - 'scripts/test_shipping_safety.ps1'
+      - 'scripts/FlickObsArchive.ps1'
+      - 'scripts/test_obs_runtime_integrity.ps1'
       - 'scripts/check_ffmpeg_runtime.ps1'
       - 'scripts/run_recording_qualification.ps1'
       - 'scripts/RecordingHarnessSession.cs'
@@ -136,6 +140,8 @@ jobs:
           ./scripts/check_gui_design.ps1
           ./scripts/check_gui_slice6.ps1
           ./scripts/check_flick_release_source.ps1
+          ./scripts/test_shipping_safety.ps1
+          ./scripts/test_obs_runtime_integrity.ps1
       - name: Build portable ZIP and conventional per-user Setup EXE
         shell: pwsh
         run: ./scripts/build_installer.ps1 -SkipNativeBuild
@@ -145,12 +151,12 @@ jobs:
           ./scripts/verify_flick_release.ps1
           $checksums = 'dist/SHA256SUMS.txt'
           $setup = 'dist/Flick-Setup.exe'
-          $portable = 'dist/Flick-v1.0.12-win-x64.zip'
+          $portable = 'dist/Flick-v1.0.13-win-x64.zip'
           foreach ($path in @($checksums, $setup, $portable)) {
             if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw "Missing $path" }
           }
           $manifest = Get-Content -LiteralPath $checksums -Raw
-          foreach ($name in @('Flick.exe', 'Flick-v1.0.12-win-x64.zip',
+          foreach ($name in @('Flick.exe', 'Flick-v1.0.13-win-x64.zip',
                               'Flick-Setup.exe', 'LocalClip.CaptureHost.exe')) {
             if (-not $manifest.Contains($name)) { throw "Missing hash entry: $name" }
           }
@@ -188,7 +194,7 @@ jobs:
           name: flick-unsigned-preview-${{ github.sha }}
           path: |
             dist/Flick-Setup.exe
-            dist/Flick-v1.0.12-win-x64.zip
+            dist/Flick-v1.0.13-win-x64.zip
             dist/SHA256SUMS.txt
           if-no-files-found: error
           retention-days: 7

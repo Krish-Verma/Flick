@@ -22,7 +22,9 @@ public class CaptureHostClient : IDisposable
     private CancellationTokenSource? _cts;
     private readonly string _hostExePath;
     private readonly string _workingDir;
+    private readonly string _hostArguments;
     private CaptureHostCapabilities? _capabilities;
+    private volatile System.Diagnostics.Process? _respondedProcess;
 
     public event Action<string, JsonElement?>? EventReceived;
     public event Action<string>? StateChanged;
@@ -49,10 +51,27 @@ public class CaptureHostClient : IDisposable
         }
     }
     public int? HostProcessId => IsRunning ? _process?.Id : null;
+    // A live process alone is not evidence that its IPC is responsive. Reset
+    // this evidence whenever the owned helper is replaced or disposed.
+    public bool HasResponded
+    {
+        get
+        {
+            var process = _process;
+            if (process == null || !ReferenceEquals(_respondedProcess, process)) return false;
+            try { return !process.HasExited && ReferenceEquals(_process, process); }
+            catch (InvalidOperationException) { return false; }
+        }
+    }
     internal bool HostExitConfirmed => _hostExitConfirmed;
 
-    public CaptureHostClient(string? hostExePath = null)
+    public CaptureHostClient(string? hostExePath = null) : this(hostExePath, "") { }
+
+    // Allows the no-GPU pipe fixture to use the installed script interpreter.
+    // Product callers retain the argument-free native executable constructor.
+    internal CaptureHostClient(string? hostExePath, string hostArguments)
     {
+        _hostArguments = hostArguments;
         if (string.IsNullOrWhiteSpace(hostExePath))
         {
             string baseDir = AppContext.BaseDirectory;
@@ -87,6 +106,7 @@ public class CaptureHostClient : IDisposable
             throw new InvalidOperationException("The previous capture helper has not confirmed its exit.");
         _expectedShutdown = false;
         _capabilities = null;
+        _respondedProcess = null;
 
         if (!File.Exists(_hostExePath))
         {
@@ -99,6 +119,7 @@ public class CaptureHostClient : IDisposable
         var psi = new ProcessStartInfo
         {
             FileName = _hostExePath,
+            Arguments = _hostArguments,
             WorkingDirectory = _workingDir,
             UseShellExecute = false,
             RedirectStandardInput = true,
@@ -169,6 +190,7 @@ public class CaptureHostClient : IDisposable
 
                         if (_pendingRequests.TryRemove(id, out var tcs))
                         {
+                            _respondedProcess = process;
                             tcs.TrySetResult(resp);
                         }
                     }
@@ -295,9 +317,20 @@ public class CaptureHostClient : IDisposable
         catch { }
     }
 
-    public async Task<IpcResponse> SendCommandAsync(string cmd, object? parameters = null, int timeoutMs = 8000)
+    public Task<IpcResponse> SendCommandAsync(string cmd, object? parameters = null, int timeoutMs = 8000) =>
+        SendCommandCoreAsync(cmd, parameters, timeoutMs, expectedHelper: null);
+
+    private async Task<IpcResponse> SendCommandCoreAsync(string cmd, object? parameters, int timeoutMs,
+        System.Diagnostics.Process? expectedHelper)
     {
-        if (!IsRunning)
+        if (expectedHelper != null)
+        {
+            // The OS may terminate a helper without acquiring _lifecycleGate.
+            // Never turn a verified start into an automatic replacement start.
+            if (!ReferenceEquals(_process, expectedHelper) || expectedHelper.HasExited)
+                throw new IOException("The verified capture helper exited or changed before recording could start. Try starting replay again.");
+        }
+        else if (!IsRunning)
         {
             if (cmd is "get_status" or "save_replay" or "stop_capture" or "shutdown")
                 throw new InvalidOperationException("The capture helper is no longer running.");
@@ -318,7 +351,8 @@ public class CaptureHostClient : IDisposable
         try
         {
             string json = JsonSerializer.Serialize(req);
-            var writer = _writer ?? throw new IOException("Capture helper input is unavailable.");
+            var writer = (expectedHelper?.StandardInput ?? _writer)
+                ?? throw new IOException("Capture helper input is unavailable.");
             lock (writer)
             {
                 writer.WriteLine(json);
@@ -473,9 +507,19 @@ public class CaptureHostClient : IDisposable
             Task<IpcResponse> reply;
             lock (_lifecycleGate)
             {
-                if (options?.RequiresCapabilities == true && (!IsRunning || _capabilities?.SupportsSafeDiagnostics != true))
-                    throw new InvalidOperationException("Verify capture helper capabilities before starting a consented recording test.");
-                reply = SendCommandAsync("start_capture", CreateStartParameters(settings, options), 60000);
+                if (options?.RequiresCapabilities == true)
+                {
+                    if (!IsRunning || _capabilities == null)
+                        throw new InvalidOperationException(options.RequiresDiagnosticCapabilities
+                            ? "Verify capture helper capabilities before starting a consented recording test."
+                            : "Verify capture helper capabilities before starting identity-bound capture.");
+                    if (options.RequiresDiagnosticCapabilities && !_capabilities.SupportsSafeDiagnostics)
+                        throw new InvalidOperationException("Verify capture helper capabilities before starting a consented recording test.");
+                    if (options.RequiresSourceIdentityBinding && !_capabilities.SourceIdentityBinding)
+                        throw new InvalidOperationException("Update the capture helper before recording this exact source.");
+                }
+                reply = SendCommandCoreAsync("start_capture", CreateStartParameters(settings, options), 60000,
+                    options?.RequiresCapabilities == true ? _process : null);
             }
             response = await reply.ConfigureAwait(false);
         }
@@ -586,6 +630,7 @@ public class CaptureHostClient : IDisposable
         _expectedShutdown = true;
         CurrentProfile = null;
         _capabilities = null;
+        _respondedProcess = null;
         _cts?.Cancel();
         foreach (var entry in _pendingRequests)
             if (_pendingRequests.TryRemove(entry.Key, out var request))

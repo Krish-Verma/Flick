@@ -32,6 +32,9 @@ internal static class Program
     private static string _phase = "startup";
     private static Exception? _backgroundFailure;
     private static int _cleanupFinished;
+    private static long _dispatcherStarted, _dispatcherCompleted;
+    private static int _lastDispatcherPriority;
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<DispatcherOperation, (int Priority, long Started)> ActiveDispatcherOperations = new();
 
     [STAThread]
     private static int Main(string[] args)
@@ -98,6 +101,18 @@ internal static class Program
             Checkpoint("throwaway-profile-created");
 
             app = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
+            app.Dispatcher.Hooks.OperationStarted += (sender, eventArgs) =>
+            {
+                Interlocked.Increment(ref _dispatcherStarted);
+                Volatile.Write(ref _lastDispatcherPriority, (int)eventArgs.Operation.Priority);
+                ActiveDispatcherOperations[eventArgs.Operation] = ((int)eventArgs.Operation.Priority, Stopwatch.GetTimestamp());
+            };
+            app.Dispatcher.Hooks.OperationCompleted += (sender, eventArgs) =>
+            {
+                Interlocked.Increment(ref _dispatcherCompleted);
+                ActiveDispatcherOperations.TryRemove(eventArgs.Operation, out _);
+            };
+            app.Dispatcher.Hooks.OperationAborted += (sender, eventArgs) => ActiveDispatcherOperations.TryRemove(eventArgs.Operation, out _);
             foreach (string dictionary in new[] { "Colors", "Metrics", "Typography", "Icons", "Controls", "Chrome" })
                 app.Resources.MergedDictionaries.Add(new ResourceDictionary
                 {
@@ -228,9 +243,16 @@ internal static class Program
                     Require(list.Items.Count == expected, "Search returned an incorrect deterministic count");
                     Checkpoint("query-filter-layout", new { repetition, term, bindingStatus = inputBinding!.Status.ToString() });
                     watch.Restart();
+                    Volatile.Write(ref _phase, "query-filter-apply");
                     vm.ApplyFilter(); // Separately labelled filter+binding/layout, after debounce.
+                    double synchronousFilterMs = watch.Elapsed.TotalMilliseconds;
+                    Volatile.Write(ref _phase, "query-filter-idle-pump");
                     Settle();
                     queryPostDebounce.Add(watch.Elapsed.TotalMilliseconds);
+                    Checkpoint("query-filter-layout-settled", new { repetition, term, synchronousFilterMs,
+                        totalMs = watch.Elapsed.TotalMilliseconds, filteredItems = vm.FilteredClips.Count,
+                        actualItems = list.Items.Count, root.IsMeasureValid, root.IsArrangeValid,
+                        dispatcher = DispatcherDiagnostics() });
                     WaitForRowStills(list, expected, $"query-{repetition}-{term}");
                     containers.Add(CheckContainers(list, expected));
                 }
@@ -400,7 +422,7 @@ internal static class Program
                     File.WriteAllText(_outputPath, JsonSerializer.Serialize(new
                     {
                         schemaVersion = 1, status = "failed", phase = failedDuring,
-                        error = error.ToString(), trace = Path.GetFileName(_tracePath)
+                        error = error.ToString(), trace = Path.GetFileName(_tracePath), dispatcher = DispatcherDiagnostics()
                     }, Json));
         }
         catch (Exception writeError) { Console.Error.WriteLine("Failure evidence write failed: " + writeError); }
@@ -616,10 +638,47 @@ internal static class Program
     private static void Settle()
     {
         ThrowBackgroundFailure();
-        for (int pass = 0; pass < 2; pass++)
-            Dispatcher.CurrentDispatcher.Invoke(() => { }, DispatcherPriority.ContextIdle);
+        var dispatcher = Dispatcher.CurrentDispatcher;
+        var frame = new DispatcherFrame();
+        int passes = 0;
+        var pending = new List<DispatcherOperation>();
+        // Preserve both natural ContextIdle turns. A Send-priority guard must
+        // still be able to report higher-priority starvation instead of hanging
+        // indefinitely inside a synchronous ContextIdle Invoke.
+        Action? idle = null;
+        idle = () =>
+        {
+            if (++passes == 2) frame.Continue = false;
+            else pending.Add(dispatcher.BeginInvoke(DispatcherPriority.ContextIdle, idle!));
+        };
+        pending.Add(dispatcher.BeginInvoke(DispatcherPriority.ContextIdle, idle));
+        var guard = new DispatcherTimer(DispatcherPriority.Send, dispatcher) { Interval = TimeSpan.FromSeconds(3) };
+        guard.Tick += (_, _) => frame.Continue = false;
+        guard.Start();
+        try { Dispatcher.PushFrame(frame); }
+        finally
+        {
+            guard.Stop();
+            foreach (var operation in pending)
+                if (operation.Status == DispatcherOperationStatus.Pending) operation.Abort();
+        }
+        if (passes != 2)
+        {
+            Checkpoint("dispatcher-settle-timeout", new { failedDuring = Volatile.Read(ref _phase), passes,
+                dispatcher = DispatcherDiagnostics() });
+            throw new TimeoutException("The real dispatcher did not complete two ContextIdle turns within three seconds.");
+        }
         ThrowBackgroundFailure();
     }
+
+    private static object DispatcherDiagnostics() => new
+    {
+        started = Interlocked.Read(ref _dispatcherStarted), completed = Interlocked.Read(ref _dispatcherCompleted),
+        lastStartedPriority = ((DispatcherPriority)Volatile.Read(ref _lastDispatcherPriority)).ToString(),
+        // The watchdog reads only captured primitive values, never UI objects.
+        active = ActiveDispatcherOperations.Select(entry => new { priority = ((DispatcherPriority)entry.Value.Priority).ToString(),
+            elapsedMilliseconds = Stopwatch.GetElapsedTime(entry.Value.Started).TotalMilliseconds }).ToArray()
+    };
 
     private static void Wait(TimeSpan duration)
     {

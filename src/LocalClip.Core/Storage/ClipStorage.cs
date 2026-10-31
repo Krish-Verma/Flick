@@ -138,15 +138,14 @@ public sealed class ClipStorage
             var ignored = _ignoredImportedPaths.Where(p =>
                 !IsWithin(p, folder.Path)).ToList();
             // Do not delete any actual imported video or user-created export.
-            _folders.Remove(folder);
-            try { SaveSourcesLocked(); }
-            catch { _folders.Add(folder); throw; }
-            _clips.Clear();
-            _clips.AddRange(remainingClips);
-            _ignoredImportedPaths.Clear();
-            foreach (var p in ignored) _ignoredImportedPaths.Add(p);
-            SaveIndexLocked();
-            SaveSourcesLocked();
+            PersistSourceMembershipChangeLocked(() =>
+            {
+                _folders.Remove(folder);
+                _clips.Clear();
+                _clips.AddRange(remainingClips);
+                _ignoredImportedPaths.Clear();
+                foreach (var p in ignored) _ignoredImportedPaths.Add(p);
+            });
             return true;
         }
     }
@@ -168,6 +167,27 @@ public sealed class ClipStorage
                 else _clips.Remove(clip);
                 throw;
             }
+        }
+    }
+
+    /// <summary>Commit a late worker result only to its still-indexed source.
+    /// This cannot register a new capture or revive a removed/unlinked item.</summary>
+    public bool TryUpdateExistingClip(ClipMetadata expected, string originalPath,
+        string connectedFolderId, Action<ClipMetadata> update)
+    {
+        ArgumentNullException.ThrowIfNull(expected);
+        ArgumentNullException.ThrowIfNull(update);
+        lock (_lock)
+        {
+            var current = _clips.FirstOrDefault(item => item.Id == expected.Id);
+            if (!ReferenceEquals(current, expected) ||
+                !ClipLibraryPaths.FileComparer.Equals(SafeNormalize(current!.OriginalFilePath), SafeNormalize(originalPath)) ||
+                current.ConnectedFolderId != connectedFolderId ||
+                (current.IsImported && !_folders.Any(folder => folder.Id == connectedFolderId))) return false;
+            update(current);
+            ValidateOrganization(current);
+            SaveIndexLocked();
+            return true;
         }
     }
 
@@ -271,6 +291,7 @@ public sealed class ClipStorage
                 clip.ThumbnailPath = generated;
             }
             catch (OperationCanceledException) { throw; }
+            catch (Exception error) when (error is MediaWorkerExitUnconfirmedException or LocalClip.Core.Audio.MediaWorkerCleanupException) { throw; }
             catch { /* Metadata and originals remain usable without a thumbnail. */ }
         }
 
@@ -317,8 +338,9 @@ public sealed class ClipStorage
                 return new ClipImportSummary { FolderUnavailable = true };
 
             // Explicit import only; enumeration is done on a worker thread.
-            var media = await Task.Run(() => ClipLibraryPaths.DiscoverVideos(
+            var discovery = await Task.Run(() => ClipLibraryPaths.DiscoverVideosWithLimits(
                 source.Path, source.IncludeSubfolders, cancellationToken), cancellationToken);
+            var media = discovery.Videos;
             int imported = 0, already = 0, skipped = 0, failed = 0, examined = 0;
             foreach (var path in media)
             {
@@ -335,6 +357,7 @@ public sealed class ClipStorage
                         imported++;
                     }
                     catch (OperationCanceledException) { throw; }
+                    catch (Exception error) when (error is MediaWorkerExitUnconfirmedException or LocalClip.Core.Audio.MediaWorkerCleanupException) { throw; }
                     catch (Exception)
                     {
                         failed++;
@@ -357,7 +380,8 @@ public sealed class ClipStorage
             {
                 TotalDiscovered = media.Count, Imported = imported,
                 AlreadyIndexed = already, Ignored = skipped, Failed = failed,
-                ScanLimitReached = media.Count >= ClipLibraryPaths.MaximumMediaFilesPerScan
+                ScanLimitReached = discovery.ScanLimitReached,
+                ScanLimitDescription = discovery.LimitDescription
             };
         }
         finally
@@ -398,14 +422,17 @@ public sealed class ClipStorage
         if (clip is null || !clip.IsAvailable) return "";
         if (!string.IsNullOrWhiteSpace(clip.ThumbnailPath) &&
             File.Exists(clip.ThumbnailPath)) return clip.ThumbnailPath;
+        string originalPath = clip.OriginalFilePath;
+        string folderId = clip.ConnectedFolderId;
         string target = Path.Combine(_thumbnailsDir, clip.Id + ".jpg");
         string generated = await _prober.GenerateThumbnailAsync(
-            clip.OriginalFilePath, target, Math.Min(1d, clip.DurationSeconds / 2d),
+            originalPath, target, Math.Min(1d, clip.DurationSeconds / 2d),
             cancellationToken);
         if (File.Exists(generated))
         {
-            clip.ThumbnailPath = generated;
-            AddOrUpdateClip(clip);
+            cancellationToken.ThrowIfCancellationRequested();
+            if (!TryUpdateExistingClip(clip, originalPath, folderId, current => current.ThumbnailPath = generated))
+                return "";
         }
         return generated;
     }
@@ -434,10 +461,11 @@ public sealed class ClipStorage
             if (clip.IsImported)
             {
                 string key = SafeNormalize(clip.OriginalFilePath);
-                _ignoredImportedPaths.Add(key);
-                SaveSourcesLocked();
-                _clips.Remove(clip);
-                SaveIndexLocked();
+                PersistSourceMembershipChangeLocked(() =>
+                {
+                    _ignoredImportedPaths.Add(key);
+                    _clips.Remove(clip);
+                });
                 return true;
             }
 
@@ -566,6 +594,45 @@ public sealed class ClipStorage
                 _sourcesReadFailed = true;
                 LastLoadWarning = "Connected folder registry unavailable; original metadata was preserved. " + ex.Message;
             }
+        }
+    }
+
+    // The registry and index have separate atomic files. If the second
+    // commit fails, compensate the first before reporting a failed change.
+    // No media operation belongs in this metadata-only transaction.
+    private void PersistSourceMembershipChangeLocked(Action change)
+    {
+        var beforeFolders = _folders.ToArray();
+        var beforeClips = _clips.ToArray();
+        var beforeIgnored = _ignoredImportedPaths.ToArray();
+        int beforeUnflushed = _unflushedImportedEntries;
+        bool sourcesCommitted = false;
+        try
+        {
+            change();
+            SaveSourcesLocked();
+            sourcesCommitted = true;
+            SaveIndexLocked();
+        }
+        catch (Exception saveError)
+        {
+            _folders.Clear(); _folders.AddRange(beforeFolders);
+            _clips.Clear(); _clips.AddRange(beforeClips);
+            _ignoredImportedPaths.Clear();
+            foreach (string path in beforeIgnored) _ignoredImportedPaths.Add(path);
+            _unflushedImportedEntries = beforeUnflushed;
+            if (sourcesCommitted)
+            {
+                try { SaveSourcesLocked(); }
+                catch (Exception rollbackError)
+                {
+                    _sourcesReadFailed = true;
+                    LastLoadWarning = "The library change failed and its folder registry could not be restored. " +
+                        "Media files were preserved. Back up and repair the library metadata before editing it again.";
+                    throw new IOException(LastLoadWarning, new AggregateException(saveError, rollbackError));
+                }
+            }
+            throw;
         }
     }
 
