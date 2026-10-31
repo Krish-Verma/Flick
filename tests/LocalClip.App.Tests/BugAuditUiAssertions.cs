@@ -115,7 +115,7 @@ internal static class BugAuditUiAssertions
                 try
                 {
                     var buttons = Descendants(((ContentControl)window.FindName("DialogContentHost")).Content).OfType<Button>().ToArray();
-                    var save = Assert.Single(buttons.Where(b => Equals(b.Content, "Save")));
+                    var save = Assert.Single(buttons, b => Equals(b.Content, "Save"));
                     Assert.True(save.IsDefault);
                     var input = Assert.Single(Descendants(((ContentControl)window.FindName("DialogContentHost")).Content).OfType<TextBox>());
                     input.Text = "New title";
