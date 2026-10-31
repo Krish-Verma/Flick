@@ -22,6 +22,8 @@ internal static class TrayGlobalAssertions
     public static void Run()
     {
         var previous = SynchronizationContext.Current;
+        var application = Application.Current;
+        Window? previousMainWindow = application.MainWindow;
         MainWindow? window = null;
         MainViewModel? vm = null;
         CaptureHostClient? original = null;
@@ -151,7 +153,22 @@ internal static class TrayGlobalAssertions
                     ((IDisposable)Field(window, "_notificationService")).Dispose();
                 }
             }
-            finally { SynchronizationContext.SetSynchronizationContext(previous); }
+            finally
+            {
+                // Constructing the first Window sets Application.MainWindow.
+                // A disposed hidden owner must not capture a later modal dialog.
+                try
+                {
+                    application.MainWindow = previousMainWindow;
+                    if (window != null)
+                    {
+                        window.Closing -= typeof(MainWindow).GetMethod("Window_Closing", Hidden)!
+                            .CreateDelegate<System.ComponentModel.CancelEventHandler>(window);
+                        window.Close(); // Never shown; no Loaded, NotifyIcon or OS-key registration.
+                    }
+                }
+                finally { SynchronizationContext.SetSynchronizationContext(previous); }
+            }
         }
     }
 

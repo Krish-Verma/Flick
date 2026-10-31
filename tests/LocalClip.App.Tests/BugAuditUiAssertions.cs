@@ -88,9 +88,9 @@ internal static class BugAuditUiAssertions
             ExportsFolder = System.IO.Path.Combine(owned.Root, "Exports"), TempFolder = System.IO.Path.Combine(owned.Root, "Temp") };
         using var vm = (MainViewModel)typeof(MainViewModel).GetConstructor(Hidden, null,
             [typeof(AppSettings), typeof(string)], null)!.Invoke([settings, System.IO.Path.Combine(owned.Root, "Metadata")]);
+        var app = Application.Current; var previousMain = app.MainWindow;
         var window = (MainWindow)typeof(MainWindow).GetConstructor(Hidden, null, [typeof(MainViewModel)], null)!.Invoke([vm]); // Unshown; no native registration or device discovery.
         window.Closing -= typeof(MainWindow).GetMethod("Window_Closing", Hidden)!.CreateDelegate<CancelEventHandler>(window);
-        var app = Application.Current; var previousMain = app.MainWindow;
         try
         {
             app.MainWindow = window;

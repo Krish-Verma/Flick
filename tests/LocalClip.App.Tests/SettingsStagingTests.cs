@@ -30,6 +30,7 @@ public partial class SettingsStagingTests
             try
             {
                 var app = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
+                var baselineMain = app.MainWindow;
                 void DrainBindings()
                 {
                     // WPF attaches bindings at Loaded and marshals worker
@@ -54,7 +55,9 @@ public partial class SettingsStagingTests
                 RunPhase(nameof(ResourceUsageSettingsAssertions), ResourceUsageSettingsAssertions.Run);
                 RunPhase(nameof(CaptureStartupAssertions), CaptureStartupAssertions.Run);
                 RunPhase(nameof(TrayGlobalAssertions), TrayGlobalAssertions.Run);
+                Assert.Same(baselineMain, app.MainWindow);
                 RunPhase(nameof(BugAuditUiAssertions), BugAuditUiAssertions.Run);
+                Assert.Same(baselineMain, app.MainWindow);
                 RunPhase(nameof(LibraryMutationAssertions), () => LibraryMutationAssertions.Run(name => Volatile.Write(ref phase, "Library mutation: " + name)));
                 RunPhase(nameof(SettingsPersistenceAssertions), () => SettingsPersistenceAssertions.Run());
                 RunPhase(nameof(ShortcutCaptureAssertions), () => ShortcutCaptureAssertions.Run());
